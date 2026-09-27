@@ -7,6 +7,22 @@ local _, WIIIUI = ...
 
 WIIIUI.Console = WIIIUI.Console or {}
 
+-- Shared create-if-missing-and-cache-on-parent step for the per-region art
+-- textures below; callers still own SetSize/SetTexture/ClearAllPoints/
+-- SetPoint since those differ per texture. isNew tells a caller that only
+-- sets its anchor once (tile1, minimapTexture) when to do so.
+local function getOrCreateTexture(parent, cacheKey, layer)
+  local texture = parent[cacheKey]
+  local isNew = not texture
+
+  if isNew then
+    texture = parent:CreateTexture(nil, layer)
+    parent[cacheKey] = texture
+  end
+
+  return texture, isNew
+end
+
 -- Vanilla WIIIUI_leftpart (e17c352 WIIIUI.xml:2091-2097): the virtual
 -- WIIIUI_Frame template it inherits anchors BOTTOM to its parent (UIParent)
 -- at offset 0,0.
@@ -27,12 +43,10 @@ function WIIIUI.Console.BuildLeft()
   -- level="ARTWORK"): anchored BOTTOM to its parent's BOTTOM at offset 0,0.
   -- Sized square by AlignMinimap's minimapFrame:SetWidth/SetHeight(uiScale)
   -- (e17c352 WIIIUI.lua:1810-1811) -- Theme.lua's MinimapGeometry.frameSize.
-  local minimapTexture = left.minimapTexture
+  local minimapTexture, minimapIsNew = getOrCreateTexture(left, "minimapTexture", "ARTWORK")
 
-  if not minimapTexture then
-    minimapTexture = left:CreateTexture(nil, "ARTWORK")
+  if minimapIsNew then
     minimapTexture:SetPoint("BOTTOM", left, "BOTTOM", 0, 0)
-    left.minimapTexture = minimapTexture
   end
 
   minimapTexture:SetSize(geometry.frameSize, geometry.frameSize)
@@ -45,12 +59,7 @@ function WIIIUI.Console.BuildLeft()
   -- "BOTTOMRIGHT", 0, 0) -- minimapFrame there is Wc3_UI_minimap itself
   -- (InitiateFrameNames, e17c352 WIIIUI.lua:4564), i.e. minimapTexture here.
   local portraitGeometry = WIIIUI.Theme.PortraitGeometry(uiScale)
-  local portraitTexture = left.portraitTexture
-
-  if not portraitTexture then
-    portraitTexture = left:CreateTexture(nil, "BORDER")
-    left.portraitTexture = portraitTexture
-  end
+  local portraitTexture = getOrCreateTexture(left, "portraitTexture", "BORDER")
 
   portraitTexture:SetSize(portraitGeometry.size, portraitGeometry.size)
   portraitTexture:SetTexture(WIIIUI.Theme.TexturePath(theme, "minimap_portrait", "portrait"))
@@ -70,12 +79,7 @@ function WIIIUI.Console.BuildLeft()
   -- XML's static anchor at runtime with extensionBackground:SetPoint(
   -- "BOTTOMLEFT", "Wc3_UI_portrait", "BOTTOMRIGHT", uiScale*-0.18, 0).
   local extensionBackgroundGeometry = WIIIUI.Theme.ExtensionBackgroundGeometry(uiScale)
-  local extensionBackgroundTexture = left.extensionBackgroundTexture
-
-  if not extensionBackgroundTexture then
-    extensionBackgroundTexture = left:CreateTexture(nil, "BACKGROUND")
-    left.extensionBackgroundTexture = extensionBackgroundTexture
-  end
+  local extensionBackgroundTexture = getOrCreateTexture(left, "extensionBackgroundTexture", "BACKGROUND")
 
   extensionBackgroundTexture:SetSize(extensionBackgroundGeometry.width, extensionBackgroundGeometry.height)
   extensionBackgroundTexture:SetTexture("Interface\\Addons\\WIIIUI\\art\\other\\black_background")
@@ -127,47 +131,30 @@ function WIIIUI.Console.BuildGrid()
 
   local tilePath = WIIIUI.Theme.TexturePath(theme, "actionbar", "actionslots_grid")
 
-  local tile1 = grid.tile1
+  local tile1, tile1IsNew = getOrCreateTexture(grid, "tile1", "BACKGROUND")
 
-  if not tile1 then
-    tile1 = grid:CreateTexture(nil, "BACKGROUND")
+  if tile1IsNew then
     tile1:SetPoint("BOTTOM", grid, "BOTTOM", 0, 0)
-    grid.tile1 = tile1
   end
 
   tile1:SetSize(geometry.size, geometry.size)
   tile1:SetTexture(tilePath)
 
-  local tile2 = grid.tile2
-
-  if not tile2 then
-    tile2 = grid:CreateTexture(nil, "BORDER")
-    grid.tile2 = tile2
-  end
+  local tile2 = getOrCreateTexture(grid, "tile2", "BORDER")
 
   tile2:SetSize(geometry.size, geometry.size)
   tile2:SetTexture(tilePath)
   tile2:ClearAllPoints()
   tile2:SetPoint("BOTTOMLEFT", tile1, "BOTTOMRIGHT", geometry.slot2OffsetX, 0)
 
-  local tile3 = grid.tile3
-
-  if not tile3 then
-    tile3 = grid:CreateTexture(nil, "ARTWORK")
-    grid.tile3 = tile3
-  end
+  local tile3 = getOrCreateTexture(grid, "tile3", "ARTWORK")
 
   tile3:SetSize(geometry.size, geometry.size)
   tile3:SetTexture(tilePath)
   tile3:ClearAllPoints()
   tile3:SetPoint("BOTTOMLEFT", tile2, "BOTTOMRIGHT", geometry.slot3OffsetX, 0)
 
-  local tile4 = grid.tile4
-
-  if not tile4 then
-    tile4 = grid:CreateTexture(nil, "OVERLAY")
-    grid.tile4 = tile4
-  end
+  local tile4 = getOrCreateTexture(grid, "tile4", "OVERLAY")
 
   tile4:SetSize(geometry.size, geometry.size)
   tile4:SetTexture(tilePath)
