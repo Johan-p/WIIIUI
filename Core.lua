@@ -70,6 +70,26 @@ local function clamp(value, low, high)
   return value
 end
 
+-- spec 0001 §Settings schema: weaponIconSelected1..3 legitimately hold either
+-- a number or "none", with a different-typed default per slot -- the generic
+-- type(current) ~= type(value) branch below would wipe a valid cross-type
+-- saved value, so these three keys validate against the allowed set instead.
+local WEAPON_ICON_KEYS = {
+  weaponIconSelected1 = true,
+  weaponIconSelected2 = true,
+  weaponIconSelected3 = true,
+}
+
+local WEAPON_ICON_VALUES = {
+  [16] = true,
+  [17] = true,
+  [18] = true,
+  [0] = true,
+  [98] = true,
+  [99] = true,
+  ["none"] = true,
+}
+
 function WIIIUI.MergeDefaults(saved)
   local merged = {}
 
@@ -82,7 +102,11 @@ function WIIIUI.MergeDefaults(saved)
   -- Table defaults are deep-copied so callers never share DEFAULTS' tables.
   for key, value in pairs(WIIIUI.DEFAULTS) do
     local current = merged[key]
-    if current == nil or type(current) ~= type(value) then
+    if WEAPON_ICON_KEYS[key] then
+      if current == nil or not WEAPON_ICON_VALUES[current] then
+        merged[key] = value
+      end
+    elseif current == nil or type(current) ~= type(value) then
       merged[key] = deepCopy(value)
     end
   end
@@ -113,10 +137,14 @@ function WIIIUI.ApplyOrQueue(key, fn)
 end
 
 function WIIIUI.Flush()
-  for _, key in ipairs(order) do
-    pending[key]()
-  end
+  -- Swap the tables out before iterating so the queue is empty (and safe to
+  -- refill) even if a queued function errors; pcall so one error doesn't
+  -- stop the rest from running (spec 0001 §A.3).
+  local runOrder, runPending = order, pending
   pending, order = {}, {}
+  for _, key in ipairs(runOrder) do
+    pcall(runPending[key])
+  end
 end
 
 -- spec 0001 §A.3: "WIIIUI.hider is an unnamed hidden Frame." Reused here as
@@ -132,6 +160,11 @@ WIIIUI.hider:Hide()
 -- callers already know the event they registered for.
 local handlers = {}
 
+-- Tracks which unit (or false for "no unit") each event was first registered
+-- with, so a later WIIIUI.On call for the same event with a different unit
+-- filter is caught loudly instead of silently losing the second filter.
+local eventUnits = {}
+
 local function dispatch(_, event, ...)
   local list = handlers[event]
   if not list then
@@ -145,13 +178,17 @@ end
 WIIIUI.hider:SetScript("OnEvent", dispatch)
 
 function WIIIUI.On(event, fn, unit)
+  local unitKey = unit or false
   if not handlers[event] then
     handlers[event] = {}
+    eventUnits[event] = unitKey
     if unit then
       WIIIUI.hider:RegisterUnitEvent(event, unit)
     else
       WIIIUI.hider:RegisterEvent(event)
     end
+  elseif eventUnits[event] ~= unitKey then
+    error("WIIIUI.On: " .. event .. " already registered with a different unit filter", 2)
   end
   handlers[event][#handlers[event] + 1] = fn
 end
@@ -169,3 +206,8 @@ end)
 -- yet (later phases), so this slice only registers the event -- scoped down
 -- per this iteration's brief.
 WIIIUI.On("PLAYER_LOGIN", function() end)
+
+-- spec 0001 §A.3: "Flush runs order on PLAYER_REGEN_ENABLED" -- the other
+-- half of ApplyOrQueue's combat-lockdown seam; without this, anything queued
+-- while in combat is only applied on a manual /reload.
+WIIIUI.On("PLAYER_REGEN_ENABLED", function() WIIIUI.Flush() end)
