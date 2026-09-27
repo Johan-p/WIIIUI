@@ -1,8 +1,10 @@
 -- spec 0001 §Module split "Console.lua": art frames -- left (minimap/
 -- portrait art), middle (grid art, extensions), right (inventory, chat
--- area). This iteration adds the action-slot grid frame and its 4 tile
--- textures; the extension1/2/3 overlays and the right frame have no
--- sanctioned Theme.lua geometry yet and stay out of scope for this slice.
+-- area). This iteration adds the right frame's inventory-art pair
+-- (rightPart_middle/rightPart_left, slice 04B's tracer bullet); the lid,
+-- chat-area top/middle/bottom pieces and the 6 extension filler textures
+-- are later iterations of the same slice. The extension1/2/3 overlays on
+-- the left frame stay out of scope (slice 04's own deferral, unchanged).
 local _, WIIIUI = ...
 
 WIIIUI.Console = WIIIUI.Console or {}
@@ -160,4 +162,57 @@ function WIIIUI.Console.BuildGrid()
   tile4:SetTexture(tilePath)
   tile4:ClearAllPoints()
   tile4:SetPoint("BOTTOMLEFT", tile3, "BOTTOMRIGHT", geometry.slot4OffsetX, 0)
+end
+
+-- Vanilla WIIIUI_rightpart (e17c352 WIIIUI.xml:3120-3127): its own top-level
+-- frame, XML-anchored BOTTOM but overridden every AlignRightPart call
+-- (e17c352 WIIIUI.lua:3430) with rightFrame:SetPoint("BOTTOMRIGHT", UIParent,
+-- "BOTTOMRIGHT", 0, 0) -- a constant anchor, so it's set once on creation
+-- like the left frame's, not re-applied every Layout() call.
+--
+-- rightPart_middle/rightPart_left are vanilla Wc3_UI_right_middle (e17c352
+-- WIIIUI.xml:3147, nested in WIIIUI_rightpart) and Wc3_UI_right_left
+-- (e17c352 WIIIUI.xml:2195, nested in WIIIUI_leftpart instead -- a quirk of
+-- vanilla's own XML, not load-bearing since a texture's SetPoint relativeTo
+-- works across parents regardless of who created it). Both are built here as
+-- children of this frame instead of split across left/right, so the whole
+-- "right region" (this pair, the still-to-come lid/chat-area pieces and
+-- fillers) lives behind one WIIIUI.Console.right table for slice 05 to
+-- Hide()/Show().
+function WIIIUI.Console.BuildRight()
+  local right = WIIIUI.Console.right
+
+  if not right then
+    right = CreateFrame("Frame", nil, UIParent)
+    right:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
+    WIIIUI.Console.right = right
+  end
+
+  local theme = wc3UI_Options.theme
+  local uiScale = wc3UI_Options.uiScale
+  local geometry = WIIIUI.Theme.RightPartGeometry(uiScale, theme)
+  local grid = WIIIUI.Console.grid
+  local tile4 = grid and grid.tile4
+
+  -- Vanilla Wc3_UI_right_middle (e17c352 WIIIUI.xml:3147, Layer
+  -- level="OVERLAY"). AlignRightPart (e17c352 WIIIUI.lua:3438-3455) overrides
+  -- the XML's static BOTTOM anchor at runtime, anchoring BOTTOMLEFT to
+  -- actionSlotGrid_4's (this module's grid.tile4) BOTTOMRIGHT.
+  local rightPartMiddle = getOrCreateTexture(right, "rightPartMiddle", "OVERLAY")
+
+  rightPartMiddle:SetSize(geometry.middleWidth, geometry.middleHeight)
+  rightPartMiddle:SetTexture(WIIIUI.Theme.TexturePath(theme, "inventory", "inventory"))
+  rightPartMiddle:ClearAllPoints()
+  rightPartMiddle:SetPoint("BOTTOMLEFT", tile4, "BOTTOMRIGHT", geometry.middleOffsetX, geometry.middleOffsetY)
+
+  -- Vanilla Wc3_UI_right_left (e17c352 WIIIUI.xml:2195, Layer
+  -- level="ARTWORK"). AlignRightPart (e17c352 WIIIUI.lua:3442-3455) overrides
+  -- the XML's static BOTTOM anchor at runtime, anchoring BOTTOMRIGHT to
+  -- rightPart_middle's BOTTOMLEFT.
+  local rightPartLeft = getOrCreateTexture(right, "rightPartLeft", "ARTWORK")
+
+  rightPartLeft:SetSize(geometry.leftWidth, geometry.leftHeight)
+  rightPartLeft:SetTexture(WIIIUI.Theme.TexturePath(theme, "inventory", "no_inventory"))
+  rightPartLeft:ClearAllPoints()
+  rightPartLeft:SetPoint("BOTTOMRIGHT", rightPartMiddle, "BOTTOMLEFT", geometry.leftOffsetX, geometry.leftOffsetY)
 end

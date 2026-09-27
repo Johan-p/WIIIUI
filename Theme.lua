@@ -88,3 +88,36 @@ function WIIIUI.Theme.ExtensionBackgroundGeometry(uiScale)
     offsetY = 0,
   }
 end
+
+-- Vanilla AlignRightPart, the rightPart_middle/rightPart_left block
+-- (e17c352 WIIIUI.lua:3438-3456): rightPart_middle is (uiScale +
+-- uiScale*0.01851) wide, uiScale tall, anchored BOTTOMLEFT to
+-- actionSlotGrid_4's BOTTOMRIGHT. rightPart_left is uiScale/2 wide, uiScale
+-- tall, anchored BOTTOMRIGHT to rightPart_middle's BOTTOMLEFT at
+-- rightPart_left:GetWidth()/2 (i.e. uiScale/4) + uiScale*0.1. Per-theme
+-- pixel nudges (human -2/-2, orc -1/-1, undead -1/-0, confirmed at
+-- WIIIUI.lua:3446-3456) subtract from both offsets; nightelf has no branch
+-- in vanilla and any other theme name resolves like TexturePath does (bogus
+-- -> orc), so both fall through to the orc/default nudge via
+-- ResolveThemeName.
+local RIGHT_PART_NUDGES = {
+  human = { middle = 2, left = 2 },
+  orc = { middle = 1, left = 1 },
+  undead = { middle = 1, left = 0 },
+}
+
+function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
+  local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
+  local leftWidth = uiScale / 2
+
+  return {
+    middleWidth = uiScale + uiScale * 0.01851,
+    middleHeight = uiScale,
+    middleOffsetX = uiScale * -0.2479 - nudge.middle,
+    middleOffsetY = -1,
+    leftWidth = leftWidth,
+    leftHeight = uiScale,
+    leftOffsetX = leftWidth / 2 + uiScale * 0.1 - nudge.left,
+    leftOffsetY = 0,
+  }
+end

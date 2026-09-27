@@ -202,6 +202,7 @@ end
 function WIIIUI.Layout()
   WIIIUI.Console.BuildLeft()
   WIIIUI.Console.BuildGrid()
+  WIIIUI.Console.BuildRight()
 end
 
 -- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."
