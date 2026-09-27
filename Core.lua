@@ -93,3 +93,28 @@ function WIIIUI.MergeDefaults(saved)
 
   return merged
 end
+
+-- spec 0001 §A.3: the one apply-now-or-queue-to-PLAYER_REGEN_ENABLED seam
+-- (CLAUDE.md "Combat lockdown"). pending/order are file-scope upvalues, not
+-- WIIIUI table fields, because they are this seam's private implementation
+-- state; nothing outside ApplyOrQueue/Flush reads or writes them.
+local pending, order = {}, {}
+
+function WIIIUI.ApplyOrQueue(key, fn)
+  if InCombatLockdown() then
+    if not pending[key] then
+      order[#order + 1] = key
+    end
+    pending[key] = fn
+    return false
+  end
+  fn()
+  return true
+end
+
+function WIIIUI.Flush()
+  for _, key in ipairs(order) do
+    pending[key]()
+  end
+  pending, order = {}, {}
+end
