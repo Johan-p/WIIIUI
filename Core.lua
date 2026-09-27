@@ -201,6 +201,7 @@ end
 -- depending on any region file existing before it's built.
 function WIIIUI.Layout()
   WIIIUI.Console.BuildLeft()
+  WIIIUI.Console.BuildGrid()
 end
 
 -- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."
