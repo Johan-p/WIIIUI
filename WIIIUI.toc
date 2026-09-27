@@ -3,3 +3,4 @@
 ## Version: 2.0
 ## SavedVariablesPerCharacter: wc3UI_Options
 Core.lua
+Theme.lua
