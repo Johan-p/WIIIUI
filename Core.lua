@@ -1,5 +1,5 @@
 -- spec 0001 §A.3-A.4, §Settings schema: WIIIUI namespace + defaults merge.
-local _, WIIIUI = ...
+local ADDON, WIIIUI = ...
 _G.WIIIUI = WIIIUI
 
 -- spec 0001 §Settings schema: full key set from CLAUDE.md -> Domain model,
@@ -118,3 +118,54 @@ function WIIIUI.Flush()
   end
   pending, order = {}, {}
 end
+
+-- spec 0001 §A.3: "WIIIUI.hider is an unnamed hidden Frame." Reused here as
+-- the event-dispatch frame too -- the spec names one frame field on WIIIUI
+-- for this purpose and forbids nothing about it also carrying OnEvent, and
+-- a second unnamed frame the spec doesn't ask for would be speculative.
+WIIIUI.hider = CreateFrame("Frame")
+WIIIUI.hider:Hide()
+
+-- spec 0001 §A.3: "Event dispatch: WIIIUI.On(event, fn, unit), which uses
+-- RegisterUnitEvent when unit is given." fn receives only the OnEvent
+-- payload (everything after self, event) -- not the event name -- because
+-- callers already know the event they registered for.
+local handlers = {}
+
+local function dispatch(_, event, ...)
+  local list = handlers[event]
+  if not list then
+    return
+  end
+  for i = 1, #list do
+    list[i](...)
+  end
+end
+
+WIIIUI.hider:SetScript("OnEvent", dispatch)
+
+function WIIIUI.On(event, fn, unit)
+  if not handlers[event] then
+    handlers[event] = {}
+    if unit then
+      WIIIUI.hider:RegisterUnitEvent(event, unit)
+    else
+      WIIIUI.hider:RegisterEvent(event)
+    end
+  end
+  handlers[event][#handlers[event] + 1] = fn
+end
+
+-- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."
+WIIIUI.On("ADDON_LOADED", function(addonName)
+  if addonName ~= ADDON then
+    return
+  end
+  wc3UI_Options = WIIIUI.MergeDefaults(wc3UI_Options)
+end)
+
+-- spec 0001 §A.4 also has PLAYER_LOGIN resolve the action bar and queue
+-- retire/layout/bindings; none of Retire/Layout/the bindings builder exist
+-- yet (later phases), so this slice only registers the event -- scoped down
+-- per this iteration's brief.
+WIIIUI.On("PLAYER_LOGIN", function() end)
