@@ -193,6 +193,16 @@ function WIIIUI.On(event, fn, unit)
   handlers[event][#handlers[event] + 1] = fn
 end
 
+-- spec 0001 §A.3/§Module split: "WIIIUI.Layout() orchestration" -- the
+-- single public entrypoint PLAYER_LOGIN queues through
+-- ApplyOrQueue("layout", WIIIUI.Layout) (§A.4). Each region file (Console.lua
+-- now; Bars.lua/Portrait.lua/etc. in later phases) owns its own Build*
+-- function; Core.lua only calls them, so this list grows without Core.lua
+-- depending on any region file existing before it's built.
+function WIIIUI.Layout()
+  WIIIUI.Console.BuildLeft()
+end
+
 -- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."
 WIIIUI.On("ADDON_LOADED", function(addonName)
   if addonName ~= ADDON then

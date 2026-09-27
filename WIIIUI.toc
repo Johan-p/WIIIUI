@@ -4,3 +4,4 @@
 ## SavedVariablesPerCharacter: wc3UI_Options
 Core.lua
 Theme.lua
+Console.lua
