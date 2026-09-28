@@ -192,7 +192,14 @@ function WIIIUI.Blizzard.BuildMicroMenu()
       end
 
       WIIIUI.ApplyOrQueue("microMenu", function()
-        MicroMenu:SetParent(WIIIUI.hider)
+        -- Read live again at flush time, not just at queue time: Flush
+        -- (Core.lua:127-148) runs queued keys in queue order, so a later
+        -- "layout" entry queued before this one already restored the menu
+        -- if the option flipped off in between -- this must be a no-op
+        -- then, not re-hide it (security-specialist finding, slice 16).
+        if wc3UI_Options.hideMicroButtons then
+          MicroMenu:SetParent(WIIIUI.hider)
+        end
       end)
     end)
   end
