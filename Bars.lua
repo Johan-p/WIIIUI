@@ -102,7 +102,20 @@ function WIIIUI.Bars.BuildBars()
       bar:SetStatusBarTexture(BAR_TEXTURE)
       bar.text = bar:CreateFontString(nil, "OVERLAY")
       bar.text:SetPoint("CENTER", bar, "CENTER", 0, 0)
-      bar.text:SetFont(FONT_PATH, FONT_SIZES[key], "")
+
+      -- CLAUDE.md "Tech stack quirks": "FontString:SetFont returns success
+      -- on Forever; the pattern stays: set the font object, then SetFont,
+      -- then confirm with GetFont(), fall back to a Blizzard font object."
+      -- GameFontHighlightSmall (FrameXML/Fonts.xml) is the safety net set
+      -- first and re-applied if the custom theme font doesn't take;
+      -- FontInstance:SetFontObject/GetFont, warcraft.wiki.gg.
+      bar.text:SetFontObject(GameFontHighlightSmall)
+      local fontApplied = bar.text:SetFont(FONT_PATH, FONT_SIZES[key], "")
+
+      if not fontApplied or not bar.text:GetFont() then
+        bar.text:SetFontObject(GameFontHighlightSmall)
+      end
+
       WIIIUI.Bars[key] = bar
     end
 
