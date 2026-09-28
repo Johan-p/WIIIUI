@@ -1,14 +1,15 @@
 -- spec 0001 §Module split "Bars.lua": health/power bars + text, power
--- colour by UnitPowerType token (C1). Vanilla AlignHealthMana (e17c352
+-- colour by UnitPowerType token (C1), plus §1.2's secret-safe % text, HP
+-- gradient and low-HP pulse. Vanilla AlignHealthMana (e17c352
 -- WIIIUI.lua:1980-2059) reused Blizzard's PlayerFrameHealthBar/
 -- PlayerFrameManaBar, reparented to UIParent; PlayerFrame is now retired
 -- (R2, Core.lua's WIIIUI.Retire), which hides its children too, so this
--- slice builds WIIIUI's own StatusBar frames at the same position/size
--- instead. % text, the HP gradient and the low-HP pulse are secret-value
--- guarded and land in slice 09 (this slice's own Notes); text stays the raw
--- "cur / max" concatenation, which CLAUDE.md's secret-value rules allow
--- unguarded (concatenation, SetValue and SetMinMaxValues are all sanctioned
--- secret-tolerant operations).
+-- file builds WIIIUI's own StatusBar frames at the same position/size
+-- instead. The raw "cur / max" text (default) is CLAUDE.md's own sanctioned
+-- unguarded route (concatenation, SetValue and SetMinMaxValues are all
+-- secret-tolerant); % text, the gradient and the pulse go through
+-- WIIIUI.Safe (Core.lua) since they touch UnitHealthPercent/
+-- UnitPowerPercent's SecretReturns results.
 local _, WIIIUI = ...
 
 WIIIUI.Bars = WIIIUI.Bars or {}
@@ -21,11 +22,24 @@ WIIIUI.Bars = WIIIUI.Bars or {}
 -- CLAUDE.md status header).
 local BAR_TEXTURE = "Interface\\Buttons\\WHITE8X8"
 
+-- Vanilla LowHPWarning (e17c352 WIIIUI.lua:3875-3939): the low-HP flash
+-- lives on PortraitBackground, ported forward here per spec 0001's
+-- architecture note ("Bars.lua ... low-HP pulse ... Every secret-value
+-- guard lives here"). white_background.tga already ships in art/other/
+-- (the same file vanilla toggled between white_background/black_background
+-- -- this port uses SetVertexColor for the fixed red tint instead, spec
+-- 0001 §1.2, so only one of the two files is needed).
+local LOW_HP_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\white_background"
+local LOW_HP_OVERLAY_WIDTH_FRACTION = 0.35
+local LOW_HP_OVERLAY_HEIGHT_FRACTION = 0.35
+local LOW_HP_OVERLAY_HEIGHT_PAD = 20
+local LOW_HP_PULSE_DURATION = 1
+
 -- Vanilla never sets a static health-bar colour in AlignHealthMana itself
--- (Blizzard's own texture supplied it); the dynamic HP gradient
--- (HPBarDamageGradiant, e17c352 WIIIUI.lua:3975-4003) is secret-guarded and
--- deferred to slice 09 per this slice's own Notes. This is a static
--- placeholder until that lands.
+-- (Blizzard's own texture supplied it). This is the fallback colour the bar
+-- keeps whenever the secret-guarded HP gradient (below) fails to build or
+-- apply -- vanilla HPBarDamageGradiant's own 100%-health colour (e17c352
+-- WIIIUI.lua:3975-4003: g=1 at healthPercent=1).
 local HEALTH_BAR_DEFAULT_COLOR_R, HEALTH_BAR_DEFAULT_COLOR_G, HEALTH_BAR_DEFAULT_COLOR_B = 0, 1, 0
 
 -- Vanilla AlignHealthMana (e17c352 WIIIUI.lua:1999, 2018): health text at
@@ -40,6 +54,198 @@ local FONT_SIZES = { health = 10, power = 9 }
 -- so that insertion only touches this line, not BuildBars' body.
 local BAR_DEFS = { "health", "power" }
 
+-- spec 0001 §1.2: "Health % text (HealthPercent) ... fs:SetFormattedText(
+-- '%.0f%%', UnitHealthPercent('player', true, CurveConstants.ScaleTo100))
+-- inside pcall ... Fallback: falls back to cur / max text." The guard seam
+-- is WIIIUI.Safe (Core.lua); CurveConstants.ScaleTo100 is Blizzard's own
+-- pre-built curve (Blizzard_SharedXMLBase/CurveConstants.lua), not one
+-- WIIIUI builds.
+local function setHealthText(bar)
+  if wc3UI_Options.HealthPercent then
+    local ok = WIIIUI.Safe(function()
+      bar.text:SetFormattedText("%.0f%%", UnitHealthPercent("player", true, CurveConstants.ScaleTo100))
+    end)
+    if ok then
+      return
+    end
+  end
+
+  bar.text:SetText(UnitHealth("player") .. " / " .. UnitHealthMax("player"))
+end
+
+-- spec 0001 §1.2: "Power % text (PowerPercent) ... Same with
+-- UnitPowerPercent('player', nil, false, CurveConstants.ScaleTo100)."
+local function setPowerText(bar)
+  if wc3UI_Options.PowerPercent then
+    local ok = WIIIUI.Safe(function()
+      bar.text:SetFormattedText("%.0f%%", UnitPowerPercent("player", nil, false, CurveConstants.ScaleTo100))
+    end)
+    if ok then
+      return
+    end
+  end
+
+  bar.text:SetText(UnitPower("player") .. " / " .. UnitPowerMax("player"))
+end
+
+-- spec 0001 §1.2: "HP gradient ... One ColorCurve built at login: 0 -> red,
+-- 0.5 -> yellow, 1 -> green (the vanilla r,g formula sampled at 0/0.5/1,
+-- linear)." Vanilla HPBarDamageGradiant (e17c352 WIIIUI.lua:3975-4003):
+-- healthPercent<0.5 -> r=1,g=2*healthPercent,b=0 (0%=red, 50%=yellow);
+-- else -> r=2*(1-healthPercent),g=1,b=0 (50%=yellow, 100%=green) -- exactly
+-- the three sampled points below. Built lazily (not at file/module load)
+-- and cached, so a missing C_CurveUtil/AddPoint/CreateColor API (spec 0001
+-- §1.2's own "Unverified" list) degrades this one feature via WIIIUI.Safe
+-- instead of erroring Bars.lua's whole load. ScriptObject_ColorCurveObject
+-- (warcraft.wiki.gg): "AddPoint takes an x and y value; ... the y should be
+-- a ColorMixin structure", built via CreateColor(r,g,b) (SharedXML/
+-- Color.lua via FrameXML/Util.lua).
+local healthColorCurve
+
+local function getHealthColorCurve()
+  if healthColorCurve then
+    return healthColorCurve
+  end
+
+  local ok, curve = WIIIUI.Safe(function()
+    local c = C_CurveUtil.CreateColorCurve()
+    c:AddPoint(0, CreateColor(1, 0, 0))
+    c:AddPoint(0.5, CreateColor(1, 1, 0))
+    c:AddPoint(1, CreateColor(0, 1, 0))
+    return c
+  end)
+
+  if ok then
+    healthColorCurve = curve
+  end
+
+  return healthColorCurve
+end
+
+-- spec 0001 §1.2: "local c = UnitHealthPercent('player', true, curve) ->
+-- bar:GetStatusBarTexture():SetVertexColor(c:GetRGB()) in pcall." Leaves
+-- the bar's own static SetStatusBarColor (BuildBars) untouched on failure
+-- -- that's the "Static vanilla green" fallback the spec's own table names.
+local function updateHealthGradient(bar)
+  local curve = getHealthColorCurve()
+  if not curve then
+    return
+  end
+
+  WIIIUI.Safe(function()
+    local color = UnitHealthPercent("player", true, curve)
+    bar:GetStatusBarTexture():SetVertexColor(color:GetRGB())
+  end)
+end
+
+-- spec 0001 §1.2: "Low-HP pulse ... overlay is a frame holding the red
+-- portrait-background texture. Its child texture runs a looping
+-- AnimationGroup Alpha 0<->1 (1 s each way, the vanilla timing)." Anchored
+-- to left.portraitTexture (not WIIIUI.Portrait.button/model) because
+-- Bars.lua's BuildBars runs before Portrait.lua's BuildPortrait in
+-- WIIIUI.Layout() (WIIIUI.toc load order) -- the portrait art texture is
+-- already built by Console.BuildLeft by the time this runs, matching how
+-- Portrait.lua itself anchors its own button to the same texture. Building
+-- the animation is plain non-secret widget setup (no unit value involved),
+-- so unlike the curve/SetAlpha calls below it isn't wrapped in WIIIUI.Safe.
+local function buildLowHpOverlay(anchor, uiScale)
+  local overlay = WIIIUI.Bars.lowHpOverlay
+
+  if not overlay then
+    overlay = CreateFrame("Frame", nil, UIParent)
+    overlay:SetFrameStrata("LOW")
+
+    local texture = overlay:CreateTexture(nil, "OVERLAY")
+    texture:SetAllPoints(overlay)
+    texture:SetTexture(LOW_HP_TEXTURE)
+    texture:SetVertexColor(1, 0, 0, 1)
+
+    -- "Its child texture runs a looping AnimationGroup Alpha 0<->1" --
+    -- BOUNCE plays the single 0->1 animation forward then backward each
+    -- cycle, giving the 1s-each-way ping-pong with one animation instead
+    -- of two (warcraft.wiki.gg API_AnimationGroup_SetLooping).
+    local animGroup = texture:CreateAnimationGroup()
+    local pulse = animGroup:CreateAnimation("Alpha")
+    pulse:SetFromAlpha(0)
+    pulse:SetToAlpha(1)
+    pulse:SetDuration(LOW_HP_PULSE_DURATION)
+    animGroup:SetLooping("BOUNCE")
+    animGroup:Play()
+
+    overlay.texture = texture
+    overlay.animGroup = animGroup
+    WIIIUI.Bars.lowHpOverlay = overlay
+  end
+
+  overlay:ClearAllPoints()
+  if anchor then
+    overlay:SetPoint("CENTER", anchor, "CENTER", 0, 0)
+  end
+  overlay:SetSize(
+    uiScale * LOW_HP_OVERLAY_WIDTH_FRACTION,
+    uiScale * LOW_HP_OVERLAY_HEIGHT_FRACTION + LOW_HP_OVERLAY_HEIGHT_PAD
+  )
+
+  return overlay
+end
+
+-- spec 0001 §1.2: "A Step curve with points (0,1), (hpWarning/100,1),
+-- (hpWarning/100+0.0001,0), (1,0) ... The curve is rebuilt when hpWarning
+-- changes." Cached alongside the threshold it was built for (not just
+-- built once at login) so this file alone -- without a Config.lua hook --
+-- notices a changed wc3UI_Options.hpWarning on the next health event.
+local lowHpCurve, lowHpCurveThreshold
+
+local function getLowHpCurve()
+  local threshold = wc3UI_Options.hpWarning
+
+  if lowHpCurve and lowHpCurveThreshold == threshold then
+    return lowHpCurve
+  end
+
+  local ok, curve = WIIIUI.Safe(function()
+    local cutoff = threshold / 100
+    local c = C_CurveUtil.CreateCurve()
+    c:SetType(Enum.LuaCurveType.Step)
+    c:AddPoint(0, 1)
+    c:AddPoint(cutoff, 1)
+    c:AddPoint(cutoff + 0.0001, 0)
+    c:AddPoint(1, 0)
+    return c
+  end)
+
+  lowHpCurve = ok and curve or nil
+  lowHpCurveThreshold = ok and threshold or nil
+
+  return lowHpCurve
+end
+
+-- spec 0001 §1.2: "overlay:SetAlpha(UnitHealthPercent('player', true,
+-- stepCurve)) ... Effective alpha = parent (secret 0/1) x child (animated),
+-- so there is no comparison, no arithmetic and no OnUpdate." Never calls
+-- Show/Hide based on the secret result itself -- only WIIIUI.Safe's own ok
+-- flag (a plain boolean, not a unit value) drives the one degrade action.
+local function updateLowHpPulse()
+  local overlay = WIIIUI.Bars.lowHpOverlay
+  if not overlay then
+    return
+  end
+
+  local curve = getLowHpCurve()
+  if not curve then
+    overlay:Hide()
+    return
+  end
+
+  local ok = WIIIUI.Safe(function()
+    overlay:SetAlpha(UnitHealthPercent("player", true, curve))
+  end)
+
+  if not ok then
+    overlay:Hide()
+  end
+end
+
 local function updateHealth()
   local bar = WIIIUI.Bars.health
   if not bar then
@@ -50,8 +256,11 @@ local function updateHealth()
   bar:SetValue(UnitHealth("player"))
 
   if bar.text then
-    bar.text:SetText(UnitHealth("player") .. " / " .. UnitHealthMax("player"))
+    setHealthText(bar)
   end
+
+  updateHealthGradient(bar)
+  updateLowHpPulse()
 end
 
 local function updatePower()
@@ -64,7 +273,7 @@ local function updatePower()
   bar:SetValue(UnitPower("player"))
 
   if bar.text then
-    bar.text:SetText(UnitPower("player") .. " / " .. UnitPowerMax("player"))
+    setPowerText(bar)
   end
 
   -- spec 0001 §Event -> widget wiring: "colour by UnitPowerType token
@@ -133,6 +342,8 @@ function WIIIUI.Bars.BuildBars()
     HEALTH_BAR_DEFAULT_COLOR_B,
     1
   )
+
+  buildLowHpOverlay(left and left.portraitTexture, uiScale)
 
   updateHealth()
   updatePower()
