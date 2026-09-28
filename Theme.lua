@@ -123,6 +123,65 @@ function WIIIUI.Theme.RightPartBackgroundGeometry(uiScale, rightPartWidth, moveC
   }
 end
 
+-- Vanilla AlignRightPart, the lid block (e17c352 WIIIUI.lua:3485-3493):
+-- Wc3_UI_right_lid is uiScale square, anchored BOTTOMLEFT to
+-- rightPart_middle's BOTTOMLEFT at offset (uiScale*0.2833333333 -
+-- shiftWidth, uiScale*-0.3166 + moveChatAreaUp). shiftWidth subtracts from
+-- the x offset for undead only (e17c352 WIIIUI.lua:3486-3488); no branch
+-- for any other theme.
+local RIGHT_LID_SHIFT_WIDTH_THEMES = {
+  undead = true,
+}
+
+function WIIIUI.Theme.RightLidGeometry(uiScale, theme, moveChatAreaUp)
+  local resolved = WIIIUI.Theme.ResolveThemeName(theme)
+  local shiftWidth = RIGHT_LID_SHIFT_WIDTH_THEMES[resolved] and uiScale * 0.0185185 or 0
+
+  return {
+    size = uiScale,
+    offsetX = uiScale * 0.2833333333 - shiftWidth,
+    offsetY = uiScale * -0.3166 + moveChatAreaUp,
+  }
+end
+
+-- Vanilla AlignRightPart, the "Increase the size of the lower right area
+-- (chat area)" block (e17c352 WIIIUI.lua:3457-3483): Wc3_UI_bottom_right_
+-- top/middle/bottom all anchor BOTTOMLEFT to UIParent's own BOTTOMRIGHT
+-- corner (not a WIIIUI frame). Top and bottom are theme-independent.
+-- Middle's height carries a human/undead extraHeight term
+-- (uiScale*0.022222, e17c352 WIIIUI.lua:3464-3468); the trailing
+-- +uiScale*0.0208333 term (e17c352 WIIIUI.lua:3472) is dropped only for
+-- human (e17c352 WIIIUI.lua:3476-3478), kept for every other theme.
+local CHAT_AREA_EXTRA_HEIGHT_THEMES = {
+  human = true,
+  undead = true,
+}
+
+function WIIIUI.Theme.ChatAreaGeometry(uiScale, theme, moveChatAreaUp)
+  local resolved = WIIIUI.Theme.ResolveThemeName(theme)
+  local extraHeight = CHAT_AREA_EXTRA_HEIGHT_THEMES[resolved] and uiScale * 0.022222 or 0
+  local middleHeight = uiScale - uiScale * 0.5 + moveChatAreaUp + extraHeight
+
+  if resolved ~= "human" then
+    middleHeight = middleHeight + uiScale * 0.0208333
+  end
+
+  return {
+    topWidth = uiScale,
+    topHeight = uiScale / 4,
+    topOffsetX = uiScale * -0.7259,
+    topOffsetY = uiScale * 0.5208 + moveChatAreaUp,
+    middleWidth = uiScale / 16,
+    middleHeight = middleHeight,
+    middleOffsetX = uiScale * -0.0625,
+    middleOffsetY = 0,
+    bottomWidth = uiScale,
+    bottomHeight = uiScale / 8,
+    bottomOffsetX = uiScale * -0.7259,
+    bottomOffsetY = 0,
+  }
+end
+
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
   local leftWidth = uiScale / 2

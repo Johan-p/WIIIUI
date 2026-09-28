@@ -1,10 +1,10 @@
 -- spec 0001 §Module split "Console.lua": art frames -- left (minimap/
 -- portrait art), middle (grid art, extensions), right (inventory, chat
--- area). This iteration adds the right frame's inventory-art pair
--- (rightPart_middle/rightPart_left, slice 04B's tracer bullet); the lid,
--- chat-area top/middle/bottom pieces and the 6 extension filler textures
--- are later iterations of the same slice. The extension1/2/3 overlays on
--- the left frame stay out of scope (slice 04's own deferral, unchanged).
+-- area). BuildRight now covers the inventory-art pair (rightPart_middle/
+-- rightPart_left), the shared background, the lid and the chat-area top/
+-- middle/bottom pieces; the 6 extension filler textures are a later
+-- iteration of the same slice. The extension1/2/3 overlays on the left
+-- frame stay out of scope (slice 04's own deferral, unchanged).
 local _, WIIIUI = ...
 
 WIIIUI.Console = WIIIUI.Console or {}
@@ -242,4 +242,47 @@ function WIIIUI.Console.BuildRight()
     backgroundGeometry.offsetX,
     backgroundGeometry.offsetY
   )
+
+  -- Vanilla Wc3_UI_right_lid (e17c352 WIIIUI.xml:3164, Layer
+  -- level="BORDER"). AlignRightPart (e17c352 WIIIUI.lua:3490-3493) overrides
+  -- the XML's static BOTTOM anchor at runtime, anchoring BOTTOMLEFT to
+  -- rightPartMiddle's BOTTOMLEFT. Cached as right.lid so slice 05 can
+  -- Hide()/Show() it.
+  local lidGeometry = WIIIUI.Theme.RightLidGeometry(uiScale, theme, wc3UI_Options.moveChatAreaUp)
+  local lid = getOrCreateTexture(right, "lid", "BORDER")
+
+  lid:SetSize(lidGeometry.size, lidGeometry.size)
+  lid:SetTexture(WIIIUI.Theme.TexturePath(theme, "bottom right", "right_part_lid"))
+  lid:ClearAllPoints()
+  lid:SetPoint("BOTTOMLEFT", rightPartMiddle, "BOTTOMLEFT", lidGeometry.offsetX, lidGeometry.offsetY)
+
+  -- Vanilla Wc3_UI_bottom_right_top/middle/bottom (e17c352 WIIIUI.xml:3179/
+  -- 3193/3207, Layer level="BORDER"). AlignRightPart's "Increase the size
+  -- of the lower right area (chat area)" block (e17c352 WIIIUI.lua:3457-
+  -- 3483) overrides the XML's static BOTTOM anchors at runtime, anchoring
+  -- all three BOTTOMLEFT to UIParent's own BOTTOMRIGHT corner, not a WIIIUI
+  -- frame. Cached as right.chatTop/chatMiddle/chatBottom so slice 05 can
+  -- Hide()/Show() them.
+  local chatAreaGeometry = WIIIUI.Theme.ChatAreaGeometry(uiScale, theme, wc3UI_Options.moveChatAreaUp)
+
+  local chatTop = getOrCreateTexture(right, "chatTop", "BORDER")
+
+  chatTop:SetSize(chatAreaGeometry.topWidth, chatAreaGeometry.topHeight)
+  chatTop:SetTexture(WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRight_Top"))
+  chatTop:ClearAllPoints()
+  chatTop:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMRIGHT", chatAreaGeometry.topOffsetX, chatAreaGeometry.topOffsetY)
+
+  local chatMiddle = getOrCreateTexture(right, "chatMiddle", "BORDER")
+
+  chatMiddle:SetSize(chatAreaGeometry.middleWidth, chatAreaGeometry.middleHeight)
+  chatMiddle:SetTexture(WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRight_Middle"))
+  chatMiddle:ClearAllPoints()
+  chatMiddle:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMRIGHT", chatAreaGeometry.middleOffsetX, chatAreaGeometry.middleOffsetY)
+
+  local chatBottom = getOrCreateTexture(right, "chatBottom", "BORDER")
+
+  chatBottom:SetSize(chatAreaGeometry.bottomWidth, chatAreaGeometry.bottomHeight)
+  chatBottom:SetTexture(WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRight_Bottom"))
+  chatBottom:ClearAllPoints()
+  chatBottom:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMRIGHT", chatAreaGeometry.bottomOffsetX, chatAreaGeometry.bottomOffsetY)
 end
