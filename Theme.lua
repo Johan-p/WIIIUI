@@ -271,12 +271,16 @@ end
 -- the same texture) at uiScale*0.23, uiScale*0.3. Vanilla builds the bar
 -- from three endcap-plus-middle textures scaled by xpScaling=0.375; this
 -- port's XP bar is one plain StatusBar (Bars.lua's health/power bar
--- convention, no left/right endcap art), so only the middle piece's own
--- width (uiScale*1.70*0.375) and the progress fill's own height
--- (uiScale*0.083, WIIIUI.lua:2113) are in scope.
+-- convention, no left/right endcap art). Finding 2 (ui-reviewer, gate-fix):
+-- width is the real vanilla fill-texture max width, xpProgBarMax =
+-- uiScale*0.6814 (e17c352 WIIIUI.lua:3828, 4539) -- the COMBINED width of
+-- left+middle+right endcap segments (uiScale*0.375*(0.05924+1.70+0.05924)),
+-- not just the middle piece's own uiScale*1.70*0.375, which rendered ~6.9%
+-- narrower than intended. The progress fill's own height
+-- (uiScale*0.083, WIIIUI.lua:2113) is unchanged.
 function WIIIUI.Theme.XPBarGeometry(uiScale)
   return {
-    width = uiScale * 1.70 * 0.375,
+    width = uiScale * 0.375 * (0.05924 + 1.70 + 0.05924),
     height = uiScale * 0.083,
     anchorOffsetX = uiScale * 0.23,
     anchorOffsetY = uiScale * 0.3,

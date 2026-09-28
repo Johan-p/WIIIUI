@@ -22,6 +22,15 @@ WIIIUI.Bars = WIIIUI.Bars or {}
 -- CLAUDE.md status header).
 local BAR_TEXTURE = "Interface\\Buttons\\WHITE8X8"
 
+-- Finding 3 (ui-reviewer, gate-fix): unlike the health/power bars above,
+-- WIIIUI's own themed XP art already ships in art/other/ (xp1/xp2/xp3.tga,
+-- xpProgressBar.tga) -- vanilla's XP bar was always WIIIUI's own art, not
+-- borrowed from Blizzard, and CLAUDE.md's "the look is the specification"
+-- says not to minimise it. Staying inside the plain-StatusBar convention
+-- (no 3-piece endcap reconstruction, out of scope), the fill piece alone
+-- uses xpProgressBar.tga instead of WHITE8X8.
+local XP_BAR_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\xpProgressBar"
+
 -- Vanilla LowHPWarning (e17c352 WIIIUI.lua:3875-3939): the low-HP flash
 -- lives on PortraitBackground, ported forward here per spec 0001's
 -- architecture note ("Bars.lua ... low-HP pulse ... Every secret-value
@@ -53,12 +62,6 @@ local FONT_SIZES = { health = 10, power = 9 }
 -- "form" between them; kept as an ordered list (not two hardcoded blocks)
 -- so that insertion only touches this line, not BuildBars' body.
 local BAR_DEFS = { "health", "power" }
-
--- Vanilla AlignXPBar (e17c352 WIIIUI.lua:2126, "xpProgBar:SetVertexColor(0.5,
--- 0, 0.5, 1)"): the main XP fill's fixed purple. The rested overlay's colour
--- comes from wc3UI_Options.xpRestedXpColor instead (user-configurable,
--- CLAUDE.md Domain model), not a constant here.
-local XP_BAR_MAIN_COLOR_R, XP_BAR_MAIN_COLOR_G, XP_BAR_MAIN_COLOR_B = 0.5, 0, 0.5
 
 -- Vanilla xpCurrLevel (e17c352 WIIIUI.lua:2213: SetFont(..., 12, "")).
 local LEVEL_TEXT_FONT_SIZE = 12
@@ -368,14 +371,13 @@ local function buildXPBar(anchor, uiScale)
 
   if not rested then
     rested = CreateFrame("StatusBar", nil, UIParent)
-    rested:SetStatusBarTexture(BAR_TEXTURE)
+    rested:SetStatusBarTexture(XP_BAR_TEXTURE)
     WIIIUI.Bars.xpRested = rested
   end
 
   if not bar then
     bar = CreateFrame("StatusBar", nil, UIParent)
-    bar:SetStatusBarTexture(BAR_TEXTURE)
-    bar:SetStatusBarColor(XP_BAR_MAIN_COLOR_R, XP_BAR_MAIN_COLOR_G, XP_BAR_MAIN_COLOR_B, 1)
+    bar:SetStatusBarTexture(XP_BAR_TEXTURE)
 
     bar.levelText = bar:CreateFontString(nil, "OVERLAY")
     bar.levelText:SetPoint("CENTER", bar, "CENTER", 0, 0)
@@ -396,9 +398,31 @@ local function buildXPBar(anchor, uiScale)
 
   local geometry = WIIIUI.Theme.XPBarGeometry(uiScale)
 
+  -- Finding 7 (ui-reviewer, gate-fix): validate shape before handing to
+  -- SetStatusBarColor -- MergeDefaults only checks xpRestedXpColor is a
+  -- table, not that it holds 4 numbers, so a hand-edited SavedVariable like
+  -- {} would otherwise reach SetStatusBarColor(nil, ...) and throw, aborting
+  -- the rest of WIIIUI.Layout() (Portrait/Buttons/Config never get built,
+  -- since ApplyOrQueue calls WIIIUI.Layout without a pcall). Falls back to
+  -- WIIIUI.DEFAULTS.xpRestedXpColor, matching CLAUDE.md's "degrade to
+  -- hidden rather than wrong" spirit for corrupted saved data.
   local restColor = wc3UI_Options.xpRestedXpColor
+  if
+    type(restColor) ~= "table"
+    or type(restColor[1]) ~= "number"
+    or type(restColor[2]) ~= "number"
+    or type(restColor[3]) ~= "number"
+  then
+    restColor = WIIIUI.DEFAULTS.xpRestedXpColor
+  end
   rested:SetStatusBarColor(restColor[1], restColor[2], restColor[3], restColor[4])
 
+  -- Finding 1 (ui-reviewer, gate-fix): both bars share UIParent and neither
+  -- overrides frame level, so per warcraft.wiki.gg's UI_rendering_process
+  -- ("there is no defined render order" for identical strata+level) the
+  -- rested overlay could draw on top of the current-XP fill. Explicit
+  -- levels (API_Frame_SetFrameLevel/GetFrameLevel, warcraft.wiki.gg) make
+  -- bar draw strictly above rested, deterministically.
   for _, xpBar in ipairs({ rested, bar }) do
     xpBar:SetFrameStrata("LOW")
     xpBar:SetSize(geometry.width, geometry.height)
@@ -407,6 +431,7 @@ local function buildXPBar(anchor, uiScale)
       xpBar:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", geometry.anchorOffsetX, geometry.anchorOffsetY)
     end
   end
+  bar:SetFrameLevel(rested:GetFrameLevel() + 1)
 end
 
 -- spec 0001 §Event -> widget wiring: "PLAYER_XP_UPDATE, UPDATE_EXHAUSTION,
@@ -427,11 +452,13 @@ local function updateXP()
     local maxXP = UnitXPMax("player")
     local curXP = UnitXP("player")
 
-    -- Vanilla AlignXPBar (e17c352 WIIIUI.lua:2119-2124): at max level
-    -- UnitXPMax returns 0, which vanilla special-cased to a full bar
-    -- instead of the 0/0 division its own width formula would otherwise
-    -- hit -- ported here as maxXP/curXP both becoming 1 so the StatusBar's
-    -- own min/max/value math (not this file's arithmetic) reads "full".
+    -- Finding 4 (ui-reviewer, gate-fix): at max level UnitXPMax returns 0;
+    -- this re-derives a full-bar result for that case (maxXP/curXP both 1,
+    -- so the StatusBar's own min/max/value math reads "full") rather than
+    -- porting vanilla's own guard, which tested UnitXP()==0 plus a
+    -- MAX_LEVEL check (e17c352 WIIIUI.lua:2119-2124) -- a different
+    -- condition this port doesn't need, since it avoids requiring an
+    -- unverified MAX_LEVEL constant on the target client.
     if maxXP == 0 then
       maxXP = 1
       curXP = 1
@@ -535,15 +562,20 @@ WIIIUI.On("UNIT_DISPLAYPOWER", updatePower, "player")
 
 -- PLAYER_XP_UPDATE/UPDATE_EXHAUSTION/PLAYER_LEVEL_UP are plain RegisterEvent
 -- calls, not RegisterUnitEvent, despite this file's other events using the
--- unit form: RegisterUnitEvent only accepts the client's fixed set of
--- UNIT_*-namespaced events (API_Frame_RegisterUnitEvent, warcraft.wiki.gg)
--- and none of these three qualify -- PLAYER_XP_UPDATE's own payload is a
--- unitTarget string (PLAYER_XP_UPDATE, warcraft.wiki.gg) but the event name
--- itself is not in that set; UPDATE_EXHAUSTION carries no payload at all
--- (UPDATE_EXHAUSTION, warcraft.wiki.gg); PLAYER_LEVEL_UP's payload leads
--- with `level`, not a unit token (PLAYER_LEVEL_UP, warcraft.wiki.gg).
--- Matches Portrait.lua's PORTRAIT_PLAIN_EVENTS convention for player-scoped
--- events that aren't UNIT_* (e.g. PLAYER_ENTERING_WORLD).
+-- unit form: Blizzard's own XP bar uses plain RegisterEvent for these same
+-- three events (Blizzard_StatusTrackingBar/Shared/ExpBar.lua:53,119-121 on
+-- the forever branch), matching this port's choice. RegisterUnitEvent isn't
+-- restricted to a fixed event list (Blizzard_EditMode/Shared/
+-- EditModeManager.lua:65 on live calls RegisterUnitEvent with
+-- PLAYER_SPECIALIZATION_CHANGED, a non-UNIT_-prefixed event) -- the reason
+-- for RegisterEvent here is simply that none of the three carries a
+-- leading unit-token payload the unit form is for: PLAYER_XP_UPDATE's own
+-- payload is a unitTarget string, not a leading unit token
+-- (PLAYER_XP_UPDATE, warcraft.wiki.gg); UPDATE_EXHAUSTION carries no
+-- payload at all (UPDATE_EXHAUSTION, warcraft.wiki.gg); PLAYER_LEVEL_UP's
+-- payload leads with `level` (PLAYER_LEVEL_UP, warcraft.wiki.gg). Matches
+-- Portrait.lua's PORTRAIT_PLAIN_EVENTS convention for player-scoped events
+-- that aren't UNIT_* (e.g. PLAYER_ENTERING_WORLD).
 WIIIUI.On("PLAYER_XP_UPDATE", updateXP)
 WIIIUI.On("UPDATE_EXHAUSTION", updateXP)
 WIIIUI.On("PLAYER_LEVEL_UP", updateXP)
