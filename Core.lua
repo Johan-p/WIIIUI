@@ -118,6 +118,15 @@ function WIIIUI.MergeDefaults(saved)
   return merged
 end
 
+-- spec 0001 §A.3/§Domain model (0001-forever-support.md:106, 409): "The
+-- guard seam is WIIIUI.Safe(fn, ...), which returns ok, result ...
+-- WIIIUI.Safe(fn, ...) = pcall." The one secret-value guard seam
+-- (CLAUDE.md "Secret values") -- a secret or erroring unit-value read
+-- degrades through this instead of throwing in the caller's handler.
+function WIIIUI.Safe(fn, ...)
+  return pcall(fn, ...)
+end
+
 -- spec 0001 §A.3: the one apply-now-or-queue-to-PLAYER_REGEN_ENABLED seam
 -- (CLAUDE.md "Combat lockdown"). pending/order are file-scope upvalues, not
 -- WIIIUI table fields, because they are this seam's private implementation

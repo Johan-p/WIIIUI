@@ -41,16 +41,46 @@ local header
 -- action bar is replacing the main action bar" per the wiki -- a TEMPORARY
 -- form, distinct from the permanent stances/forms bonusbar:1-4 cover below)
 -- all route to the runtime-resolved "possess" state (ONSTATE_PAGE_SNIPPET,
--- below); bar:2-6 are the vanilla Shift-paged bars; [bonusbar:1,stealth]8
--- (druid Prowl: Cat Form + stealthed) is a more specific clause placed
--- before the plain [bonusbar:1]7 so it wins while prowling, per
--- macro-conditional first-match-wins evaluation order. The exact ordering
--- needs in-game verification (Prowl, stances, vehicle) -- slice 13 Notes.
-local PAGE_STATE_CONDITIONAL =
+-- below); bar:2-6 are the vanilla Shift-paged bars. The exact ordering needs
+-- in-game verification (Prowl, stances, vehicle) -- slice 13 Notes.
+local PAGE_STATE_PREFIX =
   "[vehicleui][possessbar][overridebar][shapeshift] possess;"
   .. " [bar:2]2;[bar:3]3;[bar:4]4;[bar:5]5;[bar:6]6;"
-  .. " [bonusbar:1,stealth]8;[bonusbar:1]7;[bonusbar:2]8;[bonusbar:3]9;[bonusbar:4]10;"
+  .. " "
+
+local PAGE_STATE_SUFFIX =
+  "[bonusbar:1]7;[bonusbar:2]8;[bonusbar:3]9;[bonusbar:4]10;"
   .. " 1"
+
+-- spec 0001 §Buttons and paging "Bottom-row state driver" (amended
+-- 2026-09-28): [bonusbar:1,stealth] is class-agnostic -- Druid Cat Form and
+-- Rogue "Stealthed" share bonus-bar offset 1
+-- (https://warcraft.wiki.gg/wiki/API_GetBonusBarOffset), so an unconditional
+-- clause would also route a stealthed rogue to page 8 (empty) instead of
+-- their real stealth bar (7, the plain [bonusbar:1]7 clause). Placed before
+-- that plain clause so it wins while prowling, per macro-conditional
+-- first-match-wins evaluation order -- but only when buildPageStateConditional
+-- (below) confirms the class is druid.
+local PROWL_CLAUSE = "[bonusbar:1,stealth]8;"
+
+-- spec 0001 §Buttons and paging "Bottom-row state driver" (amended
+-- 2026-09-28): the Prowl clause is druid-only, gated through WIIIUI.Safe
+-- since UnitClass carries SecretWhenUnitIdentityRestricted/MayReturnNothing
+-- (https://warcraft.wiki.gg/wiki/API_UnitClass) -- a secret, missing or
+-- erroring classFilename degrades to the base string (no Prowl clause)
+-- instead of throwing out of BuildButtons(). classFilename
+-- (select(2, UnitClass("player"))) is the locale-independent upper-case
+-- token, same page. Called once per BuildButtons() build (a player's class
+-- never changes within a session), not cached at file scope, so the string
+-- is rebuilt fresh -- and a headless test can load this file fresh per
+-- UnitClass fixture.
+local function buildPageStateConditional()
+  local ok, isDruid = WIIIUI.Safe(function()
+    return select(2, UnitClass("player")) == "DRUID"
+  end)
+  local prowl = (ok and isDruid) and PROWL_CLAUSE or ""
+  return PAGE_STATE_PREFIX .. prowl .. PAGE_STATE_SUFFIX
+end
 
 -- spec 0001 §Buttons and paging: "The _onstate-page snippet resolves
 -- possess at runtime with HasVehicleActionBar/GetVehicleBarIndex,
@@ -195,7 +225,7 @@ function WIIIUI.Buttons.BuildButtons()
       if row.key == "GridB" then
         applyPageStates(buttons)
         header:SetAttribute("_onstate-page", ONSTATE_PAGE_SNIPPET)
-        RegisterStateDriver(header, "page", PAGE_STATE_CONDITIONAL)
+        RegisterStateDriver(header, "page", buildPageStateConditional())
       end
     end
 
