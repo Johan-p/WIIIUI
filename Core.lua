@@ -200,14 +200,18 @@ end
 -- function; Core.lua only calls them, so this list grows without Core.lua
 -- depending on any region file existing before it's built.
 -- WIIIUI.Buttons is existence-checked (not yet another list entry) because
--- console_test.lua/bars_test.lua load Core/Theme/Console/Bars without
--- Buttons.lua and call WIIIUI.Layout() directly -- same existence-check
--- convention as the retire handler below.
+-- console_test.lua/bars_test.lua/events_test.lua/retire_test.lua load
+-- Core/Theme/Console/Bars/Portrait without Buttons.lua and call
+-- WIIIUI.Layout() directly (or override Layout to a no-op) -- same
+-- existence-check convention as the retire handler below. Portrait stays
+-- unconditional (slice 08): every file that calls WIIIUI.Layout() for real
+-- already loads Portrait.lua alongside it.
 function WIIIUI.Layout()
   WIIIUI.Console.BuildLeft()
   WIIIUI.Console.BuildGrid()
   WIIIUI.Console.BuildRight()
   WIIIUI.Bars.BuildBars()
+  WIIIUI.Portrait.BuildPortrait()
   if WIIIUI.Buttons then
     WIIIUI.Buttons.BuildButtons()
   end
