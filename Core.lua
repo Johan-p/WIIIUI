@@ -316,3 +316,21 @@ if EditModeManagerFrame then
     WIIIUI.ApplyOrQueue("layout", WIIIUI.Layout)
   end)
 end
+
+-- spec 0001 §Buttons and paging "WIIIUI/Bindings.xml": "BINDING_HEADER_WIIIUI
+-- and the BINDING_NAME_CLICK ... strings ... in Core.lua." BINDING_HEADER_WIIIUI
+-- is the Key Bindings UI section title (vanilla's own BINDING_HEADER_WC3HEADER
+-- string, e17c352 WIIIUI.lua:3); the 9 BINDING_NAME_CLICK labels are vanilla's
+-- own Bindings.xml label text, in the same order (minimap top/middle/bottom,
+-- then inventory TL/TR/ML/MR/BL/BR) -- "_G["BINDING_NAME_" .. command]"
+-- convention, warcraft.wiki.gg Bindings.xml.
+BINDING_HEADER_WIIIUI = "Warcraft III - UI"
+_G["BINDING_NAME_CLICK WIIIUI_Extra1:LeftButton"] = "Top Minimap Button"
+_G["BINDING_NAME_CLICK WIIIUI_Extra2:LeftButton"] = "Middle Minimap Button"
+_G["BINDING_NAME_CLICK WIIIUI_Extra3:LeftButton"] = "Bottom Minimap Button"
+_G["BINDING_NAME_CLICK WIIIUI_Extra4:LeftButton"] = "Top Left Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra5:LeftButton"] = "Top Right Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra6:LeftButton"] = "Middle Left Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra7:LeftButton"] = "Middle Right Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra8:LeftButton"] = "Bottom Left Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra9:LeftButton"] = "Bottom Right Inventory"
