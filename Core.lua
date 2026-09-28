@@ -215,6 +215,9 @@ function WIIIUI.Layout()
   if WIIIUI.Buttons then
     WIIIUI.Buttons.BuildButtons()
   end
+  if WIIIUI.Config then
+    WIIIUI.Config.BuildConfig()
+  end
 end
 
 -- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."
@@ -294,13 +297,13 @@ end)
 -- while in combat is only applied on a manual /reload.
 WIIIUI.On("PLAYER_REGEN_ENABLED", function() WIIIUI.Flush() end)
 
--- spec 0001 §A.4: "Re-layout triggers: UI_SCALE_CHANGED, ...". The other two
--- listed triggers -- Config.lua's "every setting change" and
--- PLAYER_ENTERING_WORLD -- are later phases (Config.lua doesn't exist until
--- slice 06; PLAYER_ENTERING_WORLD needs the frame-lifecycle work built
--- around it), so only these two are wired here. WIIIUI.Layout is looked up
--- by table field each time the handler runs, not captured as an upvalue, so
--- whatever WIIIUI.Layout resolves to at fire time is what runs.
+-- spec 0001 §A.4: "Re-layout triggers: UI_SCALE_CHANGED, ...". Config.lua's
+-- "every setting change" trigger is wired at its own call site instead
+-- (each control row's applyRow() calls WIIIUI.ApplyOrQueue("layout",
+-- WIIIUI.Layout) directly, Config.lua); PLAYER_ENTERING_WORLD is still a
+-- later phase, needing the frame-lifecycle work built around it. WIIIUI.Layout
+-- is looked up by table field each time the handler runs, not captured as an
+-- upvalue, so whatever WIIIUI.Layout resolves to at fire time is what runs.
 WIIIUI.On("UI_SCALE_CHANGED", function()
   WIIIUI.ApplyOrQueue("layout", WIIIUI.Layout)
 end)
