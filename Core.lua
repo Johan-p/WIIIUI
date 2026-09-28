@@ -225,11 +225,12 @@ end)
 -- for a Blizzard system WIIIUI replaces outright, parameterized by frame so
 -- a later R2 target (action bars, slice 12; spec 0004 §3: "12 retires the
 -- action bars through WIIIUI.Retire, so it uses 07's seam") reuses this same
--- sequence instead of duplicating it. unregister is a parameter, not baked
--- in, because R2 itself only runs UnregisterAllEvents() "only where listed"
--- per frame (CLAUDE.md R2) -- PlayerFrame is one of the frames that needs
--- it; a future R2 target that doesn't passes false. Sequence: existence-
--- checked frame (a resolved-at-call-time frame reference may be nil),
+-- sequence instead of duplicating it. unregister stays a parameter rather
+-- than being hardcoded true, though spec 0001 §1.1 "Unregister set" makes
+-- it the default on all four current R2 frames (MainActionBar,
+-- MultiBarBottomLeft, MultiBarBottomRight, PlayerFrame) -- every call site
+-- here passes true. Sequence: existence-checked frame (a resolved-at-call-
+-- time frame reference may be nil),
 -- UnregisterAllEvents(), existence-checked HideBase() (never Hide(), which
 -- runs Blizzard's Edit Mode HideOverride tainted; confirmed via
 -- EditModeSystemMixin's "self.HideBase = self.Hide; self.Hide =
