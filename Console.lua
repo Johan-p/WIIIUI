@@ -215,4 +215,31 @@ function WIIIUI.Console.BuildRight()
   rightPartLeft:SetTexture(WIIIUI.Theme.TexturePath(theme, "inventory", "no_inventory"))
   rightPartLeft:ClearAllPoints()
   rightPartLeft:SetPoint("BOTTOMRIGHT", rightPartMiddle, "BOTTOMLEFT", geometry.leftOffsetX, geometry.leftOffsetY)
+
+  -- Vanilla WIIIUI_rightpartBackground (e17c352 WIIIUI.xml:3131, Layer
+  -- level="BACKGROUND", nested in WIIIUI_rightpart), a shared (not
+  -- per-theme) texture -- literal path, same convention as the left frame's
+  -- extension-background. AlignRightPart (e17c352 WIIIUI.lua:3495-3497)
+  -- overrides the XML's static CENTER anchor/0x0 size at runtime.
+  -- rightPartWidth defaults to uiScale*2.2 when unset (e17c352
+  -- WIIIUI.lua:4545-4546's backfill-only-when-nil semantics); read here
+  -- rather than via Config.lua, which doesn't exist yet (slice 04B).
+  local rightPartWidth = wc3UI_Options.rightPartWidth or (uiScale * 2.2)
+  local backgroundGeometry = WIIIUI.Theme.RightPartBackgroundGeometry(
+    uiScale,
+    rightPartWidth,
+    wc3UI_Options.moveChatAreaUp
+  )
+  local rightPartBackground = getOrCreateTexture(right, "rightPartBackground", "BACKGROUND")
+
+  rightPartBackground:SetSize(backgroundGeometry.width, backgroundGeometry.height)
+  rightPartBackground:SetTexture("Interface\\Addons\\WIIIUI\\art\\other\\black_background")
+  rightPartBackground:ClearAllPoints()
+  rightPartBackground:SetPoint(
+    "BOTTOMLEFT",
+    rightPartLeft,
+    "BOTTOMRIGHT",
+    backgroundGeometry.offsetX,
+    backgroundGeometry.offsetY
+  )
 end

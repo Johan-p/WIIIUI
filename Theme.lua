@@ -106,6 +106,23 @@ local RIGHT_PART_NUDGES = {
   undead = { middle = 1, left = 0 },
 }
 
+-- Vanilla AlignRightPart, the WIIIUI_rightpartBackground block (e17c352
+-- WIIIUI.lua:3495-3497): width is the caller-resolved rightPartWidth
+-- (uiScale*2.2 derived default when unset, e17c352 WIIIUI.lua:4545-4546 --
+-- resolved by the caller, not here, since the derivation reads
+-- wc3UI_Options directly and this function stays a pure uiScale/theme-free
+-- calculation like the other *Geometry functions); height is
+-- uiScale*0.5578 + moveChatAreaUp; anchored BOTTOMLEFT to rightPart_left's
+-- BOTTOMRIGHT at a constant offset of 3,0 (not per-theme, not uiScale-scaled).
+function WIIIUI.Theme.RightPartBackgroundGeometry(uiScale, rightPartWidth, moveChatAreaUp)
+  return {
+    width = rightPartWidth,
+    height = uiScale * 0.5578 + moveChatAreaUp,
+    offsetX = 3,
+    offsetY = 0,
+  }
+end
+
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
   local leftWidth = uiScale / 2
