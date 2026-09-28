@@ -199,11 +199,18 @@ end
 -- now; Bars.lua/Portrait.lua/etc. in later phases) owns its own Build*
 -- function; Core.lua only calls them, so this list grows without Core.lua
 -- depending on any region file existing before it's built.
+-- WIIIUI.Buttons is existence-checked (not yet another list entry) because
+-- console_test.lua/bars_test.lua load Core/Theme/Console/Bars without
+-- Buttons.lua and call WIIIUI.Layout() directly -- same existence-check
+-- convention as the retire handler below.
 function WIIIUI.Layout()
   WIIIUI.Console.BuildLeft()
   WIIIUI.Console.BuildGrid()
   WIIIUI.Console.BuildRight()
   WIIIUI.Bars.BuildBars()
+  if WIIIUI.Buttons then
+    WIIIUI.Buttons.BuildButtons()
+  end
 end
 
 -- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."
@@ -255,9 +262,26 @@ end
 -- own; ApplyOrQueue keys its pending/order tables by this string, so there's
 -- no collision between the two calls. Resolving the action bar and queuing
 -- bindings are later phases, not yet built.
+-- spec 0004 §3: "12 retires the action bars through WIIIUI.Retire, so it
+-- uses 07's seam" -- WIIIUI.Buttons.RetireBlizzardBars (Buttons.lua,
+-- existence-checked the same way as the Layout() call above, since
+-- retire_test.lua/older tests load Core.lua alone) joins the same "retire"
+-- queue key as PlayerFrame, so both apply (or queue) as one atomic unit.
+-- "bindings" is its own queue key per spec 0001 §A.4's PLAYER_LOGIN list --
+-- WIIIUI.Buttons.ApplyBindings applies the initial override bindings once at
+-- login, in addition to the UPDATE_BINDINGS event Buttons.lua itself
+-- registers for later rebinds.
 WIIIUI.On("PLAYER_LOGIN", function()
-  WIIIUI.ApplyOrQueue("retire", function() WIIIUI.Retire(PlayerFrame, true) end)
+  WIIIUI.ApplyOrQueue("retire", function()
+    WIIIUI.Retire(PlayerFrame, true)
+    if WIIIUI.Buttons then
+      WIIIUI.Buttons.RetireBlizzardBars()
+    end
+  end)
   WIIIUI.ApplyOrQueue("layout", WIIIUI.Layout)
+  if WIIIUI.Buttons then
+    WIIIUI.ApplyOrQueue("bindings", WIIIUI.Buttons.ApplyBindings)
+  end
 end)
 
 -- spec 0001 §A.3: "Flush runs order on PLAYER_REGEN_ENABLED" -- the other

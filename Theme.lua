@@ -244,6 +244,27 @@ function WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
   }
 end
 
+-- Vanilla AlignActionBars (e17c352 WIIIUI.lua:2639-2667): button size and
+-- horizontal spacing within a row. row2/row3 stack the multi-bar rows above
+-- the bottom row by one button height plus a fixed uiScale-scaled gap each
+-- (e17c352 WIIIUI.lua:2660, 2665: extraY = actionButton:GetHeight() +
+-- uiScale*0.0667, then + actionButton:GetHeight() + uiScale*0.04444);
+-- actionButton:GetHeight() there equals size, so the port computes both
+-- purely from uiScale rather than reading a built button's height back.
+-- The per-index pixel nudges vanilla applies at buttons 7/10/12
+-- (WIIIUI.lua:2560-2574, mostly commented out in vanilla itself) are a
+-- documented deferral, same convention as Console.lua's filler-nudge notes.
+function WIIIUI.Theme.ActionButtonGeometry(uiScale)
+  local size = uiScale * 0.11111
+
+  return {
+    size = size,
+    spacing = uiScale * 0.159259,
+    row2OffsetY = size + uiScale * 0.0667,
+    row3OffsetY = size + uiScale * 0.0667 + size + uiScale * 0.04444,
+  }
+end
+
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
   local leftWidth = uiScale / 2
