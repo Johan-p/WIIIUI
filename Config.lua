@@ -95,7 +95,12 @@ local function makeRangeControl(key, min, max)
     get = function() return wc3UI_Options[key] end,
     set = function(value)
       local number = tonumber(value)
-      if number then
+      -- tonumber("nan") returns a float that is neither < min nor > max, so
+      -- clamp() would pass it through unchanged (security-specialist
+      -- finding, slice 06 gate iteration 1). NaN is the only Lua value for
+      -- which self-equality is false; reject it the same way a
+      -- non-numeric string is already rejected below.
+      if number and number == number then
         wc3UI_Options[key] = clamp(number, min, max)
       end
     end,
@@ -218,6 +223,13 @@ local function buildEditbox(panel, row, x, y)
     eb = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
     eb:SetAutoFocus(false)
     eb:SetSize(60, 20)
+    -- EditBox:SetNumeric (warcraft.wiki.gg API_EditBox_SetNumeric) strips
+    -- non-digit input, including a minus sign, so it's only safe on rows
+    -- whose range never goes negative -- every numeric row this slice ships
+    -- has min >= 0 (ui-reviewer finding, slice 06 gate iteration 1).
+    if row.min == nil or row.min >= 0 then
+      eb:SetNumeric(true)
+    end
     eb:SetScript("OnEscapePressed", function(self)
       self:SetText(tostring(row.get()))
       self:ClearFocus()
@@ -303,7 +315,12 @@ local function buildNote(panel, row, x, y)
   local note = WIIIUI.Config.widgets[row.key]
   if not note then
     note = panel:CreateFontString(nil, "OVERLAY")
-    note:SetFontObject(GameFontHighlightSmall)
+    -- GameFontDisableSmall (Gethe/wow-ui-source forever branch,
+    -- Blizzard_Fonts_Shared/Shared/FontStyles.xml) dims note rows so they
+    -- read apart from real controls' GameFontHighlightSmall labels without
+    -- relying on the suffix text alone (ui-reviewer finding, slice 06 gate
+    -- iteration 1).
+    note:SetFontObject(GameFontDisableSmall)
     WIIIUI.Config.widgets[row.key] = note
   end
 
@@ -314,7 +331,19 @@ end
 
 local ROW_X = 20
 local ROW_HEIGHT = 26
-local ROW_START_Y = -70
+local CONTENT_START_Y = -10
+local CONTENT_WIDTH = 600
+local CONTENT_BOTTOM_PADDING = 20
+local RELOAD_BUTTON_HEIGHT = 22
+
+-- UIPanelScrollFrameTemplate anchors its scrollbar 6px right of the scroll
+-- frame's own right edge (Gethe/wow-ui-source forever branch,
+-- Blizzard_SharedXML/SecureScrollTemplates.xml) -- SCROLL_INSET_RIGHT leaves
+-- enough panel margin that the scrollbar doesn't sit on the panel's border.
+local SCROLL_INSET_TOP = 50
+local SCROLL_INSET_BOTTOM = 16
+local SCROLL_INSET_LEFT = 16
+local SCROLL_INSET_RIGHT = 34
 
 -- Vanilla WIIIUI_cogwheel_hover (e17c352 WIIIUI.xml:62-88): 30x30, anchored
 -- BOTTOMRIGHT of UIParent at (7,-6). Always shown -- it is the invisible hit
@@ -414,6 +443,33 @@ local function ensurePanel()
   return panel
 end
 
+-- ui-reviewer finding (slice 06 gate iteration 1): the panel's fixed 650x600
+-- size can't fit all 25 control-table rows + reload button (content ran
+-- ~190px past the bottom edge with no scroll frame). Rows live in this
+-- scroll child instead of directly on the panel; the title bar and close
+-- button (ensurePanel, above) stay outside it. UIPanelScrollFrameTemplate
+-- confirmed real (Gethe/wow-ui-source forever branch,
+-- Blizzard_SharedXML/SecureScrollTemplates.xml).
+local function ensureScrollFrame(panel)
+  local content = WIIIUI.Config.scrollContent
+  if content then
+    return content
+  end
+
+  local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", SCROLL_INSET_LEFT, -SCROLL_INSET_TOP)
+  scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -SCROLL_INSET_RIGHT, SCROLL_INSET_BOTTOM)
+
+  content = CreateFrame("Frame", nil, scrollFrame)
+  content:SetWidth(CONTENT_WIDTH)
+  content:SetHeight(1) -- grown to fit every row by BuildConfig, below
+  scrollFrame:SetScrollChild(content)
+
+  WIIIUI.Config.scrollFrame = scrollFrame
+  WIIIUI.Config.scrollContent = content
+  return content
+end
+
 local function ensureReloadButton(panel, y)
   local reload = WIIIUI.Config.reloadButton
   if not reload then
@@ -441,27 +497,33 @@ function WIIIUI.Config.BuildConfig()
   ensureHover()
   ensureCogwheel()
   local panel = ensurePanel()
+  local content = ensureScrollFrame(panel)
 
-  local y = ROW_START_Y
+  local y = CONTENT_START_Y
 
   for _, row in ipairs(WIIIUI.Config.CONTROLS) do
     if isNoteRow(row) then
-      buildNote(panel, row, ROW_X, y)
+      buildNote(content, row, ROW_X, y)
       y = y - ROW_HEIGHT
     elseif row.kind == "checkbox" then
-      buildCheckbox(panel, row, ROW_X, y)
+      buildCheckbox(content, row, ROW_X, y)
       y = y - ROW_HEIGHT
     elseif row.kind == "editbox" then
-      buildEditbox(panel, row, ROW_X, y)
+      buildEditbox(content, row, ROW_X, y)
       y = y - ROW_HEIGHT
     elseif row.kind == "cycle" then
-      buildCycle(panel, row, ROW_X, y)
+      buildCycle(content, row, ROW_X, y)
       y = y - ROW_HEIGHT
     elseif row.kind == "theme" then
-      local height = buildTheme(panel, row, ROW_X, y)
+      local height = buildTheme(content, row, ROW_X, y)
       y = y - height - 6
     end
   end
 
-  ensureReloadButton(panel, y - 6)
+  local reloadY = y - 6
+  ensureReloadButton(content, reloadY)
+  -- Scroll range depends on the content child's actual height, not the
+  -- scroll frame's visible height -- size it to reach past the reload
+  -- button (the last row) plus a bottom margin.
+  content:SetHeight(-(reloadY - RELOAD_BUTTON_HEIGHT) + CONTENT_BOTTOM_PADDING)
 end
