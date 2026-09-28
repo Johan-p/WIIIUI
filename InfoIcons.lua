@@ -190,6 +190,18 @@ local function computeStats(option)
     end
 
     local ammoSlot = C_PaperDollInfo.GetInventorySlotInfo(AMMO_SLOT_NAME)
+
+    -- security-specialist Finding 2 (slice 18 gate-fix): on retail there is
+    -- no ammo slot, so GetInventorySlotInfo("AmmoSlot") returns nil
+    -- (C_PaperDollInfo.GetInventorySlotInfo, warcraft.wiki.gg -- invSlot may
+    -- be nil for a slot the client doesn't have). RefreshSlot already treats
+    -- computeStats returning nil, ok as "hide the icon" (the UnitHasRelicSlot
+    -- branch above uses the same convention), so this matches that existing
+    -- contract instead of falling through to a misleading "No ammo" row.
+    if not ammoSlot then
+      return nil
+    end
+
     local texture = GetInventoryItemTexture("player", ammoSlot)
 
     if not texture then
@@ -281,12 +293,20 @@ local function ensureIconWidgets(slotIndex)
   -- the border draws above the icon backdrop, both siblings of frame.
   border:SetFrameLevel(10)
 
+  -- ui-reviewer Finding 3 (slice 18 gate-fix): width comes from
+  -- WeaponIconGeometry's labelWidth (uiScale-dependent, applied per-call in
+  -- BuildWeaponIcons below); height/justify are vanilla's own flat constants
+  -- (weaponDamageText/weaponNumbersText, e17c352 WIIIUI.lua:2293-2296,
+  -- 2367-2370) and don't depend on uiScale, so they're set once here.
   local label = frame:CreateFontString(nil, "OVERLAY")
   label:SetFontObject(GameFontHighlightSmall)
   local labelFontApplied = label:SetFont(FONT_PATH, LABEL_FONT_SIZE, "")
   if not labelFontApplied or not label:GetFont() then
     label:SetFontObject(GameFontHighlightSmall)
   end
+  label:SetHeight(15)
+  label:SetJustifyH("LEFT")
+  label:SetJustifyV("TOP")
 
   local value = frame:CreateFontString(nil, "OVERLAY")
   value:SetFontObject(GameFontHighlightSmall)
@@ -294,6 +314,9 @@ local function ensureIconWidgets(slotIndex)
   if not valueFontApplied or not value:GetFont() then
     value:SetFontObject(GameFontHighlightSmall)
   end
+  value:SetHeight(30)
+  value:SetJustifyH("LEFT")
+  value:SetJustifyV("TOP")
 
   local widgets = { frame = frame, icon = icon, border = border, label = label, value = value }
   WIIIUI.InfoIcons[slotIndex] = widgets
@@ -398,9 +421,11 @@ function WIIIUI.InfoIcons.BuildWeaponIcons()
     widgets.border:ClearAllPoints()
     widgets.border:SetPoint("BOTTOMLEFT", widgets.frame, "BOTTOMLEFT", 0, 0)
 
+    widgets.label:SetWidth(geometry.labelWidth)
     widgets.label:ClearAllPoints()
     widgets.label:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.labelOffsetX, geometry.labelOffsetY)
 
+    widgets.value:SetWidth(geometry.labelWidth)
     widgets.value:ClearAllPoints()
     widgets.value:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.valueOffsetX, geometry.valueOffsetY)
 
@@ -414,15 +439,46 @@ local function refreshAllSlots()
   end
 end
 
--- Vanilla weaponMainFrame's own event list (e17c352 WIIIUI.lua:2396-2403):
--- UNIT_ATTACK_POWER/UNIT_RANGED_ATTACK_POWER/UNIT_INVENTORY_CHANGED, all
--- "player"-filtered -- confirmed present on the forever branch
--- (warcraft.wiki.gg: UNIT_ATTACK_POWER "1.60.1 (69913)" under forever;
--- UNIT_RANGED_ATTACK_POWER and UNIT_INVENTORY_CHANGED likewise). Vanilla's
--- other four (UPDATE_SHAPESHIFT_FORM/LEARNED_SPELL_IN_TAB/SPELLS_CHANGED/
--- CHARACTER_POINTS_CHANGED/UNIT_AURA) drove CheckIfInForm's form-icon
--- override, which is slice 19's scope (armor icon + "any remaining form/
--- stance status icons"), not this slice's plain weapon-slot stats.
+-- security-specialist/ui-reviewer Finding 1 (slice 18 gate-fix): the
+-- architect spec's own Event -> widget wiring table (0001-forever-support.md
+-- "info icons" row) assigns this file the full list below, not just
+-- vanilla's three (UNIT_ATTACK_POWER/UNIT_RANGED_ATTACK_POWER/
+-- UNIT_INVENTORY_CHANGED, e17c352 WIIIUI.lua:2396-2403). Split by payload
+-- shape, confirmed per-event on warcraft.wiki.gg (2026-09-28):
+--   unit events (unitTarget payload, RegisterUnitEvent(event, "player")):
+--   UNIT_DAMAGE, UNIT_RANGEDDAMAGE, UNIT_ATTACK_SPEED, UNIT_ATTACK_POWER,
+--   UNIT_RANGED_ATTACK_POWER, UNIT_STATS, UNIT_RESISTANCES,
+--   UNIT_INVENTORY_CHANGED;
+--   no-unit events (COMBAT_RATING_UPDATE/SPELL_POWER_CHANGED/
+--   UPDATE_SHAPESHIFT_FORM: no payload; PLAYER_EQUIPMENT_CHANGED:
+--   equipmentSlot/hasCurrent, no unit token) -- RegisterEvent, no unit
+--   filter, since none of these fire per-unit.
+-- UPDATE_SHAPESHIFT_FORM is registered for base-damage/stat refresh only
+-- (the numbers shown can go stale across a stance/form change); the
+-- form-icon overlay itself (vanilla's CheckIfInForm) is slice 19's scope,
+-- not this file's. Vanilla's other three
+-- (LEARNED_SPELL_IN_TAB/SPELLS_CHANGED/CHARACTER_POINTS_CHANGED) drove that
+-- same form-icon override and stay out of scope with it.
 WIIIUI.On("UNIT_INVENTORY_CHANGED", refreshAllSlots, "player")
 WIIIUI.On("UNIT_ATTACK_POWER", refreshAllSlots, "player")
 WIIIUI.On("UNIT_RANGED_ATTACK_POWER", refreshAllSlots, "player")
+WIIIUI.On("UNIT_DAMAGE", refreshAllSlots, "player")
+WIIIUI.On("UNIT_RANGEDDAMAGE", refreshAllSlots, "player")
+WIIIUI.On("UNIT_ATTACK_SPEED", refreshAllSlots, "player")
+WIIIUI.On("UNIT_STATS", refreshAllSlots, "player")
+WIIIUI.On("UNIT_RESISTANCES", refreshAllSlots, "player")
+WIIIUI.On("COMBAT_RATING_UPDATE", refreshAllSlots)
+WIIIUI.On("SPELL_POWER_CHANGED", refreshAllSlots)
+WIIIUI.On("PLAYER_EQUIPMENT_CHANGED", refreshAllSlots)
+WIIIUI.On("UPDATE_SHAPESHIFT_FORM", refreshAllSlots)
+
+-- security-specialist's own suggestion (Finding 1, cheap and related):
+-- SecretWhenUnitStatsRestricted values (spec 0001 §1.7) may only recover
+-- once combat/encounter restrictions lift, so a stat that failed Safe mid-
+-- combat and degraded to a blank value needs a refresh once combat ends.
+-- Core.lua:314 already registers PLAYER_REGEN_ENABLED with no unit filter
+-- (WIIIUI.Flush) -- WIIIUI.On's eventUnits guard only rejects a *different*
+-- unit filter for the same event (Core.lua's WIIIUI.On), and this call also
+-- passes no unit, so it appends to that event's handler list instead of
+-- erroring.
+WIIIUI.On("PLAYER_REGEN_ENABLED", refreshAllSlots)

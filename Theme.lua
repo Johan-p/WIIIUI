@@ -337,14 +337,27 @@ function WIIIUI.Theme.WeaponIconGeometry(uiScale, slotIndex)
   local slotOffset = WEAPON_ICON_SLOT_OFFSETS[slotIndex] or WEAPON_ICON_SLOT_OFFSETS[1]
   local extraSpace = uiScale <= 250 and 1 or 0
   local lowScaleNudge = uiScale <= 210 and -3 or 0
+  local labelOffsetXFraction = 0.1294
 
   return {
     size = WIIIUI.Theme.XPBarGeometry(uiScale).width * 0.17,
     offsetX = 1 + uiScale * slotOffset.x,
     offsetY = uiScale * -0.14 + uiScale * slotOffset.y,
-    labelOffsetX = uiScale * 0.1294,
+    labelOffsetX = uiScale * labelOffsetXFraction,
     labelOffsetY = uiScale * -0.065,
-    valueOffsetX = uiScale * 0.1294,
+    valueOffsetX = uiScale * labelOffsetXFraction,
     valueOffsetY = uiScale * -0.1667 - extraSpace + lowScaleNudge,
+    -- ui-reviewer Finding 3 (slice 18 gate-fix): label/value FontStrings had
+    -- no SetWidth, so a long value (e.g. a high main-hand damage range) could
+    -- visually run into slot 2/3's icon, which sits only
+    -- WEAPON_ICON_SLOT_OFFSETS[2].x * uiScale to the right of slot 1's icon
+    -- (0.3607). Vanilla used a flat SetWidth(100) regardless of uiScale
+    -- (e17c352 WIIIUI.lua:2293, 2367); at this port's uiScale floor (240,
+    -- Core.lua's clamp) that constant is already wider than the gap to the
+    -- next icon's own label start, so porting it unchanged would still
+    -- overlap. This constrains to the actual horizontal room before the next
+    -- icon's label begins (next icon's X offset minus this label's own X
+    -- offset, both in uiScale fractions).
+    labelWidth = uiScale * (WEAPON_ICON_SLOT_OFFSETS[2].x - labelOffsetXFraction),
   }
 end
