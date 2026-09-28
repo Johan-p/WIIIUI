@@ -132,8 +132,43 @@ end
 --
 -- The hooked-once guard lives on WIIIUI.Blizzard, never on MicroMenu itself
 -- -- CLAUDE.md R1: "Never write a Lua key onto a Blizzard frame or table."
+-- Restore branch (ui-reviewer finding, gate iteration 2): every other
+-- General-tab boolean row restores on uncheck via WIIIUI.Layout() re-running
+-- through ApplyOrQueue; this one silently didn't, since the `if` above has
+-- no `else`. MicroMenuMixin:ResetMicroMenuPosition (the obvious "put it
+-- back" call, already hooked above) was considered and rejected: its body
+-- ("self:SetParent(MicroMenuContainer); self.stride = self.numButtons;
+-- self:ClearOverrideScale(); EditModeManagerFrame:UpdateSystem(
+-- MicroMenuContainer, true); UpdateMicroButtons()", MicroMenuContainer.lua:
+-- 233-243 forever branch, fetched 2026-09-28) calls
+-- EditModeManagerFrameMixin:UpdateSystem(systemFrame, true)
+-- (EditModeManagerFrame's own Shared/EditModeManager.lua:1475-1491, same
+-- fetch) which -- whenever MicroMenuContainer has active layout info (the
+-- normal, always-true case) -- runs
+-- systemFrame:MarkAllSettingsDirty()/systemFrame:UpdateSystem(systemInfo),
+-- and EditModeSystemMixin:UpdateSystem (Shared/EditModeSystemTemplates.lua:
+-- 385-407, same fetch) calls self:ApplySystemAnchor(), which calls
+-- self:ClearAllPoints()/self:SetPoint(...) (same file:350-375) -- both
+-- overridden per-system by EditModeSystemMixin:OnSystemLoad
+-- (EditModeSystemTemplates.lua:1-17: "self.SetPoint = self.SetPointOverride"
+-- etc). So calling ResetMicroMenuPosition from here, even out of combat,
+-- would run those two R1-forbidden overrides on MicroMenuContainer (the
+-- Edit Mode system itself) from our addon-tainted call stack -- not a
+-- combat-lockdown error, but exactly the taint risk R1 exists to prevent.
+-- Reparenting alone is sufficient and stays R3 (plain-frame SetParent):
+-- MicroMenu's own anchor points -- set by MicroMenuMixin:AnchorToMenuContainer
+-- at its last real layout and never cleared by the hide branch below -- and
+-- MicroMenuContainer's cached size -- its own Layout(), MicroMenuContainer.lua
+-- :17-55, returns early without resizing whenever
+-- `MicroMenu:GetParent() ~= self`, so nothing goes stale while hidden -- are
+-- both still valid the moment MicroMenu is parented back. MicroMenuContainer
+-- itself is read once as a plain global and handed to SetParent as an
+-- argument, never indexed into or written to (dev/tests/wow_stub.lua's
+-- newMicroMenuContainerTripwire -- errors on any field read/write, not on
+-- being passed by reference -- proves this at the seam).
 function WIIIUI.Blizzard.BuildMicroMenu()
   local MicroMenu = _G.MicroMenu
+  local MicroMenuContainer = _G.MicroMenuContainer
 
   if not MicroMenu then
     return
@@ -141,6 +176,8 @@ function WIIIUI.Blizzard.BuildMicroMenu()
 
   if wc3UI_Options.hideMicroButtons then
     MicroMenu:SetParent(WIIIUI.hider)
+  elseif MicroMenuContainer and MicroMenu:GetParent() == WIIIUI.hider then
+    MicroMenu:SetParent(MicroMenuContainer)
   end
 
   if not WIIIUI.Blizzard.microMenuHooked then
