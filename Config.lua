@@ -320,7 +320,18 @@ local function buildTheme(panel, row, x, y)
   return lines * THEME_BUTTON_HEIGHT
 end
 
-local EDIT_MODE_NOTE_SUFFIX = " -- set in Edit Mode"
+-- spec 0001 §1.6: every "Set in Edit Mode" row (the fixed 6 plus any
+-- in-game-check failure) is, per the §1.6 per-piece table, a piece the
+-- shipped layout string places -- so the note now names the constant that
+-- backs it (WIIIUI.LAYOUT_BUILD, Blizzard.lua) instead of a bare "set in
+-- Edit Mode" with no pointer to where. Blizzard.lua isn't loaded by every
+-- test fixture that builds this control table (config_test.lua's own, same
+-- reasoning as the ZoneTextPos `available` field above), so this falls back
+-- to a plain string there -- only a real client (or a test that loads
+-- Blizzard.lua too) sees the build number.
+local function editModeNoteSuffix()
+  return " -- set in Edit Mode (WIIIUI's layout string, build " .. (WIIIUI.LAYOUT_BUILD or "not yet exported") .. ")"
+end
 
 local function buildNote(panel, row, x, y)
   local note = WIIIUI.Config.widgets[row.key]
@@ -337,7 +348,7 @@ local function buildNote(panel, row, x, y)
 
   note:ClearAllPoints()
   note:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
-  note:SetText(label(row.key) .. EDIT_MODE_NOTE_SUFFIX)
+  note:SetText(label(row.key) .. editModeNoteSuffix())
 end
 
 local ROW_X = 20
@@ -481,6 +492,75 @@ local function ensureScrollFrame(panel)
   return content
 end
 
+local LAYOUT_STRING_BOX_WIDTH = 300
+local LAYOUT_STRING_BOX_HEIGHT = 20
+
+local function layoutStringValue()
+  return WIIIUI.LAYOUT_STRING or "Not exported yet -- see WIIIUI.LAYOUT_STRING (Blizzard.lua)"
+end
+
+-- spec 0001 §1.6 "Copy layout string": a read-only EditBox with the layout
+-- string pre-selected, so Ctrl+C copies the whole thing without a manual
+-- drag-select. Not part of WIIIUI.Config.CONTROLS -- it has no wc3UI_Options
+-- key to get/set, so it would fail the "editMode xor get/set" shape every
+-- other row follows (config_test.lua's own round-trip loop); built directly
+-- here instead, the same way ensureReloadButton is.
+--
+-- "Read-only" is enforced by snapping any user edit straight back to the
+-- constant rather than disabling the box (which would also block
+-- selecting/copying it) -- the same idiom Blizzard's own Edit Mode
+-- rename/import dialog uses to pre-select an EditBox's contents
+-- (EditModeBaseDialogMixin:SetupDialog, Blizzard_EditMode/Shared/
+-- EditModeDialogs.lua:239-240, forever branch, fetched 2026-09-28:
+-- "self:GetEditBox():SetText(...); self:GetEditBox():HighlightText()" --
+-- HighlightText() with no arguments selects the entire contents,
+-- warcraft.wiki.gg API_EditBox_HighlightText). OnTextChanged's userInput
+-- flag (warcraft.wiki.gg UIHANDLER_OnTextChanged: "true when changing as a
+-- result of user input, false when programmatically set") gates the reset so
+-- the SetText call below can't recurse: it re-fires OnTextChanged with
+-- userInput = false, which the `if userInput` guard ignores.
+local function ensureLayoutStringBox(panel, x, y)
+  local widget = WIIIUI.Config.widgets.layoutString
+  if not widget then
+    local title = panel:CreateFontString(nil, "OVERLAY")
+    title:SetFontObject(GameFontHighlightSmall)
+    title:SetText("Copy layout string")
+
+    local box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    box:SetAutoFocus(false)
+    box:SetSize(LAYOUT_STRING_BOX_WIDTH, LAYOUT_STRING_BOX_HEIGHT)
+    box:SetText(layoutStringValue())
+
+    box:SetScript("OnEditFocusGained", function(self)
+      self:HighlightText()
+    end)
+    box:SetScript("OnTextChanged", function(self, userInput)
+      if userInput and self:GetText() ~= layoutStringValue() then
+        self:SetText(layoutStringValue())
+        self:HighlightText()
+      end
+    end)
+    box:SetScript("OnEscapePressed", function(self)
+      self:ClearFocus()
+    end)
+
+    widget = { title = title, box = box }
+    WIIIUI.Config.widgets.layoutString = widget
+  end
+
+  widget.title:ClearAllPoints()
+  widget.title:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
+  widget.box:ClearAllPoints()
+  widget.box:SetPoint("TOPLEFT", panel, "TOPLEFT", x + LABEL_COLUMN_WIDTH, y)
+
+  -- Re-sync on every call, matching every other Build* row: once the
+  -- maintainer's real export replaces the Blizzard.lua placeholder, the box
+  -- must show it without needing a fresh widget.
+  if widget.box:GetText() ~= layoutStringValue() then
+    widget.box:SetText(layoutStringValue())
+  end
+end
+
 local function ensureReloadButton(panel, y)
   local reload = WIIIUI.Config.reloadButton
   if not reload then
@@ -530,6 +610,10 @@ function WIIIUI.Config.BuildConfig()
       y = y - height - 6
     end
   end
+
+  local layoutStringY = y - 6
+  ensureLayoutStringBox(content, ROW_X, layoutStringY)
+  y = layoutStringY - ROW_HEIGHT
 
   local reloadY = y - 6
   ensureReloadButton(content, reloadY)
