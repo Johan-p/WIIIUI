@@ -22,6 +22,24 @@ WIIIUI.Bars = WIIIUI.Bars or {}
 -- CLAUDE.md status header).
 local BAR_TEXTURE = "Interface\\Buttons\\WHITE8X8"
 
+-- Finding 3 (ui-reviewer, gate-fix): unlike the health/power bars above,
+-- WIIIUI's own themed XP art already ships in art/other/ (xp1/xp2/xp3.tga,
+-- xpProgressBar.tga) -- vanilla's XP bar was always WIIIUI's own art, not
+-- borrowed from Blizzard, and CLAUDE.md's "the look is the specification"
+-- says not to minimise it. Staying inside the plain-StatusBar convention
+-- (no 3-piece endcap reconstruction, out of scope), the fill piece alone
+-- uses xpProgressBar.tga instead of WHITE8X8.
+local XP_BAR_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\xpProgressBar"
+
+-- Regression fix (gate-fix iteration 2): xpProgressBar.tga is a grayscale
+-- bevel/gloss mask, not pre-coloured art (ui-reviewer decoded the pixel
+-- data), so the texture swap above needs the same fixed purple tint vanilla
+-- AlignXPBar applied on top of its own art (e17c352 WIIIUI.lua:2129,
+-- "xpProgBar:SetVertexColor(0.5, 0, 0.5, 1)") -- both together, not either
+-- alone. The rested overlay's colour stays user-configurable via
+-- wc3UI_Options.xpRestedXpColor (CLAUDE.md Domain model), not this constant.
+local XP_BAR_MAIN_COLOR_R, XP_BAR_MAIN_COLOR_G, XP_BAR_MAIN_COLOR_B = 0.5, 0, 0.5
+
 -- Vanilla LowHPWarning (e17c352 WIIIUI.lua:3875-3939): the low-HP flash
 -- lives on PortraitBackground, ported forward here per spec 0001's
 -- architecture note ("Bars.lua ... low-HP pulse ... Every secret-value
@@ -53,6 +71,9 @@ local FONT_SIZES = { health = 10, power = 9 }
 -- "form" between them; kept as an ordered list (not two hardcoded blocks)
 -- so that insertion only touches this line, not BuildBars' body.
 local BAR_DEFS = { "health", "power" }
+
+-- Vanilla xpCurrLevel (e17c352 WIIIUI.lua:2213: SetFont(..., 12, "")).
+local LEVEL_TEXT_FONT_SIZE = 12
 
 -- spec 0001 §1.2: "Health % text (HealthPercent) ... fs:SetFormattedText(
 -- '%.0f%%', UnitHealthPercent('player', true, CurveConstants.ScaleTo100))
@@ -347,6 +368,138 @@ local function updatePower()
   end
 end
 
+-- spec 0001 §Phased plan "C4 XP bar + tracking-bar starve/hide". Builds two
+-- plain StatusBars (Bars.lua's health/power convention -- no left/right
+-- endcap art, spec 0001 §1.2's "one plain StatusBar" deferral noted in
+-- Theme.XPBarGeometry above): xpRested behind xp so the rested portion shows
+-- past the current-XP fill, matching vanilla's own draw order (xpProgBarRested
+-- built before xpProgBar is drawn over it, e17c352 WIIIUI.lua:2113 vs 2190).
+local function buildXPBar(anchor, uiScale)
+  local rested = WIIIUI.Bars.xpRested
+  local bar = WIIIUI.Bars.xp
+
+  if not rested then
+    rested = CreateFrame("StatusBar", nil, UIParent)
+    rested:SetStatusBarTexture(XP_BAR_TEXTURE)
+    WIIIUI.Bars.xpRested = rested
+  end
+
+  if not bar then
+    bar = CreateFrame("StatusBar", nil, UIParent)
+    bar:SetStatusBarTexture(XP_BAR_TEXTURE)
+    bar:SetStatusBarColor(XP_BAR_MAIN_COLOR_R, XP_BAR_MAIN_COLOR_G, XP_BAR_MAIN_COLOR_B, 1)
+
+    bar.levelText = bar:CreateFontString(nil, "OVERLAY")
+    bar.levelText:SetPoint("CENTER", bar, "CENTER", 0, 0)
+
+    -- Same font-fallback pattern as the health/power bars' text above
+    -- (CLAUDE.md "Tech stack quirks"): GameFontHighlightSmall first, then
+    -- the theme font, re-applying the fallback if SetFont/GetFont didn't
+    -- take.
+    bar.levelText:SetFontObject(GameFontHighlightSmall)
+    local fontApplied = bar.levelText:SetFont(FONT_PATH, LEVEL_TEXT_FONT_SIZE, "")
+
+    if not fontApplied or not bar.levelText:GetFont() then
+      bar.levelText:SetFontObject(GameFontHighlightSmall)
+    end
+
+    WIIIUI.Bars.xp = bar
+  end
+
+  local geometry = WIIIUI.Theme.XPBarGeometry(uiScale)
+
+  -- Finding 7 (ui-reviewer, gate-fix): validate shape before handing to
+  -- SetStatusBarColor -- MergeDefaults only checks xpRestedXpColor is a
+  -- table, not that it holds 4 numbers, so a hand-edited SavedVariable like
+  -- {} would otherwise reach SetStatusBarColor(nil, ...) and throw, aborting
+  -- the rest of WIIIUI.Layout() (Portrait/Buttons/Config never get built,
+  -- since ApplyOrQueue calls WIIIUI.Layout without a pcall). Falls back to
+  -- WIIIUI.DEFAULTS.xpRestedXpColor, matching CLAUDE.md's "degrade to
+  -- hidden rather than wrong" spirit for corrupted saved data.
+  local restColor = wc3UI_Options.xpRestedXpColor
+  if
+    type(restColor) ~= "table"
+    or type(restColor[1]) ~= "number"
+    or type(restColor[2]) ~= "number"
+    or type(restColor[3]) ~= "number"
+  then
+    restColor = WIIIUI.DEFAULTS.xpRestedXpColor
+  end
+  rested:SetStatusBarColor(restColor[1], restColor[2], restColor[3], restColor[4])
+
+  -- Finding 1 (ui-reviewer, gate-fix): both bars share UIParent and neither
+  -- overrides frame level, so per warcraft.wiki.gg's UI_rendering_process
+  -- ("there is no defined render order" for identical strata+level) the
+  -- rested overlay could draw on top of the current-XP fill. Explicit
+  -- levels (API_Frame_SetFrameLevel/GetFrameLevel, warcraft.wiki.gg) make
+  -- bar draw strictly above rested, deterministically.
+  for _, xpBar in ipairs({ rested, bar }) do
+    xpBar:SetFrameStrata("LOW")
+    xpBar:SetSize(geometry.width, geometry.height)
+    xpBar:ClearAllPoints()
+    if anchor then
+      xpBar:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", geometry.anchorOffsetX, geometry.anchorOffsetY)
+    end
+  end
+  bar:SetFrameLevel(rested:GetFrameLevel() + 1)
+end
+
+-- spec 0001 §Event -> widget wiring: "PLAYER_XP_UPDATE, UPDATE_EXHAUSTION,
+-- PLAYER_LEVEL_UP | XP bar, rested, level text (XP not secret; still
+-- Safe)". Not a secret-value guard (XP is never secret, CLAUDE.md "Secret
+-- values") -- WIIIUI.Safe here is the same generic "degrade rather than
+-- error" seam Bars.lua's colour-curve builders already use, covering a
+-- missing UnitXP/UnitXPMax/GetXPExhaustion/UnitClass or a UnitXPMax==0 edge
+-- case without taking down the rest of WIIIUI.Layout().
+local function updateXP()
+  local bar = WIIIUI.Bars.xp
+  local rested = WIIIUI.Bars.xpRested
+  if not bar or not rested then
+    return
+  end
+
+  local ok = WIIIUI.Safe(function()
+    local maxXP = UnitXPMax("player")
+    local curXP = UnitXP("player")
+
+    -- Finding 4 (ui-reviewer, gate-fix): at max level UnitXPMax returns 0;
+    -- this re-derives a full-bar result for that case (maxXP/curXP both 1,
+    -- so the StatusBar's own min/max/value math reads "full") rather than
+    -- porting vanilla's own guard, which tested UnitXP()==0 plus a
+    -- MAX_LEVEL check (e17c352 WIIIUI.lua:2119-2124) -- a different
+    -- condition this port doesn't need, since it avoids requiring an
+    -- unverified MAX_LEVEL constant on the target client.
+    if maxXP == 0 then
+      maxXP = 1
+      curXP = 1
+    end
+
+    bar:SetMinMaxValues(0, maxXP)
+    bar:SetValue(curXP)
+
+    rested:SetMinMaxValues(0, maxXP)
+
+    local restedValue = curXP + (GetXPExhaustion() or 0)
+    if restedValue > maxXP then
+      restedValue = maxXP
+    end
+    rested:SetValue(restedValue)
+
+    if bar.levelText then
+      local className = UnitClass("player")
+      bar.levelText:SetText("Level " .. UnitLevel("player") .. " " .. tostring(className))
+    end
+  end)
+
+  if ok then
+    bar:Show()
+    rested:Show()
+  else
+    bar:Hide()
+    rested:Hide()
+  end
+end
+
 -- Vanilla AlignHealthMana (e17c352 WIIIUI.lua:1987-1992, 2009-2014): both
 -- bars anchor to minimapFrame (the minimap art texture, WIIIUI.Console.left.
 -- minimapTexture -- see BuildLeft's own citation of this same vanilla
@@ -399,9 +552,11 @@ function WIIIUI.Bars.BuildBars()
   )
 
   buildLowHpOverlay(left and left.portraitTexture, uiScale)
+  buildXPBar(left and left.portraitTexture, uiScale)
 
   updateHealth()
   updatePower()
+  updateXP()
 end
 
 -- spec 0001 §Event -> widget wiring, all via RegisterUnitEvent(event,
@@ -414,3 +569,46 @@ WIIIUI.On("UNIT_MAXHEALTH", updateHealth, "player")
 WIIIUI.On("UNIT_POWER_UPDATE", updatePower, "player")
 WIIIUI.On("UNIT_MAXPOWER", updatePower, "player")
 WIIIUI.On("UNIT_DISPLAYPOWER", updatePower, "player")
+
+-- PLAYER_XP_UPDATE/UPDATE_EXHAUSTION/PLAYER_LEVEL_UP are plain RegisterEvent
+-- calls, not RegisterUnitEvent, despite this file's other events using the
+-- unit form: Blizzard's own XP bar uses plain RegisterEvent for these same
+-- three events (Blizzard_StatusTrackingBar/Shared/ExpBar.lua:53,119-121 on
+-- the forever branch), matching this port's choice. RegisterUnitEvent isn't
+-- restricted to a fixed event list (Blizzard_EditMode/Shared/
+-- EditModeManager.lua:65 on live calls RegisterUnitEvent with
+-- PLAYER_SPECIALIZATION_CHANGED, a non-UNIT_-prefixed event) -- the reason
+-- for RegisterEvent here is simply that none of the three carries a
+-- leading unit-token payload the unit form is for: PLAYER_XP_UPDATE's own
+-- payload is a unitTarget string, not a leading unit token
+-- (PLAYER_XP_UPDATE, warcraft.wiki.gg); UPDATE_EXHAUSTION carries no
+-- payload at all (UPDATE_EXHAUSTION, warcraft.wiki.gg); PLAYER_LEVEL_UP's
+-- payload leads with `level` (PLAYER_LEVEL_UP, warcraft.wiki.gg). Matches
+-- Portrait.lua's PORTRAIT_PLAIN_EVENTS convention for player-scoped events
+-- that aren't UNIT_* (e.g. PLAYER_ENTERING_WORLD).
+WIIIUI.On("PLAYER_XP_UPDATE", updateXP)
+WIIIUI.On("UPDATE_EXHAUSTION", updateXP)
+WIIIUI.On("PLAYER_LEVEL_UP", updateXP)
+
+-- spec 0001 §1.1 R3 / CLAUDE.md "Starving StatusTrackingBarManager is not
+-- enough on Forever": UnregisterAllEvents() + Hide() the manager itself (a
+-- plain frame, not an Edit Mode system) -- never Main/SecondaryStatusTracking
+-- BarContainer. Out of combat only, through its own ApplyOrQueue key
+-- ("trackingBarStarve", distinct from Core.lua's "retire") -- registered as
+-- an additional PLAYER_LOGIN handler (WIIIUI.On's dispatch loop runs every
+-- handler registered for an event, Core.lua), the same convention Buttons.lua
+-- already uses for its own hearthstone placement, so Bars.lua owns this
+-- without editing Core.lua's PLAYER_LOGIN handler body.
+local function starveTrackingBars()
+  local manager = StatusTrackingBarManager
+  if not manager then
+    return
+  end
+
+  manager:UnregisterAllEvents()
+  manager:Hide()
+end
+
+WIIIUI.On("PLAYER_LOGIN", function()
+  WIIIUI.ApplyOrQueue("trackingBarStarve", starveTrackingBars)
+end)
