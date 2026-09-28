@@ -106,3 +106,101 @@ function WIIIUI.Blizzard.BuildMinimap()
   Minimap:EnableMouseWheel(true)
   Minimap:SetMaskTexture(MASK_TEXTURE)
 end
+
+-- spec 0001 §Phased plan "E. Blizzard pieces" (E2); §1.6 ("hideMicroButtons
+-- needs code on the plain MicroMenu, but Blizzard re-parents it on every
+-- ResetMicroMenuPosition"). MicroMenu is the plain MicroMenuMixin instance
+-- MicroMenuContainer (the Edit Mode system, EditModeMicroMenuSystemTemplate)
+-- parents -- never the system itself, so SetParent on MicroMenu is R3, not
+-- R1. Confirmed via MicroMenuMixin:ResetMicroMenuPosition's own body
+-- ("self:SetParent(MicroMenuContainer); ...
+-- EditModeManagerFrame:UpdateSystem(MicroMenuContainer, forceFullUpdate)",
+-- Blizzard_MicroMenu/Shared/MicroMenuContainer.lua:233-243 on the forever
+-- branch, fetched 2026-09-28) -- Blizzard calls that method itself from
+-- MainActionBarMixin:OnShow (Blizzard_ActionBar/Shared/MainActionBar.lua:16)
+-- and ActionBarController.lua's override-bar transition
+-- (Blizzard_ActionBarController/ActionBarController.lua:224), re-parenting
+-- MicroMenu back onto the container -- and undoing hideMicroButtons -- any
+-- time either fires. hooksecurefunc post-hooks that same method (never
+-- overwritten, CLAUDE.md "hooksecurefunc only") to re-hide. The re-hide
+-- goes through ApplyOrQueue because the hook can fire at any time, including
+-- mid-combat (CLAUDE.md "Combat lockdown"); BuildMicroMenu's own initial
+-- hide below doesn't need its own ApplyOrQueue call, since (like BuildMinimap
+-- above) it only ever runs inside WIIIUI.Layout(), which every caller already
+-- wraps in ApplyOrQueue (Core.lua's PLAYER_LOGIN handler, Config.lua's
+-- applyRow).
+--
+-- The hooked-once guard lives on WIIIUI.Blizzard, never on MicroMenu itself
+-- -- CLAUDE.md R1: "Never write a Lua key onto a Blizzard frame or table."
+-- Restore branch (ui-reviewer finding, gate iteration 2): every other
+-- General-tab boolean row restores on uncheck via WIIIUI.Layout() re-running
+-- through ApplyOrQueue; this one silently didn't, since the `if` above has
+-- no `else`. MicroMenuMixin:ResetMicroMenuPosition (the obvious "put it
+-- back" call, already hooked above) was considered and rejected: its body
+-- ("self:SetParent(MicroMenuContainer); self.stride = self.numButtons;
+-- self:ClearOverrideScale(); EditModeManagerFrame:UpdateSystem(
+-- MicroMenuContainer, true); UpdateMicroButtons()", MicroMenuContainer.lua:
+-- 233-243 forever branch, fetched 2026-09-28) calls
+-- EditModeManagerFrameMixin:UpdateSystem(systemFrame, true)
+-- (EditModeManagerFrame's own Shared/EditModeManager.lua:1475-1491, same
+-- fetch) which -- whenever MicroMenuContainer has active layout info (the
+-- normal, always-true case) -- runs
+-- systemFrame:MarkAllSettingsDirty()/systemFrame:UpdateSystem(systemInfo),
+-- and EditModeSystemMixin:UpdateSystem (Shared/EditModeSystemTemplates.lua:
+-- 385-407, same fetch) calls self:ApplySystemAnchor(), which calls
+-- self:ClearAllPoints()/self:SetPoint(...) (same file:350-375) -- both
+-- overridden per-system by EditModeSystemMixin:OnSystemLoad
+-- (EditModeSystemTemplates.lua:1-17: "self.SetPoint = self.SetPointOverride"
+-- etc). So calling ResetMicroMenuPosition from here, even out of combat,
+-- would run those two R1-forbidden overrides on MicroMenuContainer (the
+-- Edit Mode system itself) from our addon-tainted call stack -- not a
+-- combat-lockdown error, but exactly the taint risk R1 exists to prevent.
+-- Reparenting alone is sufficient and stays R3 (plain-frame SetParent):
+-- MicroMenu's own anchor points -- set by MicroMenuMixin:AnchorToMenuContainer
+-- at its last real layout and never cleared by the hide branch below -- and
+-- MicroMenuContainer's cached size -- its own Layout(), MicroMenuContainer.lua
+-- :17-55, returns early without resizing whenever
+-- `MicroMenu:GetParent() ~= self`, so nothing goes stale while hidden -- are
+-- both still valid the moment MicroMenu is parented back. MicroMenuContainer
+-- itself is read once as a plain global and handed to SetParent as an
+-- argument, never indexed into or written to (dev/tests/wow_stub.lua's
+-- newMicroMenuContainerTripwire -- errors on any field read/write, not on
+-- being passed by reference -- proves this at the seam).
+function WIIIUI.Blizzard.BuildMicroMenu()
+  local MicroMenu = _G.MicroMenu
+  local MicroMenuContainer = _G.MicroMenuContainer
+
+  if not MicroMenu then
+    return
+  end
+
+  if wc3UI_Options.hideMicroButtons then
+    MicroMenu:SetParent(WIIIUI.hider)
+  elseif MicroMenuContainer and MicroMenu:GetParent() == WIIIUI.hider then
+    MicroMenu:SetParent(MicroMenuContainer)
+  end
+
+  if not WIIIUI.Blizzard.microMenuHooked then
+    WIIIUI.Blizzard.microMenuHooked = true
+
+    hooksecurefunc(MicroMenu, "ResetMicroMenuPosition", function()
+      -- Read live, not captured at registration time: a user can toggle
+      -- hideMicroButtons off after this hook is registered, and the hook
+      -- must stop re-hiding from that point on.
+      if not wc3UI_Options.hideMicroButtons then
+        return
+      end
+
+      WIIIUI.ApplyOrQueue("microMenu", function()
+        -- Read live again at flush time, not just at queue time: Flush
+        -- (Core.lua:127-148) runs queued keys in queue order, so a later
+        -- "layout" entry queued before this one already restored the menu
+        -- if the option flipped off in between -- this must be a no-op
+        -- then, not re-hide it (security-specialist finding, slice 16).
+        if wc3UI_Options.hideMicroButtons then
+          MicroMenu:SetParent(WIIIUI.hider)
+        end
+      end)
+    end)
+  end
+end
