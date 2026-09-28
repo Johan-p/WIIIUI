@@ -265,6 +265,24 @@ function WIIIUI.Theme.ActionButtonGeometry(uiScale)
   }
 end
 
+-- Vanilla AlignXPBar (e17c352 WIIIUI.lua:2094-2113, 2190-2192): the XP bar
+-- anchors BOTTOMLEFT to portraitFrame's own BOTTOMLEFT (Console.lua's
+-- left.portraitTexture here -- Bars.lua's low-HP overlay already anchors to
+-- the same texture) at uiScale*0.23, uiScale*0.3. Vanilla builds the bar
+-- from three endcap-plus-middle textures scaled by xpScaling=0.375; this
+-- port's XP bar is one plain StatusBar (Bars.lua's health/power bar
+-- convention, no left/right endcap art), so only the middle piece's own
+-- width (uiScale*1.70*0.375) and the progress fill's own height
+-- (uiScale*0.083, WIIIUI.lua:2113) are in scope.
+function WIIIUI.Theme.XPBarGeometry(uiScale)
+  return {
+    width = uiScale * 1.70 * 0.375,
+    height = uiScale * 0.083,
+    anchorOffsetX = uiScale * 0.23,
+    anchorOffsetY = uiScale * 0.3,
+  }
+end
+
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
   local leftWidth = uiScale / 2
