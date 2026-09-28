@@ -196,7 +196,7 @@ end
 -- through to the default, matching vanilla's own if/elseif/else chain.
 -- Table lookup follows Theme.lua's RIGHT_LID_SHIFT_WIDTH_THEMES-style
 -- per-theme table convention.
-local ULTRA_WIDE_CHAT_TOP_OFFSET_X_FRACTION = {
+local ULTRA_WIDE_CHAT_TOP_OFFSET_X_THEMES = {
   nightelf = -0.9,
   undead = -0.734615,
 }
@@ -260,16 +260,18 @@ local function applyLayoutModes(right, left, theme, uiScale)
   end
 
   -- ultraWide/centerSlim/centerSlimNoInv horizontal centering (vanilla
-  -- AlignUltraWide's tail, e17c352 WIIIUI.lua:4666-4694, 4815). Only the
-  -- Wc3_UI_bottom_right_middle:IsVisible() branch applies here -- the other
-  -- two elseif branches (e17c352 WIIIUI.lua:4697-4762) manipulate real
-  -- action-slot buttons that don't exist until slice D. chatTop/chatMiddle/
-  -- chatBottom already got their normal default anchor unconditionally in
-  -- BuildRight, so the false branch below needs no extra code to revert
-  -- them -- only `left`'s anchor (set once by BuildLeft at creation) needs
-  -- an explicit revert here.
+  -- AlignUltraWide's tail, e17c352 WIIIUI.lua:4666-4694, 4815). chatTop/
+  -- chatMiddle/chatBottom always reference rightPartBackground here (they
+  -- already got their normal default anchor unconditionally in BuildRight,
+  -- so the false branch below needs no extra code to revert them) -- only
+  -- the *centering reference edge* selected just below varies per mode, and
+  -- only `left`'s anchor (set once by BuildLeft at creation) needs an
+  -- explicit revert in the false branch. The action-slot-button
+  -- repositioning/resize inside vanilla's other two elseif branches
+  -- (e17c352 WIIIUI.lua:4697-4762) still doesn't exist until slice D and
+  -- stays deferred.
   if wc3UI_Options.ultraWide or wc3UI_Options.centerSlim or wc3UI_Options.centerSlimNoInv then
-    local topOffsetX = uiScale * (ULTRA_WIDE_CHAT_TOP_OFFSET_X_FRACTION[theme] or ULTRA_WIDE_CHAT_TOP_OFFSET_X_DEFAULT)
+    local topOffsetX = uiScale * (ULTRA_WIDE_CHAT_TOP_OFFSET_X_THEMES[theme] or ULTRA_WIDE_CHAT_TOP_OFFSET_X_DEFAULT)
     local topOffsetY = -uiScale * 0.03846153
 
     chatTop:ClearAllPoints()
@@ -289,11 +291,61 @@ local function applyLayoutModes(right, left, theme, uiScale)
     -- all chain their anchors from `left` -- moving the parent frame
     -- carries the same visual result without re-anchoring each child.
     if left then
-      local uiParentRight = UIParent:GetRight()
-      local rightEdge = rightPartBackground:GetRight()
-
+      -- rightPartBackground/rightPartMiddle/rightPartLeft's resolved right
+      -- edge chains all the way back through grid/extensionBackgroundTexture/
+      -- portraitTexture/minimapTexture to `left` itself (BuildLeft/BuildGrid/
+      -- BuildRight's own anchor graph). Measuring the reference edge against
+      -- `left`'s prior (possibly already re-centered) position feeds this
+      -- call's own output back into the next call's input and drifts off
+      -- true center (security-specialist finding, slice 05 gate). Resetting
+      -- `left` to its known default anchor before measuring makes the whole
+      -- graph re-resolve relative to that fixed baseline first -- WoW
+      -- resolves GetLeft/GetRight synchronously after SetPoint, no frame
+      -- delay needed -- so the measured span depends only on fixed geometry,
+      -- never on a previous call's result.
       left:ClearAllPoints()
-      left:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", (uiParentRight - rightEdge) / 2, 0)
+      left:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+
+      -- Reference edge per mode -- vanilla picks a different frame
+      -- depending which piece is actually visible (e17c352 WIIIUI.lua:
+      -- 4666-4762): rightPartBackground when neither center mode is on (the
+      -- Wc3_UI_bottom_right_middle:IsVisible() branch, line 4667);
+      -- rightPartLeft when centerSlimNoInv (WIIIUI_rightpart:IsVisible()==
+      -- nil, line 4703), +18 for nightelf (line 4711); rightPart_middle when
+      -- centerSlim (WIIIUI_rightpartBackground:IsVisible()==nil, line 4815)
+      -- -- vanilla checks centerSlim before centerSlimNoInv with an elseif,
+      -- so centerSlim's reference wins when both flags are set, matching the
+      -- Hide/Show precedence above. Vanilla's own resize of rightPart_middle
+      -- under centerSlim (lines 4738-4762) stays deferred (real-action-
+      -- button territory, slice D); this only selects which frame's edge is
+      -- read, at its current (un-resized) width.
+      local referenceFrame = rightPartBackground
+
+      if wc3UI_Options.centerSlim then
+        referenceFrame = right.rightPartMiddle
+      elseif wc3UI_Options.centerSlimNoInv then
+        referenceFrame = right.rightPartLeft
+      end
+
+      local referenceEdge = referenceFrame and referenceFrame:GetRight()
+
+      if referenceEdge and wc3UI_Options.centerSlimNoInv and not wc3UI_Options.centerSlim and theme == "nightelf" then
+        referenceEdge = referenceEdge + 18
+      end
+
+      local leftEdge = left:GetLeft()
+      local uiParentRight = UIParent:GetRight()
+
+      -- GetRight()/GetLeft() can return nil before a region's rect resolves
+      -- (security-specialist finding, slice 05 gate) -- skip the re-centre
+      -- and leave `left` at the default anchor just set above rather than
+      -- computing arithmetic on nil.
+      if referenceEdge and leftEdge and uiParentRight then
+        local span = referenceEdge - leftEdge
+
+        left:ClearAllPoints()
+        left:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", (uiParentRight - span) / 2, 0)
+      end
     end
   elseif left then
     left:ClearAllPoints()
