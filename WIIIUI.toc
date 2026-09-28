@@ -11,3 +11,4 @@ Console.lua
 Bars.lua
 Portrait.lua
 Buttons.lua
+Config.lua

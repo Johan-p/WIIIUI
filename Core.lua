@@ -215,6 +215,9 @@ function WIIIUI.Layout()
   if WIIIUI.Buttons then
     WIIIUI.Buttons.BuildButtons()
   end
+  if WIIIUI.Config then
+    WIIIUI.Config.BuildConfig()
+  end
 end
 
 -- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."
