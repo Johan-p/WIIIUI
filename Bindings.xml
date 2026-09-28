@@ -1,1 +1,11 @@
-<Bindings/>
+<Bindings>
+   <Binding name="CLICK WIIIUI_Extra1:LeftButton" header="WIIIUI"/>
+   <Binding name="CLICK WIIIUI_Extra2:LeftButton"/>
+   <Binding name="CLICK WIIIUI_Extra3:LeftButton"/>
+   <Binding name="CLICK WIIIUI_Extra4:LeftButton"/>
+   <Binding name="CLICK WIIIUI_Extra5:LeftButton"/>
+   <Binding name="CLICK WIIIUI_Extra6:LeftButton"/>
+   <Binding name="CLICK WIIIUI_Extra7:LeftButton"/>
+   <Binding name="CLICK WIIIUI_Extra8:LeftButton"/>
+   <Binding name="CLICK WIIIUI_Extra9:LeftButton"/>
+</Bindings>

@@ -1,14 +1,22 @@
 -- spec 0001 §Module split "Buttons.lua": LibActionButton-1.0 header + 36
--- grid buttons (rows B/M/T), override bindings, retire of bars 1-3 (R2).
--- D2 scope only (spec 0001 phased plan "D. Action slots"): the bottom row
--- (WIIIUI_GridB) is built at LAB's default state (0), showing actions 1-12,
--- the same fixed-row treatment as the middle/top rows -- RegisterStateDriver
--- and the full per-page SetState table (spec §Buttons and paging) are
--- slice 13's job (D3, "bottom-row paging").
+-- grid buttons (rows B/M/T) + 9 extra slots (13-21), override bindings,
+-- hearthstone auto-place, retire of bars 1-3 (R2).
+-- The bottom row (WIIIUI_GridB) is still built at LAB's default state (0),
+-- showing actions 1-12, the same fixed-row treatment as the middle/top rows
+-- and the extras -- RegisterStateDriver and the full per-page SetState table
+-- (spec §Buttons and paging) are slice 13's job (D3, "bottom-row paging"),
+-- not yet landed in this worktree.
 local _, WIIIUI = ...
 
 WIIIUI.Buttons = WIIIUI.Buttons or {}
 WIIIUI.Buttons.rows = WIIIUI.Buttons.rows or {}
+
+-- spec 0001 §1.3 (decided), §Buttons and paging: "extra slots
+-- WIIIUI_Extra1..9: EXTRA_SLOT_BASE + 0..8 = slots 13-21, fixed." One
+-- constant so a later revision (spec 0001 §1.3: "0003 can move it") only
+-- changes this line.
+WIIIUI.EXTRA_SLOT_BASE = 13
+local EXTRA_SLOT_COUNT = 9
 
 -- LibActionButton-1.0 (spec 0001 §1.4, vendored in libs/ by slice 11, loaded
 -- before this file in the TOC).
@@ -61,6 +69,33 @@ local function anchorRow(buttons, originY, uiScale, geometry, grid)
   end
 end
 
+-- spec 0001 §Buttons and paging: "Extra1 (slot 13) is the top minimap slot;
+-- the order follows vanilla Bindings.xml (minimap 1-3, then inventory
+-- TL/TR/ML/MR/BL/BR)." Fixed at LAB state 0, same "always-visible" treatment
+-- as GridM/GridT above -- no RegisterStateDriver entry ever targets these,
+-- so their action never changes with the bottom row's page (slice 14
+-- acceptance criterion 1). No anchor: the spec's "Sizing and anchoring"
+-- section covers only the 36-button grid rows; the extras' on-screen
+-- position (minimap/inventory art) is not yet specified and is out of this
+-- slice's scope.
+local function buildExtras()
+  local extras = WIIIUI.Buttons.extras
+
+  if extras then
+    return
+  end
+
+  extras = {}
+
+  for i = 1, EXTRA_SLOT_COUNT do
+    local button = getOrCreateButton("WIIIUI_Extra", i)
+    button:SetState(0, "action", WIIIUI.EXTRA_SLOT_BASE - 1 + i)
+    extras[i] = button
+  end
+
+  WIIIUI.Buttons.extras = extras
+end
+
 function WIIIUI.Buttons.BuildButtons()
   if not header then
     -- spec 0001 §Buttons and paging: "Header: a SecureHandlerStateTemplate
@@ -90,6 +125,8 @@ function WIIIUI.Buttons.BuildButtons()
 
     anchorRow(buttons, rowOriginY[rowIndex], uiScale, geometry, grid)
   end
+
+  buildExtras()
 end
 
 -- spec 0001 §Buttons and paging "Retire (R2)": MainActionBar,
@@ -170,4 +207,57 @@ end
 -- own queue key, separate from "retire"/"layout").
 WIIIUI.On("UPDATE_BINDINGS", function()
   WIIIUI.ApplyOrQueue("bindings", WIIIUI.Buttons.ApplyBindings)
+end)
+
+-- spec 0001 §Event -> widget wiring: "BAG_UPDATE_DELAYED (out of combat),
+-- PLAYER_LOGIN | hearthstone auto-place (item ID 6948,
+-- C_Container.GetContainerItemID; PickupContainerItem + PlaceAction
+-- (EXTRA_SLOT_BASE) -- i.e. slot 13 -- only if not HasAction(slot) and not
+-- in combat)". Item ID 6948 (Hearthstone) is the spec's own citation, not
+-- looked up separately. NUM_BAG_SLOTS is Blizzard's own FrameXML constant
+-- (= 4); bag 0 is the backpack, 1-NUM_BAG_SLOTS the equipped bag slots -- the
+-- same range vanilla's own bag UI iterates.
+local HEARTHSTONE_ITEM_ID = 6948
+
+-- C_Container.GetContainerNumSlots/GetContainerItemID/PickupContainerItem --
+-- ContainerDocumentation.lua (spec 0001 §WoW APIs relied on).
+local function findHearthstoneBagSlot()
+  for bag = 0, NUM_BAG_SLOTS do
+    local numSlots = C_Container.GetContainerNumSlots(bag)
+
+    for slot = 1, numSlots do
+      if C_Container.GetContainerItemID(bag, slot) == HEARTHSTONE_ITEM_ID then
+        return bag, slot
+      end
+    end
+  end
+end
+
+-- HasAction/PlaceAction: Blizzard_DeprecatedActionBar/Deprecated_ActionBar.lua
+-- and FrameXML's own action-bar globals respectively (spec 0001 §WoW APIs
+-- relied on). PickupContainerItem puts the item on the cursor; PlaceAction
+-- places whatever's on the cursor into the given slot and empties the cursor
+-- when the slot was empty (warcraft.wiki.gg API_PlaceAction) -- no
+-- ClearCursor needed, since this only runs when the slot was confirmed empty.
+function WIIIUI.Buttons.PlaceHearthstone()
+  if HasAction(WIIIUI.EXTRA_SLOT_BASE) then
+    return
+  end
+
+  local bag, slot = findHearthstoneBagSlot()
+
+  if not bag then
+    return
+  end
+
+  C_Container.PickupContainerItem(bag, slot)
+  PlaceAction(WIIIUI.EXTRA_SLOT_BASE)
+end
+
+WIIIUI.On("BAG_UPDATE_DELAYED", function()
+  WIIIUI.ApplyOrQueue("hearthstone", WIIIUI.Buttons.PlaceHearthstone)
+end)
+
+WIIIUI.On("PLAYER_LOGIN", function()
+  WIIIUI.ApplyOrQueue("hearthstone", WIIIUI.Buttons.PlaceHearthstone)
 end)
