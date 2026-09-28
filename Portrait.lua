@@ -8,6 +8,35 @@ local _, WIIIUI = ...
 
 WIIIUI.Portrait = WIIIUI.Portrait or {}
 
+-- spec 0001 §1.5: "our own WIIIUI_PortraitHitText FontString over the
+-- portrait (vanilla offset uiScale*0.0222 above centre)." Vanilla
+-- CombatTextPortrait (e17c352 WIIIUI.lua:2075): "PlayerHitIndicator:
+-- SetPoint('CENTER', dummyFrameCombatText, 'CENTER', 0,
+-- wc3UI_Options.uiScale*0.022222222)" -- PlayerHitIndicator is Blizzard's
+-- own combat-feedback FontString (PlayerFrame.lua:51); this file's
+-- WIIIUI_PortraitHitText replaces it entirely (PlayerFrame is retired, R2),
+-- same offset. The shared font path/fallback pattern (Bars.lua) is
+-- duplicated locally rather than exposed cross-file, matching this file's
+-- own ICON_DEFS convention of file-local constants for its own widgets.
+local FONT_PATH = "Interface\\Addons\\WIIIUI\\art\\other\\fonts\\blq55.TTF"
+local HIT_TEXT_OFFSET_Y = 0.0222222
+
+-- Blizzard_UnitFrame/Mainline/PlayerFrame.xml:112 (CombatFeedback_Initialize
+-- call, PlayerFrame.lua:51): "CombatFeedback_Initialize(self, ...HitText,
+-- 30)" -- 30 is the base font height CombatFeedback_OnCombatEvent scales
+-- per event (see combatFeedbackParams below).
+local BASE_HIT_TEXT_HEIGHT = 30
+
+-- Blizzard_FrameXML/Mainline/CombatFeedback.lua: COMBATFEEDBACK_FADEINTIME/
+-- HOLDTIME/FADEOUTTIME -- the vanilla fade timing spec 0001 §1.5 asks for
+-- ("fades with an AnimationGroup (0.2 in / 0.7 hold / 0.3 out,
+-- COMBATFEEDBACK_* constants)"), ported as WIIIUI's own local constants
+-- since PlayerFrame's own globals of the same name are gone once it's
+-- retired.
+local COMBATFEEDBACK_FADEINTIME = 0.2
+local COMBATFEEDBACK_HOLDTIME = 0.7
+local COMBATFEEDBACK_FADEOUTTIME = 0.3
+
 -- spec 0001 §Portrait: "WIIIUI_Portrait: CreateFrame("Button",
 -- "WIIIUI_Portrait", parent, "SecureUnitButtonTemplate") with attributes
 -- unit = "player", type1 = "target", type2 = "togglemenu",
@@ -258,6 +287,166 @@ local function updateCombat()
   end
 end
 
+-- spec 0001 §1.5: "our own WIIIUI_PortraitHitText FontString over the
+-- portrait ... RegisterUnitEvent('UNIT_COMBAT', 'player')." Built once,
+-- centred on the button (same anchor as buildIcons) with the vanilla Y
+-- offset; the fade AnimationGroup (0.2 in / 0.7 hold / 0.3 out) is plain
+-- non-secret widget setup, so -- like buildLowHpOverlay's animation in
+-- Bars.lua -- it isn't wrapped in WIIIUI.Safe.
+local function buildHitText(parent, uiScale)
+  local hitText = WIIIUI.Portrait.hitText
+
+  if hitText then
+    hitText:ClearAllPoints()
+    hitText:SetPoint("CENTER", parent, "CENTER", 0, uiScale * HIT_TEXT_OFFSET_Y)
+    return hitText
+  end
+
+  hitText = parent:CreateFontString("WIIIUI_PortraitHitText", "OVERLAY")
+  hitText:SetPoint("CENTER", parent, "CENTER", 0, uiScale * HIT_TEXT_OFFSET_Y)
+  hitText:Hide()
+
+  -- CLAUDE.md "Tech stack quirks" font-fallback pattern, same as Bars.lua.
+  -- NumberFontNormalHuge (Blizzard_Fonts_Shared/Shared/GameFontStyles.xml,
+  -- forever branch) inherits NumberFont_Outline_Huge -- the same outlined
+  -- style Blizzard's own PlayerFrame HitText uses (PlayerFrame.xml:115,
+  -- CombatFeedback_Initialize's 30pt base), unlike GameFontHighlightSmall's
+  -- body-text sizing.
+  hitText:SetFontObject(NumberFontNormalHuge)
+  local fontApplied = hitText:SetFont(FONT_PATH, BASE_HIT_TEXT_HEIGHT, "")
+
+  if not fontApplied or not hitText:GetFont() then
+    hitText:SetFontObject(NumberFontNormalHuge)
+  end
+
+  local animGroup = hitText:CreateAnimationGroup()
+
+  local fadeIn = animGroup:CreateAnimation("Alpha")
+  fadeIn:SetFromAlpha(0)
+  fadeIn:SetToAlpha(1)
+  fadeIn:SetDuration(COMBATFEEDBACK_FADEINTIME)
+  fadeIn:SetOrder(1)
+
+  local hold = animGroup:CreateAnimation("Alpha")
+  hold:SetFromAlpha(1)
+  hold:SetToAlpha(1)
+  hold:SetDuration(COMBATFEEDBACK_HOLDTIME)
+  hold:SetOrder(2)
+
+  local fadeOut = animGroup:CreateAnimation("Alpha")
+  fadeOut:SetFromAlpha(1)
+  fadeOut:SetToAlpha(0)
+  fadeOut:SetDuration(COMBATFEEDBACK_FADEOUTTIME)
+  fadeOut:SetOrder(3)
+
+  animGroup:SetScript("OnFinished", function()
+    hitText:Hide()
+  end)
+
+  WIIIUI.Portrait.hitText = hitText
+  WIIIUI.Portrait.hitTextAnim = animGroup
+
+  return hitText
+end
+
+-- Ported from Blizzard's own CombatFeedback_OnCombatEvent
+-- (Blizzard_FrameXML/Mainline/CombatFeedback.lua) -- same event/flags
+-- branches, same colours, same font-height multipliers; only the
+-- destination widget differs (WIIIUI_PortraitHitText instead of
+-- PlayerFrame's HitIndicator.HitText). A pure function (no widget calls),
+-- so any error inside it (e.g. a missing CombatFeedbackText/Enum.Damageclass
+-- global) is caught by updateCombatText's single WIIIUI.Safe wrapper below,
+-- same as the widget calls that use its result. COMBAT_TEXT_BLOCK_REDUCED
+-- (Blizzard_FrameXML/Mainline/CombatFeedback.lua:50-52, forever branch,
+-- unguarded in Blizzard's own source) formats the BLOCK_REDUCED case, same
+-- as every other CombatFeedbackText/GlobalString below.
+local function combatFeedbackParams(feedbackEvent, flags, amount, schoolMask)
+  local text
+  local r, g, b, heightScale = 1, 1, 1, 1
+
+  if feedbackEvent == "IMMUNE" then
+    heightScale = 0.5
+    text = CombatFeedbackText[feedbackEvent]
+  elseif feedbackEvent == "WOUND" then
+    if amount ~= 0 then
+      if flags == "CRITICAL" or flags == "CRUSHING" then
+        heightScale = 1.5
+      elseif flags == "GLANCING" then
+        heightScale = 0.75
+      end
+      if schoolMask ~= Enum.Damageclass.MaskPhysical then
+        r, g, b = 1, 1, 0
+      end
+      text = BreakUpLargeNumbers(amount)
+      if flags == "BLOCK_REDUCED" then
+        text = COMBAT_TEXT_BLOCK_REDUCED:format(text)
+      end
+    elseif flags == "ABSORB" then
+      heightScale = 0.75
+      text = CombatFeedbackText.ABSORB
+    elseif flags == "BLOCK" then
+      heightScale = 0.75
+      text = CombatFeedbackText.BLOCK
+    elseif flags == "RESIST" then
+      heightScale = 0.75
+      text = CombatFeedbackText.RESIST
+    else
+      text = CombatFeedbackText.MISS
+    end
+  elseif feedbackEvent == "BLOCK" then
+    heightScale = 0.75
+    text = CombatFeedbackText[feedbackEvent]
+  elseif feedbackEvent == "HEAL" then
+    text = BreakUpLargeNumbers(amount)
+    r, g, b = 0, 1, 0
+    if flags == "CRITICAL" then
+      heightScale = 1.5
+    end
+  elseif feedbackEvent == "ENERGIZE" then
+    text = BreakUpLargeNumbers(amount)
+    r, g, b = 0.41, 0.8, 0.94
+    if flags == "CRITICAL" then
+      heightScale = 1.5
+    end
+  else
+    text = CombatFeedbackText[feedbackEvent]
+  end
+
+  return text, r, g, b, heightScale
+end
+
+-- spec 0001 §1.5: "formats BreakUpLargeNumbers(amount) (secret-tolerant);
+-- picks colour and size by event/flags strings, which are not secret;
+-- takes miss/block/etc words from Blizzard's CombatFeedbackText table; on
+-- any failure, calls WIIIUI.Safe and skips the event." One Safe call wraps
+-- text-building and every widget call together, so a missing global, a
+-- schoolMask comparison that turns out to be secret in some context (the
+-- spec's own "Unverified" item), or anything else in between all take the
+-- same single degrade path -- hide the text, skip this hit.
+local function updateCombatText(_, feedbackEvent, flags, amount, schoolMask)
+  local hitText = WIIIUI.Portrait.hitText
+  local animGroup = WIIIUI.Portrait.hitTextAnim
+
+  if not hitText or not animGroup then
+    return
+  end
+
+  local ok = WIIIUI.Safe(function()
+    local text, r, g, b, heightScale = combatFeedbackParams(feedbackEvent, flags, amount, schoolMask)
+
+    hitText:SetText(text)
+    hitText:SetTextColor(r, g, b)
+    hitText:SetTextHeight(BASE_HIT_TEXT_HEIGHT * heightScale)
+    hitText:Show()
+    animGroup:Stop()
+    animGroup:Play()
+  end)
+
+  if not ok then
+    hitText:Hide()
+  end
+end
+
 -- spec 0001 §Portrait: the button sits directly on WIIIUI.Console.left's
 -- portraitTexture (same size, zero offset) -- portraitTexture is already
 -- positioned relative to the minimap texture by Console.BuildLeft/
@@ -282,6 +471,7 @@ function WIIIUI.Portrait.BuildPortrait()
   model:ClearAllPoints()
   model:SetPoint("CENTER", button, "CENTER", 0, 0)
 
+  buildHitText(button, uiScale)
   buildIcons(button, uiScale)
 
   updateModel()
@@ -304,3 +494,4 @@ WIIIUI.On("PLAYER_ROLES_ASSIGNED", updateRole)
 WIIIUI.On("PLAYER_UPDATE_RESTING", updateResting)
 WIIIUI.On("PLAYER_REGEN_DISABLED", updateCombat)
 WIIIUI.On("PLAYER_REGEN_ENABLED", updateCombat)
+WIIIUI.On("UNIT_COMBAT", updateCombatText, "player")

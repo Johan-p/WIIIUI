@@ -156,6 +156,16 @@ function WIIIUI.Flush()
   end
 end
 
+-- spec 0001 §1.2/§A.3: "The guard seam is WIIIUI.Safe(fn, ...), which
+-- returns ok, result." / "WIIIUI.Safe(fn, ...) = pcall." The one
+-- secret-value guard seam (CLAUDE.md "Secret-value tolerant"): every
+-- HP/power-percent-text, HP-gradient, low-HP-pulse and portrait-combat-text
+-- call site that might touch a secret unit value goes through this instead
+-- of a bare pcall of its own.
+function WIIIUI.Safe(fn, ...)
+  return pcall(fn, ...)
+end
+
 -- spec 0001 §A.3: "WIIIUI.hider is an unnamed hidden Frame." Reused here as
 -- the event-dispatch frame too -- the spec names one frame field on WIIIUI
 -- for this purpose and forbids nothing about it also carrying OnEvent, and
