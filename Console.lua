@@ -285,4 +285,66 @@ function WIIIUI.Console.BuildRight()
   chatBottom:SetTexture(WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRight_Bottom"))
   chatBottom:ClearAllPoints()
   chatBottom:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMRIGHT", chatAreaGeometry.bottomOffsetX, chatAreaGeometry.bottomOffsetY)
+
+  -- Vanilla Wc3_UI_right_right_extendedFillerTop_1/Bottom_1 (e17c352
+  -- WIIIUI.xml:3220-3243, Layer level="BORDER"). AlignRightPart (e17c352
+  -- WIIIUI.lua:3507-3514) overrides the XML's static BOTTOM anchor at
+  -- runtime, anchoring both BOTTOMLEFT to rightPartMiddle's BOTTOMRIGHT.
+  -- Cached as right.fillerTop1/fillerBottom1 so slice 05 can Hide()/Show()
+  -- them; the uiScale-threshold Show/Hide quirks and the undead-only
+  -- re-aligner (e17c352 WIIIUI.lua:3515-3560, 3562+) are this slice's
+  -- documented deferral, not built here.
+  local fillerGeometry = WIIIUI.Theme.RightFillerGeometry(uiScale, wc3UI_Options.moveChatAreaUp)
+  local fillerTopPath = WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRightFillerTop")
+  local fillerBottomPath = WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRightFillerBottom")
+
+  local fillerTop1 = getOrCreateTexture(right, "fillerTop1", "BORDER")
+
+  fillerTop1:SetSize(fillerGeometry.topWidth, fillerGeometry.topHeight)
+  fillerTop1:SetTexture(fillerTopPath)
+  fillerTop1:ClearAllPoints()
+  fillerTop1:SetPoint("BOTTOMLEFT", rightPartMiddle, "BOTTOMRIGHT", fillerGeometry.top1OffsetX, fillerGeometry.top1OffsetY)
+
+  local fillerBottom1 = getOrCreateTexture(right, "fillerBottom1", "BORDER")
+
+  fillerBottom1:SetSize(fillerGeometry.bottomWidth, fillerGeometry.bottomHeight)
+  fillerBottom1:SetTexture(fillerBottomPath)
+  fillerBottom1:ClearAllPoints()
+  fillerBottom1:SetPoint("BOTTOMLEFT", rightPartMiddle, "BOTTOMRIGHT", fillerGeometry.bottom1OffsetX, fillerGeometry.bottom1OffsetY)
+
+  -- Vanilla Wc3_UI_right_right_extendedFillerTop_2/Bottom_2 (e17c352
+  -- WIIIUI.xml:3251-3273, Layer level="ARTWORK"). AlignRightPart (e17c352
+  -- WIIIUI.lua:3526-3534) overrides the XML's static BOTTOM anchor at
+  -- runtime, anchoring both BOTTOMLEFT to fillerBottom1's own BOTTOMLEFT.
+  local fillerTop2 = getOrCreateTexture(right, "fillerTop2", "ARTWORK")
+
+  fillerTop2:SetSize(fillerGeometry.topWidth, fillerGeometry.topHeight)
+  fillerTop2:SetTexture(fillerTopPath)
+  fillerTop2:ClearAllPoints()
+  fillerTop2:SetPoint("BOTTOMLEFT", fillerBottom1, "BOTTOMLEFT", fillerGeometry.top2OffsetX, fillerGeometry.top2OffsetY)
+
+  local fillerBottom2 = getOrCreateTexture(right, "fillerBottom2", "ARTWORK")
+
+  fillerBottom2:SetSize(fillerGeometry.bottomWidth, fillerGeometry.bottomHeight)
+  fillerBottom2:SetTexture(fillerBottomPath)
+  fillerBottom2:ClearAllPoints()
+  fillerBottom2:SetPoint("BOTTOMLEFT", fillerBottom1, "BOTTOMLEFT", fillerGeometry.bottom2OffsetX, fillerGeometry.bottom2OffsetY)
+
+  -- Vanilla Wc3_UI_right_right_extendedFillerTop_3/Bottom_3 (e17c352
+  -- WIIIUI.xml:3280-3302, Layer level="ARTWORK"). AlignRightPart (e17c352
+  -- WIIIUI.lua:3543-3550) overrides the XML's static BOTTOM anchor at
+  -- runtime, anchoring both BOTTOMLEFT to fillerBottom2's own BOTTOMLEFT.
+  local fillerTop3 = getOrCreateTexture(right, "fillerTop3", "ARTWORK")
+
+  fillerTop3:SetSize(fillerGeometry.topWidth, fillerGeometry.topHeight)
+  fillerTop3:SetTexture(fillerTopPath)
+  fillerTop3:ClearAllPoints()
+  fillerTop3:SetPoint("BOTTOMLEFT", fillerBottom2, "BOTTOMLEFT", fillerGeometry.top3OffsetX, fillerGeometry.top3OffsetY)
+
+  local fillerBottom3 = getOrCreateTexture(right, "fillerBottom3", "ARTWORK")
+
+  fillerBottom3:SetSize(fillerGeometry.bottomWidth, fillerGeometry.bottomHeight)
+  fillerBottom3:SetTexture(fillerBottomPath)
+  fillerBottom3:ClearAllPoints()
+  fillerBottom3:SetPoint("BOTTOMLEFT", fillerBottom2, "BOTTOMLEFT", fillerGeometry.bottom3OffsetX, fillerGeometry.bottom3OffsetY)
 end

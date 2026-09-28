@@ -182,6 +182,49 @@ function WIIIUI.Theme.ChatAreaGeometry(uiScale, theme, moveChatAreaUp)
   }
 end
 
+-- Vanilla AlignRightPart, the extension-filler block (e17c352
+-- WIIIUI.lua:3496-3550): the 6 filler textures anchor off rightPart_middle
+-- (top1/bottom1) then chain off each other's bottom piece (top2/bottom2 off
+-- bottom1, top3/bottom3 off bottom2). alignExtraHorizontal
+-- (e17c352 WIIIUI.lua:3496-3505) is unconditional uiScale-threshold position
+-- math (not a Show/Hide quirk), so it's in scope for "base position": 0
+-- below 250, -3 from 250-259, -6 above 259. The Show/Hide toggles guarding
+-- filler visibility (e17c352 WIIIUI.lua:3515-3560) and the undead-only
+-- re-aligner (e17c352 WIIIUI.lua:3562+) that resizes/repositions these same
+-- textures per exact uiScale value are this slice's documented deferral, not
+-- built here.
+function WIIIUI.Theme.RightFillerGeometry(uiScale, moveChatAreaUp)
+  local alignExtraHorizontal = 0
+
+  if uiScale >= 250 and uiScale <= 259 then
+    alignExtraHorizontal = -3
+  elseif uiScale > 259 then
+    alignExtraHorizontal = -6
+  end
+
+  return {
+    topWidth = uiScale / 2,
+    topHeight = uiScale / 4,
+    bottomWidth = uiScale / 2,
+    bottomHeight = uiScale / 16,
+
+    top1OffsetX = uiScale * -0.09 + alignExtraHorizontal,
+    top1OffsetY = uiScale * 0.5206 + moveChatAreaUp,
+    bottom1OffsetX = uiScale * -0.03703,
+    bottom1OffsetY = 0,
+
+    top2OffsetX = uiScale * 0.2291 + alignExtraHorizontal,
+    top2OffsetY = uiScale * 0.5206 + moveChatAreaUp,
+    bottom2OffsetX = uiScale * 0.2768,
+    bottom2OffsetY = 0,
+
+    top3OffsetX = uiScale * 0.2291 + alignExtraHorizontal,
+    top3OffsetY = uiScale * 0.5206 + moveChatAreaUp,
+    bottom3OffsetX = uiScale * 0.2768,
+    bottom3OffsetY = 0,
+  }
+end
+
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
   local leftWidth = uiScale / 2
