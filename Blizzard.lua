@@ -46,62 +46,19 @@ function WIIIUI.Blizzard.MailIndicatorAvailable()
   return _G.MiniMapMailFrame ~= nil
 end
 
--- Vanilla AlignMinimap/AlignZoneText (e17c352 WIIIUI.lua:1828-1831,
--- 1878-1889): MinimapZoneTextButton reparents under Minimap, anchored
--- BOTTOM to it; ZoneTextPos 1/2 pick the Y offset (Theme.lua's
--- ZoneTextGeometry), 3 hides it outright. Existence-checked per this file's
--- header comment -- absent on Forever (confirmed via source), so this is a
--- no-op there until a follow-up.
-function WIIIUI.Blizzard.BuildZoneText(Minimap)
-  local zoneText = _G.MinimapZoneTextButton
-
-  if not zoneText then
-    return
-  end
-
-  local geometry = WIIIUI.Theme.ZoneTextGeometry(wc3UI_Options.uiScale, wc3UI_Options.ZoneTextPos)
-
-  zoneText:SetParent(Minimap)
-  zoneText:ClearAllPoints()
-
-  if geometry.hidden then
-    zoneText:Hide()
-    return
-  end
-
-  zoneText:Show()
-  zoneText:SetPoint("BOTTOM", Minimap, "BOTTOM", 0, geometry.offsetY)
-end
-
--- Vanilla AlignMinimap's mail block (e17c352 WIIIUI.lua:1834-1837): only the
--- unconditional (non-theme-conditional) offsets are ported -- the human/orc
--- uiScale-threshold extraAlign fine-tune (e17c352 WIIIUI.lua:1839-1858) is a
--- documented deferral, same convention as Theme.lua's RightFillerGeometry/
--- Console.lua's filler-nudge notes. MiniMapMailBorder:Hide() (vanilla's own
--- unconditional call) isn't ported -- that global doesn't exist standalone
--- on Forever either (confirmed via source: no top-level MiniMapMailBorder
--- name in Blizzard_Minimap/Mainline/Minimap.xml), so under this file's
--- existence-check convention there is nothing to hide. Existence-checked
--- per this file's header comment -- MiniMapMailFrame is absent on Forever
--- (confirmed via source), so this is a no-op there until a follow-up.
-function WIIIUI.Blizzard.BuildMailIndicator(Minimap, uiScale)
-  local mailFrame = _G.MiniMapMailFrame
-
-  if not mailFrame then
-    return
-  end
-
-  local geometry = WIIIUI.Theme.MailIndicatorGeometry(uiScale)
-
-  mailFrame:ClearAllPoints()
-  mailFrame:SetPoint("BOTTOMLEFT", Minimap, "BOTTOMRIGHT", geometry.offsetX, geometry.offsetY)
-
-  local mailIcon = _G.MiniMapMailIcon
-
-  if mailIcon then
-    mailIcon:SetSize(geometry.iconSize, geometry.iconSize)
-  end
-end
+-- MinimapZoneTextButton/MiniMapMailFrame are confirmed dead globals on both
+-- Forever and retail (this file's header comment) -- ZoneTextAvailable()/
+-- MailIndicatorAvailable() above always resolve false there today, so
+-- there's nothing left to build behind them. The vanilla reparent/anchor
+-- logic they used to gate (AlignZoneText, AlignMinimap's mail block,
+-- e17c352 WIIIUI.lua:1828-1837, 1878-1889) is a follow-up's job, once that
+-- follow-up decides how to reach the real nested ZoneTextButton/MailFrame
+-- children inside MinimapCluster without violating R4 ("never reference
+-- MinimapCluster") -- most likely through the shipped Edit Mode layout
+-- string rather than a direct reparent. Vanilla's mail block also swapped
+-- in a "no mail" texture and trimmed MiniMapMailIcon's TexCoord
+-- (e17c352 WIIIUI.lua:1834-1837) -- cosmetic polish not ported here either,
+-- for the same reason: no reachable mail frame to apply it to yet.
 
 -- Vanilla AlignMinimap's Minimap block (e17c352 WIIIUI.lua:1814-1823):
 -- ClearAllPoints, then CENTER-anchor to minimapFrame (Console.lua's
@@ -110,6 +67,12 @@ end
 -- Minimap/Frame widget methods (warcraft.wiki.gg API_Frame_
 -- EnableMouseWheel, API_Minimap_SetMaskTexture -- the latter's wiki page
 -- lists Forever 1.60.1 explicitly among its confirmed client versions).
+-- SetFrameStrata("LOW")/SetFrameLevel(1) right after the reparent match
+-- vanilla's own AlignMinimap (e17c352 WIIIUI.lua:1817-1818) -- SetParent
+-- doesn't change a frame's own strata/level, and Minimap sets no explicit
+-- frameStrata of its own on Forever, so without this it would keep
+-- whatever it inherited at creation instead of matching left's own "LOW"
+-- (Console.lua's BuildLeft).
 --
 -- "Enable wheel zoom" is EnableMouseWheel(true) only, not a SetScript call:
 -- Blizzard_Minimap/Mainline/Minimap.xml's own <Minimap> element already
@@ -136,11 +99,10 @@ function WIIIUI.Blizzard.BuildMinimap()
 
   Minimap:ClearAllPoints()
   Minimap:SetParent(left)
+  Minimap:SetFrameStrata("LOW")
+  Minimap:SetFrameLevel(1)
   Minimap:SetSize(geometry.minimapSize, geometry.minimapSize)
   Minimap:SetPoint("CENTER", minimapTexture, "CENTER", geometry.minimapOffsetX, geometry.minimapOffsetY)
   Minimap:EnableMouseWheel(true)
   Minimap:SetMaskTexture(MASK_TEXTURE)
-
-  WIIIUI.Blizzard.BuildZoneText(Minimap)
-  WIIIUI.Blizzard.BuildMailIndicator(Minimap, uiScale)
 end
