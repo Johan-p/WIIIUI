@@ -9,3 +9,4 @@ Core.lua
 Theme.lua
 Console.lua
 Bars.lua
+Portrait.lua
