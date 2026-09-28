@@ -34,6 +34,11 @@ function WIIIUI.Console.BuildLeft()
   if not left then
     left = CreateFrame("Frame", nil, UIParent)
     left:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+    -- Vanilla WIIIUI_leftpart is framestrata="LOW" (e17c352 WIIIUI.xml:5,
+    -- the virtual WIIIUI_Frame template's default) -- below the grid and
+    -- right consoles in the stack. API_Frame_GetFrameStrata,
+    -- warcraft.wiki.gg.
+    left:SetFrameStrata("LOW")
     WIIIUI.Console.left = left
   end
 
@@ -112,6 +117,10 @@ function WIIIUI.Console.BuildGrid()
 
   if not grid then
     grid = CreateFrame("Frame", nil, UIParent)
+    -- Vanilla WIIIUI_actionslotGrid is framestrata="MEDIUM" (e17c352
+    -- WIIIUI.xml:3045) -- above the left console, below the right console.
+    -- API_Frame_GetFrameStrata, warcraft.wiki.gg.
+    grid:SetFrameStrata("MEDIUM")
     WIIIUI.Console.grid = grid
   end
 
@@ -185,6 +194,11 @@ function WIIIUI.Console.BuildRight()
   if not right then
     right = CreateFrame("Frame", nil, UIParent)
     right:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
+    -- Vanilla WIIIUI_rightpart is framestrata="HIGH" (e17c352
+    -- WIIIUI.xml:3120) -- the inventory/lid/chat-area console draws above
+    -- the grid, which draws above the left console. API_Frame_
+    -- GetFrameStrata, warcraft.wiki.gg.
+    right:SetFrameStrata("HIGH")
     WIIIUI.Console.right = right
   end
 
@@ -224,7 +238,12 @@ function WIIIUI.Console.BuildRight()
   -- rightPartWidth defaults to uiScale*2.2 when unset (e17c352
   -- WIIIUI.lua:4545-4546's backfill-only-when-nil semantics); read here
   -- rather than via Config.lua, which doesn't exist yet (slice 04B).
-  local rightPartWidth = wc3UI_Options.rightPartWidth or (uiScale * 2.2)
+  -- rightPartWidth is deliberately excluded from DEFAULTS (Core.lua), so
+  -- MergeDefaults never resets a wrong-typed value from a hand-edited or
+  -- corrupted SavedVariables file -- guard the type here instead of letting
+  -- a non-number flow into rightPartBackground:SetSize below.
+  local rawRightPartWidth = wc3UI_Options.rightPartWidth
+  local rightPartWidth = (type(rawRightPartWidth) == "number") and rawRightPartWidth or (uiScale * 2.2)
   local backgroundGeometry = WIIIUI.Theme.RightPartBackgroundGeometry(
     uiScale,
     rightPartWidth,
