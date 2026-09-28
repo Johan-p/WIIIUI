@@ -225,6 +225,9 @@ function WIIIUI.Layout()
   if WIIIUI.Buttons then
     WIIIUI.Buttons.BuildButtons()
   end
+  if WIIIUI.Blizzard then
+    WIIIUI.Blizzard.BuildMinimap()
+  end
   if WIIIUI.Config then
     WIIIUI.Config.BuildConfig()
   end
