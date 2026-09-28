@@ -203,6 +203,7 @@ function WIIIUI.Layout()
   WIIIUI.Console.BuildLeft()
   WIIIUI.Console.BuildGrid()
   WIIIUI.Console.BuildRight()
+  WIIIUI.Bars.BuildBars()
 end
 
 -- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."
@@ -213,11 +214,30 @@ WIIIUI.On("ADDON_LOADED", function(addonName)
   wc3UI_Options = WIIIUI.MergeDefaults(wc3UI_Options)
 end)
 
--- spec 0001 §A.4 also has PLAYER_LOGIN resolve the action bar and queue
--- retire/layout/bindings; none of Retire/Layout/the bindings builder exist
--- yet (later phases), so this slice only registers the event -- scoped down
--- per this iteration's brief.
-WIIIUI.On("PLAYER_LOGIN", function() end)
+-- spec 0001 §1.1 R2 ("retire"): the one audited sequence for a Blizzard
+-- system WIIIUI replaces outright -- UnregisterAllEvents(), existence-
+-- checked HideBase() (never Hide(), which runs Blizzard's Edit Mode
+-- HideOverride tainted; confirmed via EditModeSystemMixin's
+-- "self.HideBase = self.Hide; self.Hide = self.HideOverride" swap,
+-- Blizzard_EditMode/Shared/EditModeSystemTemplates.lua:35-36 on the forever
+-- branch), then SetParent(WIIIUI.hider). No key purge: this never writes a
+-- key onto PlayerFrame, only calls its own methods. PlayerFrame is the only
+-- R2 target this slice owns (spec 0004 D3); a later slice retiring another
+-- system (action bars, slice 12) follows this same three-call pattern.
+function WIIIUI.Retire()
+  PlayerFrame:UnregisterAllEvents()
+  if PlayerFrame.HideBase then
+    PlayerFrame:HideBase()
+  end
+  PlayerFrame:SetParent(WIIIUI.hider)
+end
+
+-- spec 0001 §A.4: PLAYER_LOGIN retires PlayerFrame (C1), out of combat,
+-- through ApplyOrQueue. Resolving the action bar and queuing layout/bindings
+-- are later phases, not yet built.
+WIIIUI.On("PLAYER_LOGIN", function()
+  WIIIUI.ApplyOrQueue("retire", WIIIUI.Retire)
+end)
 
 -- spec 0001 §A.3: "Flush runs order on PLAYER_REGEN_ENABLED" -- the other
 -- half of ApplyOrQueue's combat-lockdown seam; without this, anything queued
