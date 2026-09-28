@@ -203,6 +203,7 @@ function WIIIUI.Layout()
   WIIIUI.Console.BuildLeft()
   WIIIUI.Console.BuildGrid()
   WIIIUI.Console.BuildRight()
+  WIIIUI.Bars.BuildBars()
 end
 
 -- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."
@@ -213,11 +214,51 @@ WIIIUI.On("ADDON_LOADED", function(addonName)
   wc3UI_Options = WIIIUI.MergeDefaults(wc3UI_Options)
 end)
 
--- spec 0001 §A.4 also has PLAYER_LOGIN resolve the action bar and queue
--- retire/layout/bindings; none of Retire/Layout/the bindings builder exist
--- yet (later phases), so this slice only registers the event -- scoped down
--- per this iteration's brief.
-WIIIUI.On("PLAYER_LOGIN", function() end)
+-- spec 0001 §A.3: "Retire(frame, unregister)" -- the one R2 implementation
+-- for a Blizzard system WIIIUI replaces outright, parameterized by frame so
+-- a later R2 target (action bars, slice 12; spec 0004 §3: "12 retires the
+-- action bars through WIIIUI.Retire, so it uses 07's seam") reuses this same
+-- sequence instead of duplicating it. unregister is a parameter, not baked
+-- in, because R2 itself only runs UnregisterAllEvents() "only where listed"
+-- per frame (CLAUDE.md R2) -- PlayerFrame is one of the frames that needs
+-- it; a future R2 target that doesn't passes false. Sequence: existence-
+-- checked frame (a resolved-at-call-time frame reference may be nil),
+-- UnregisterAllEvents(), existence-checked HideBase() (never Hide(), which
+-- runs Blizzard's Edit Mode HideOverride tainted; confirmed via
+-- EditModeSystemMixin's "self.HideBase = self.Hide; self.Hide =
+-- self.HideOverride" swap, Blizzard_EditMode/Shared/
+-- EditModeSystemTemplates.lua:35-36 on the forever branch), then
+-- SetParent(WIIIUI.hider). No key purge: this never writes a key onto the
+-- frame, only calls its own methods.
+function WIIIUI.Retire(frame, unregister)
+  if not frame then
+    return
+  end
+
+  if unregister then
+    frame:UnregisterAllEvents()
+  end
+
+  if frame.HideBase then
+    frame:HideBase()
+  end
+
+  frame:SetParent(WIIIUI.hider)
+end
+
+-- spec 0001 §A.4: "PLAYER_LOGIN: resolve action bar, build everything once,
+-- then ApplyOrQueue('retire'), ApplyOrQueue('layout', WIIIUI.Layout),
+-- ApplyOrQueue('bindings')." Retires PlayerFrame (C1, needs
+-- UnregisterAllEvents per R2's per-frame list) and builds the console/bars
+-- via WIIIUI.Layout(), both out of combat through ApplyOrQueue -- "retire"
+-- and "layout" are separate queue keys, so each applies (or queues) on its
+-- own; ApplyOrQueue keys its pending/order tables by this string, so there's
+-- no collision between the two calls. Resolving the action bar and queuing
+-- bindings are later phases, not yet built.
+WIIIUI.On("PLAYER_LOGIN", function()
+  WIIIUI.ApplyOrQueue("retire", function() WIIIUI.Retire(PlayerFrame, true) end)
+  WIIIUI.ApplyOrQueue("layout", WIIIUI.Layout)
+end)
 
 -- spec 0001 §A.3: "Flush runs order on PLAYER_REGEN_ENABLED" -- the other
 -- half of ApplyOrQueue's combat-lockdown seam; without this, anything queued

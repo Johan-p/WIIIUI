@@ -8,3 +8,4 @@ libs/LibActionButton-1.0/LibActionButton-1.0.lua
 Core.lua
 Theme.lua
 Console.lua
+Bars.lua

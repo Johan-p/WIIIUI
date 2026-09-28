@@ -225,6 +225,25 @@ function WIIIUI.Theme.RightFillerGeometry(uiScale, moveChatAreaUp)
   }
 end
 
+-- Vanilla AlignHealthMana (e17c352 WIIIUI.lua:1987-1992, 2009-2014): both
+-- bars anchor BOTTOMLEFT to minimapFrame's BOTTOMRIGHT (minimapFrame there
+-- is Wc3_UI_minimap itself, per Console.lua's BuildLeft's own citation of
+-- this same vanilla naming quirk -- the minimap texture, not the left
+-- console frame) at uiScale*-0.147, <Y>;
+-- width uiScale*0.27, height uiScale*0.03. Y is uiScale*0.07 for the health
+-- bar (slot 1) and uiScale*0.02 for the power bar (slot 2) -- a
+-- uiScale*0.05 step down per slot, derived from those two known offsets so
+-- slotIndex generalizes to a later inserted bar (0002's druid "form" bar,
+-- spec 0004 §Phase-boundary) without a new hardcoded constant per bar.
+function WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
+  return {
+    width = uiScale * 0.27,
+    height = uiScale * 0.03,
+    offsetX = uiScale * -0.147,
+    offsetY = uiScale * 0.07 - (slotIndex - 1) * uiScale * 0.05,
+  }
+end
+
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
   local leftWidth = uiScale / 2
