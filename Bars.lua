@@ -31,6 +31,15 @@ local BAR_TEXTURE = "Interface\\Buttons\\WHITE8X8"
 -- uses xpProgressBar.tga instead of WHITE8X8.
 local XP_BAR_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\xpProgressBar"
 
+-- Regression fix (gate-fix iteration 2): xpProgressBar.tga is a grayscale
+-- bevel/gloss mask, not pre-coloured art (ui-reviewer decoded the pixel
+-- data), so the texture swap above needs the same fixed purple tint vanilla
+-- AlignXPBar applied on top of its own art (e17c352 WIIIUI.lua:2129,
+-- "xpProgBar:SetVertexColor(0.5, 0, 0.5, 1)") -- both together, not either
+-- alone. The rested overlay's colour stays user-configurable via
+-- wc3UI_Options.xpRestedXpColor (CLAUDE.md Domain model), not this constant.
+local XP_BAR_MAIN_COLOR_R, XP_BAR_MAIN_COLOR_G, XP_BAR_MAIN_COLOR_B = 0.5, 0, 0.5
+
 -- Vanilla LowHPWarning (e17c352 WIIIUI.lua:3875-3939): the low-HP flash
 -- lives on PortraitBackground, ported forward here per spec 0001's
 -- architecture note ("Bars.lua ... low-HP pulse ... Every secret-value
@@ -378,6 +387,7 @@ local function buildXPBar(anchor, uiScale)
   if not bar then
     bar = CreateFrame("StatusBar", nil, UIParent)
     bar:SetStatusBarTexture(XP_BAR_TEXTURE)
+    bar:SetStatusBarColor(XP_BAR_MAIN_COLOR_R, XP_BAR_MAIN_COLOR_G, XP_BAR_MAIN_COLOR_B, 1)
 
     bar.levelText = bar:CreateFontString(nil, "OVERLAY")
     bar.levelText:SetPoint("CENTER", bar, "CENTER", 0, 0)
