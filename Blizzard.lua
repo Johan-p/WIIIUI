@@ -106,3 +106,57 @@ function WIIIUI.Blizzard.BuildMinimap()
   Minimap:EnableMouseWheel(true)
   Minimap:SetMaskTexture(MASK_TEXTURE)
 end
+
+-- spec 0001 §Phased plan "E. Blizzard pieces" (E2); §1.6 ("hideMicroButtons
+-- needs code on the plain MicroMenu, but Blizzard re-parents it on every
+-- ResetMicroMenuPosition"). MicroMenu is the plain MicroMenuMixin instance
+-- MicroMenuContainer (the Edit Mode system, EditModeMicroMenuSystemTemplate)
+-- parents -- never the system itself, so SetParent on MicroMenu is R3, not
+-- R1. Confirmed via MicroMenuMixin:ResetMicroMenuPosition's own body
+-- ("self:SetParent(MicroMenuContainer); ...
+-- EditModeManagerFrame:UpdateSystem(MicroMenuContainer, forceFullUpdate)",
+-- Blizzard_MicroMenu/Shared/MicroMenuContainer.lua:233-243 on the forever
+-- branch, fetched 2026-09-28) -- Blizzard calls that method itself from
+-- MainActionBarMixin:OnShow (Blizzard_ActionBar/Shared/MainActionBar.lua:16)
+-- and ActionBarController.lua's override-bar transition
+-- (Blizzard_ActionBarController/ActionBarController.lua:224), re-parenting
+-- MicroMenu back onto the container -- and undoing hideMicroButtons -- any
+-- time either fires. hooksecurefunc post-hooks that same method (never
+-- overwritten, CLAUDE.md "hooksecurefunc only") to re-hide. The re-hide
+-- goes through ApplyOrQueue because the hook can fire at any time, including
+-- mid-combat (CLAUDE.md "Combat lockdown"); BuildMicroMenu's own initial
+-- hide below doesn't need its own ApplyOrQueue call, since (like BuildMinimap
+-- above) it only ever runs inside WIIIUI.Layout(), which every caller already
+-- wraps in ApplyOrQueue (Core.lua's PLAYER_LOGIN handler, Config.lua's
+-- applyRow).
+--
+-- The hooked-once guard lives on WIIIUI.Blizzard, never on MicroMenu itself
+-- -- CLAUDE.md R1: "Never write a Lua key onto a Blizzard frame or table."
+function WIIIUI.Blizzard.BuildMicroMenu()
+  local MicroMenu = _G.MicroMenu
+
+  if not MicroMenu then
+    return
+  end
+
+  if wc3UI_Options.hideMicroButtons then
+    MicroMenu:SetParent(WIIIUI.hider)
+  end
+
+  if not WIIIUI.Blizzard.microMenuHooked then
+    WIIIUI.Blizzard.microMenuHooked = true
+
+    hooksecurefunc(MicroMenu, "ResetMicroMenuPosition", function()
+      -- Read live, not captured at registration time: a user can toggle
+      -- hideMicroButtons off after this hook is registered, and the hook
+      -- must stop re-hiding from that point on.
+      if not wc3UI_Options.hideMicroButtons then
+        return
+      end
+
+      WIIIUI.ApplyOrQueue("microMenu", function()
+        MicroMenu:SetParent(WIIIUI.hider)
+      end)
+    end)
+  end
+end

@@ -227,6 +227,7 @@ function WIIIUI.Layout()
   end
   if WIIIUI.Blizzard then
     WIIIUI.Blizzard.BuildMinimap()
+    WIIIUI.Blizzard.BuildMicroMenu()
   end
   if WIIIUI.Config then
     WIIIUI.Config.BuildConfig()
