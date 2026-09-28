@@ -144,6 +144,17 @@ WIIIUI.Config.CONTROLS = {
     key = "ZoneTextPos",
     kind = "cycle",
     values = { 1, 2, 3 },
+    -- spec 0001 §1.6 "ZoneTextPos ... depend on the spike": Blizzard.lua
+    -- (slice 15) exposes WIIIUI.Blizzard.ZoneTextAvailable(), the Phase E
+    -- in-game check for this control (§1.9 Q3: "any of ... ZoneTextPos ...
+    -- that fails its in-game check joins the same treatment"). Blizzard.lua
+    -- isn't loaded by every test fixture that builds this control table
+    -- (config_test.lua's own), so this stays a live cycle control there --
+    -- only a real client (or a test that loads Blizzard.lua too) sees the
+    -- degrade.
+    available = function()
+      return not WIIIUI.Blizzard or WIIIUI.Blizzard.ZoneTextAvailable()
+    end,
     get = function() return wc3UI_Options.ZoneTextPos end,
     set = function(value)
       if value ~= 1 and value ~= 2 and value ~= 3 then

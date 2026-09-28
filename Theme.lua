@@ -287,6 +287,15 @@ function WIIIUI.Theme.XPBarGeometry(uiScale)
   }
 end
 
+-- ZoneTextGeometry/MailIndicatorGeometry (vanilla AlignZoneText/AlignMinimap's
+-- mail block, e17c352 WIIIUI.lua:1834-1837, 1878-1889) were deleted here --
+-- their only caller, Blizzard.lua's BuildZoneText/BuildMailIndicator, was
+-- confirmed dead code (MinimapZoneTextButton/MiniMapMailFrame don't exist as
+-- globals on Forever or retail, Blizzard.lua's header comment) and deleted
+-- too. Revive both, geometry and build function together, if a follow-up
+-- reaches the real nested frames through the shipped Edit Mode layout
+-- string.
+
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
   local leftWidth = uiScale / 2
