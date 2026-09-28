@@ -100,11 +100,30 @@ end
 -- (warcraft.wiki.gg): "AddPoint takes an x and y value; ... the y should be
 -- a ColorMixin structure", built via CreateColor(r,g,b) (SharedXML/
 -- Color.lua via FrameXML/Util.lua).
-local healthColorCurve
+-- healthColorCurveFailed*/fingerprint cache a build failure (missing
+-- C_CurveUtil/CreateColor) so a known-failing build isn't retried on every
+-- UNIT_HEALTH/UNIT_MAXHEALTH event -- but only while the reason it failed
+-- hasn't changed. The fingerprint is a cheap existence check of the two
+-- globals the build needs, taken *before* attempting the build; a failure
+-- is skipped only when a later call's fingerprint still matches the one
+-- recorded at failure time, so a build that starts succeeding again (the
+-- globals reappear) still gets retried on the very next call, per spec
+-- 0001 §1.2's own degrade-and-recover expectation for this route.
+local function healthCurveFingerprint()
+  return C_CurveUtil ~= nil and CreateColor ~= nil
+end
+
+local healthColorCurve, healthColorCurveFailed, healthColorCurveFailedFingerprint
 
 local function getHealthColorCurve()
   if healthColorCurve then
     return healthColorCurve
+  end
+
+  local fingerprint = healthCurveFingerprint()
+
+  if healthColorCurveFailed and healthColorCurveFailedFingerprint == fingerprint then
+    return nil
   end
 
   local ok, curve = WIIIUI.Safe(function()
@@ -117,6 +136,10 @@ local function getHealthColorCurve()
 
   if ok then
     healthColorCurve = curve
+    healthColorCurveFailed = false
+  else
+    healthColorCurveFailed = true
+    healthColorCurveFailedFingerprint = fingerprint
   end
 
   return healthColorCurve
@@ -194,13 +217,34 @@ end
 -- changes." Cached alongside the threshold it was built for (not just
 -- built once at login) so this file alone -- without a Config.lua hook --
 -- notices a changed wc3UI_Options.hpWarning on the next health event.
+-- lowHpCurveFailed*/fingerprint cache a build failure (missing
+-- Enum.LuaCurveType/C_CurveUtil) against the threshold *and* the
+-- prerequisite-existence fingerprint it failed at (same reasoning as
+-- healthCurveFingerprint above), so a known-failing build isn't retried on
+-- every health event, but still recovers on the next event once the
+-- missing piece reappears, without waiting for hpWarning to change.
+local function lowHpCurveFingerprint()
+  return C_CurveUtil ~= nil and Enum ~= nil and Enum.LuaCurveType ~= nil
+end
+
 local lowHpCurve, lowHpCurveThreshold
+local lowHpCurveFailed, lowHpCurveFailedThreshold, lowHpCurveFailedFingerprint
 
 local function getLowHpCurve()
   local threshold = wc3UI_Options.hpWarning
 
   if lowHpCurve and lowHpCurveThreshold == threshold then
     return lowHpCurve
+  end
+
+  local fingerprint = lowHpCurveFingerprint()
+
+  if
+    lowHpCurveFailed
+    and lowHpCurveFailedThreshold == threshold
+    and lowHpCurveFailedFingerprint == fingerprint
+  then
+    return nil
   end
 
   local ok, curve = WIIIUI.Safe(function()
@@ -214,8 +258,17 @@ local function getLowHpCurve()
     return c
   end)
 
-  lowHpCurve = ok and curve or nil
-  lowHpCurveThreshold = ok and threshold or nil
+  if ok then
+    lowHpCurve = curve
+    lowHpCurveThreshold = threshold
+    lowHpCurveFailed = false
+  else
+    lowHpCurve = nil
+    lowHpCurveThreshold = nil
+    lowHpCurveFailed = true
+    lowHpCurveFailedThreshold = threshold
+    lowHpCurveFailedFingerprint = fingerprint
+  end
 
   return lowHpCurve
 end
@@ -241,7 +294,9 @@ local function updateLowHpPulse()
     overlay:SetAlpha(UnitHealthPercent("player", true, curve))
   end)
 
-  if not ok then
+  if ok then
+    overlay:Show()
+  else
     overlay:Hide()
   end
 end

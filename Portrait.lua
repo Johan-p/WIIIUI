@@ -307,11 +307,16 @@ local function buildHitText(parent, uiScale)
   hitText:Hide()
 
   -- CLAUDE.md "Tech stack quirks" font-fallback pattern, same as Bars.lua.
-  hitText:SetFontObject(GameFontHighlightSmall)
+  -- NumberFontNormalHuge (Blizzard_Fonts_Shared/Shared/GameFontStyles.xml,
+  -- forever branch) inherits NumberFont_Outline_Huge -- the same outlined
+  -- style Blizzard's own PlayerFrame HitText uses (PlayerFrame.xml:115,
+  -- CombatFeedback_Initialize's 30pt base), unlike GameFontHighlightSmall's
+  -- body-text sizing.
+  hitText:SetFontObject(NumberFontNormalHuge)
   local fontApplied = hitText:SetFont(FONT_PATH, BASE_HIT_TEXT_HEIGHT, "")
 
   if not fontApplied or not hitText:GetFont() then
-    hitText:SetFontObject(GameFontHighlightSmall)
+    hitText:SetFontObject(NumberFontNormalHuge)
   end
 
   local animGroup = hitText:CreateAnimationGroup()
@@ -351,7 +356,10 @@ end
 -- PlayerFrame's HitIndicator.HitText). A pure function (no widget calls),
 -- so any error inside it (e.g. a missing CombatFeedbackText/Enum.Damageclass
 -- global) is caught by updateCombatText's single WIIIUI.Safe wrapper below,
--- same as the widget calls that use its result.
+-- same as the widget calls that use its result. COMBAT_TEXT_BLOCK_REDUCED
+-- (Blizzard_FrameXML/Mainline/CombatFeedback.lua:50-52, forever branch,
+-- unguarded in Blizzard's own source) formats the BLOCK_REDUCED case, same
+-- as every other CombatFeedbackText/GlobalString below.
 local function combatFeedbackParams(feedbackEvent, flags, amount, schoolMask)
   local text
   local r, g, b, heightScale = 1, 1, 1, 1
@@ -370,6 +378,9 @@ local function combatFeedbackParams(feedbackEvent, flags, amount, schoolMask)
         r, g, b = 1, 1, 0
       end
       text = BreakUpLargeNumbers(amount)
+      if flags == "BLOCK_REDUCED" then
+        text = COMBAT_TEXT_BLOCK_REDUCED:format(text)
+      end
     elseif flags == "ABSORB" then
       heightScale = 0.75
       text = CombatFeedbackText.ABSORB
