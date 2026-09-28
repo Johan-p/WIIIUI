@@ -311,3 +311,53 @@ function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
     leftOffsetY = 0,
   }
 end
+
+-- Vanilla AlignWeaponFrame (e17c352 WIIIUI.lua:2258-2281, 2297, 2365): the
+-- weapon-icon frame is (xpBarLeft+xpBarMiddle+xpBarRight width)*0.17 square,
+-- anchored BOTTOMLEFT to xpBarLeft's own BOTTOMLEFT at (1, uiScale*-0.14),
+-- offset per slot (slot 2: +uiScale*0.3607 X; slot 3: +uiScale*0.3607 X,
+-- -uiScale*0.1412 Y). This port's XP bar is one plain StatusBar anchored at
+-- XPBarGeometry's own anchorOffsetX/Y off left.portraitTexture
+-- (Bars.lua's buildXPBar) -- its BOTTOMLEFT is the same point vanilla's
+-- xpBarLeft (the bar's own left endcap) anchored from, so InfoIcons.lua
+-- anchors weapon icons to that same StatusBar instead of a separate
+-- xpBarLeft frame. Size reuses XPBarGeometry's total width, which is
+-- already the combined left+middle+right span (Finding 2 above). Label/value
+-- text offsets port weaponDamageText/weaponNumbersText's own anchors
+-- (BOTTOMLEFT to the icon frame's TOPLEFT); extraSpace/the uiScale<=210
+-- nudge are the exact vanilla thresholds, kept even though CLAMPS' uiScale
+-- floor (Core.lua, 240) makes the <=210 branch unreachable today.
+local WEAPON_ICON_SLOT_OFFSETS = {
+  { x = 0, y = 0 },
+  { x = 0.3607, y = 0 },
+  { x = 0.3607, y = -0.1412 },
+}
+
+function WIIIUI.Theme.WeaponIconGeometry(uiScale, slotIndex)
+  local slotOffset = WEAPON_ICON_SLOT_OFFSETS[slotIndex] or WEAPON_ICON_SLOT_OFFSETS[1]
+  local extraSpace = uiScale <= 250 and 1 or 0
+  local lowScaleNudge = uiScale <= 210 and -3 or 0
+  local labelOffsetXFraction = 0.1294
+
+  return {
+    size = WIIIUI.Theme.XPBarGeometry(uiScale).width * 0.17,
+    offsetX = 1 + uiScale * slotOffset.x,
+    offsetY = uiScale * -0.14 + uiScale * slotOffset.y,
+    labelOffsetX = uiScale * labelOffsetXFraction,
+    labelOffsetY = uiScale * -0.065,
+    valueOffsetX = uiScale * labelOffsetXFraction,
+    valueOffsetY = uiScale * -0.1667 - extraSpace + lowScaleNudge,
+    -- ui-reviewer Finding 3 (slice 18 gate-fix): label/value FontStrings had
+    -- no SetWidth, so a long value (e.g. a high main-hand damage range) could
+    -- visually run into slot 2/3's icon, which sits only
+    -- WEAPON_ICON_SLOT_OFFSETS[2].x * uiScale to the right of slot 1's icon
+    -- (0.3607). Vanilla used a flat SetWidth(100) regardless of uiScale
+    -- (e17c352 WIIIUI.lua:2293, 2367); at this port's uiScale floor (240,
+    -- Core.lua's clamp) that constant is already wider than the gap to the
+    -- next icon's own label start, so porting it unchanged would still
+    -- overlap. This constrains to the actual horizontal room before the next
+    -- icon's label begins (next icon's X offset minus this label's own X
+    -- offset, both in uiScale fractions).
+    labelWidth = uiScale * (WEAPON_ICON_SLOT_OFFSETS[2].x - labelOffsetXFraction),
+  }
+end

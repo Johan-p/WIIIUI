@@ -12,4 +12,5 @@ Bars.lua
 Portrait.lua
 Buttons.lua
 Blizzard.lua
+InfoIcons.lua
 Config.lua
