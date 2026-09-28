@@ -223,3 +223,26 @@ WIIIUI.On("PLAYER_LOGIN", function() end)
 -- half of ApplyOrQueue's combat-lockdown seam; without this, anything queued
 -- while in combat is only applied on a manual /reload.
 WIIIUI.On("PLAYER_REGEN_ENABLED", function() WIIIUI.Flush() end)
+
+-- spec 0001 §A.4: "Re-layout triggers: UI_SCALE_CHANGED, ...". The other two
+-- listed triggers -- Config.lua's "every setting change" and
+-- PLAYER_ENTERING_WORLD -- are later phases (Config.lua doesn't exist until
+-- slice 06; PLAYER_ENTERING_WORLD needs the frame-lifecycle work built
+-- around it), so only these two are wired here. WIIIUI.Layout is looked up
+-- by table field each time the handler runs, not captured as an upvalue, so
+-- whatever WIIIUI.Layout resolves to at fire time is what runs.
+WIIIUI.On("UI_SCALE_CHANGED", function()
+  WIIIUI.ApplyOrQueue("layout", WIIIUI.Layout)
+end)
+
+-- spec 0001 §A.4 / CLAUDE.md "Tech stack quirks": re-anchor on Edit Mode
+-- exit via hooksecurefunc, existence-checked -- EditModeManagerFrame is
+-- absent on the test stub by default, and every Blizzard frame lookup in
+-- this codebase is existence-checked regardless (R2/R4 conventions).
+-- hooksecurefunc only, per CLAUDE.md's "never overwrite a Blizzard function
+-- or method".
+if EditModeManagerFrame then
+  hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function()
+    WIIIUI.ApplyOrQueue("layout", WIIIUI.Layout)
+  end)
+end

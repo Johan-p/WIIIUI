@@ -188,6 +188,119 @@ end
 -- "right region" (this pair, the still-to-come lid/chat-area pieces and
 -- fillers) lives behind one WIIIUI.Console.right table for slice 05 to
 -- Hide()/Show().
+--
+-- Per-theme x-offset fraction for the ultraWide/centerSlim/centerSlimNoInv
+-- chat-top re-anchor in applyLayoutModes below (vanilla AlignUltraWide,
+-- e17c352 WIIIUI.lua:4674-4679): nightelf and undead override the default
+-- fraction; every other theme name (including unknown/custom ones) falls
+-- through to the default, matching vanilla's own if/elseif/else chain.
+-- Table lookup follows Theme.lua's RIGHT_LID_SHIFT_WIDTH_THEMES-style
+-- per-theme table convention.
+local ULTRA_WIDE_CHAT_TOP_OFFSET_X_FRACTION = {
+  nightelf = -0.9,
+  undead = -0.734615,
+}
+local ULTRA_WIDE_CHAT_TOP_OFFSET_X_DEFAULT = -0.725833
+
+-- Per-theme fixed (non-uiScale-scaled) x-offset for the chat-middle texture
+-- in the same block (e17c352 WIIIUI.lua:4688-4689): nightelf only; every
+-- other theme uses the uiScale-scaled default (-uiScale*0.0625).
+local ULTRA_WIDE_CHAT_MIDDLE_OFFSET_X_NIGHTELF = -37
+
+-- Layout modes: centerSlim/centerSlimNoInv/ultraWide (vanilla
+-- AlignUltraWide, e17c352 WIIIUI.lua:4640-4694, 4815). Reads the pieces
+-- BuildRight already cached on `right` (getOrCreateTexture's
+-- parent[cacheKey] convention) and re-derives their visibility/anchor from
+-- wc3UI_Options every call, since WIIIUI.Layout() has no done-flag -- the
+-- false/default path of every branch below has to explicitly restore the
+-- non-mode state, not just apply the mode.
+--
+-- Vanilla checks centerSlim first with an elseif, so centerSlimNoInv only
+-- applies when centerSlim is also false -- replicated here so centerSlim's
+-- per-piece hiding wins when both flags are set.
+local function applyLayoutModes(right, left, theme, uiScale)
+  local rightPartBackground = right.rightPartBackground
+  local lid = right.lid
+  local chatTop = right.chatTop
+  local chatMiddle = right.chatMiddle
+  local chatBottom = right.chatBottom
+  local fillerTop1, fillerBottom1 = right.fillerTop1, right.fillerBottom1
+  local fillerTop2, fillerBottom2 = right.fillerTop2, right.fillerBottom2
+  local fillerTop3, fillerBottom3 = right.fillerTop3, right.fillerBottom3
+
+  -- centerSlim (vanilla AlignUltraWide's centerSlim branch, e17c352
+  -- WIIIUI.lua:4640-4652) hides the background/lid/chat-area/filler pieces
+  -- while keeping rightPartMiddle/rightPartLeft (inventory art) visible.
+  -- Vanilla's nightelf-only decorative left-frame texture in the same
+  -- branch is a deferred cosmetic detail, out of this list's scope.
+  local slimPieces = {
+    rightPartBackground, lid, chatTop, chatMiddle, chatBottom,
+    fillerTop1, fillerBottom1, fillerTop2, fillerBottom2, fillerTop3, fillerBottom3,
+  }
+
+  if wc3UI_Options.centerSlim then
+    for i = 1, #slimPieces do
+      slimPieces[i]:Hide()
+    end
+  else
+    for i = 1, #slimPieces do
+      slimPieces[i]:Show()
+    end
+  end
+
+  -- centerSlimNoInv (vanilla AlignUltraWide's centerSlimNoInv branch,
+  -- e17c352 WIIIUI.lua:4653-4663) hides the whole right frame, which
+  -- cascades to rightPartMiddle/rightPartLeft and everything else anchored
+  -- under it -- unlike centerSlim above, which hides only the individual
+  -- pieces and keeps the inventory art shown.
+  if wc3UI_Options.centerSlimNoInv and not wc3UI_Options.centerSlim then
+    right:Hide()
+  else
+    right:Show()
+  end
+
+  -- ultraWide/centerSlim/centerSlimNoInv horizontal centering (vanilla
+  -- AlignUltraWide's tail, e17c352 WIIIUI.lua:4666-4694, 4815). Only the
+  -- Wc3_UI_bottom_right_middle:IsVisible() branch applies here -- the other
+  -- two elseif branches (e17c352 WIIIUI.lua:4697-4762) manipulate real
+  -- action-slot buttons that don't exist until slice D. chatTop/chatMiddle/
+  -- chatBottom already got their normal default anchor unconditionally in
+  -- BuildRight, so the false branch below needs no extra code to revert
+  -- them -- only `left`'s anchor (set once by BuildLeft at creation) needs
+  -- an explicit revert here.
+  if wc3UI_Options.ultraWide or wc3UI_Options.centerSlim or wc3UI_Options.centerSlimNoInv then
+    local topOffsetX = uiScale * (ULTRA_WIDE_CHAT_TOP_OFFSET_X_FRACTION[theme] or ULTRA_WIDE_CHAT_TOP_OFFSET_X_DEFAULT)
+    local topOffsetY = -uiScale * 0.03846153
+
+    chatTop:ClearAllPoints()
+    chatTop:SetPoint("BOTTOMLEFT", rightPartBackground, "TOPRIGHT", topOffsetX, topOffsetY)
+
+    chatBottom:ClearAllPoints()
+    chatBottom:SetPoint("BOTTOMLEFT", rightPartBackground, "BOTTOMRIGHT", -uiScale * 0.725833, 0)
+
+    local middleOffsetX = (theme == "nightelf") and ULTRA_WIDE_CHAT_MIDDLE_OFFSET_X_NIGHTELF or (-uiScale * 0.0625)
+
+    chatMiddle:ClearAllPoints()
+    chatMiddle:SetPoint("BOTTOMLEFT", rightPartBackground, "BOTTOMRIGHT", middleOffsetX, 0)
+
+    -- vanilla minimapFrame:SetPoint (e17c352 WIIIUI.lua:4815) moves Wc3_UI_
+    -- minimap directly; here the whole `left` console frame moves instead,
+    -- since minimapTexture/portraitTexture/extensionBackgroundTexture/grid
+    -- all chain their anchors from `left` -- moving the parent frame
+    -- carries the same visual result without re-anchoring each child.
+    if left then
+      local uiParentRight = UIParent:GetRight()
+      local rightEdge = rightPartBackground:GetRight()
+
+      left:ClearAllPoints()
+      left:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", (uiParentRight - rightEdge) / 2, 0)
+    end
+  elseif left then
+    left:ClearAllPoints()
+    left:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+  end
+end
+
 function WIIIUI.Console.BuildRight()
   local right = WIIIUI.Console.right
 
@@ -366,4 +479,9 @@ function WIIIUI.Console.BuildRight()
   fillerBottom3:SetTexture(fillerBottomPath)
   fillerBottom3:ClearAllPoints()
   fillerBottom3:SetPoint("BOTTOMLEFT", fillerBottom2, "BOTTOMLEFT", fillerGeometry.bottom3OffsetX, fillerGeometry.bottom3OffsetY)
+
+  -- Layout modes (centerSlim/centerSlimNoInv/ultraWide): applyLayoutModes,
+  -- defined above, re-derives visibility/anchors from wc3UI_Options every
+  -- call -- see its own comments for the vanilla citations per mode.
+  applyLayoutModes(right, WIIIUI.Console.left, theme, uiScale)
 end
