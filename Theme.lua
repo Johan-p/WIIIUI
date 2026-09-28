@@ -265,6 +265,37 @@ function WIIIUI.Theme.ActionButtonGeometry(uiScale)
   }
 end
 
+-- Vanilla AlignZoneText (e17c352 WIIIUI.lua:1878-1889): ZoneTextPos 1/2 pick
+-- the Y offset (BOTTOM-anchored to Minimap, e17c352 WIIIUI.lua:1830, 1883,
+-- 1885); 3 hides the button outright. Blizzard.lua's BuildZoneText reads
+-- this and existence-checks the frame itself (spec 0001 §1.6 "depend on the
+-- spike").
+function WIIIUI.Theme.ZoneTextGeometry(uiScale, pos)
+  if pos == 3 then
+    return { hidden = true }
+  end
+
+  local offsetY = 1
+
+  if pos == 2 then
+    offsetY = uiScale * 0.5
+  end
+
+  return { hidden = false, offsetY = offsetY }
+end
+
+-- Vanilla AlignMinimap's mail block (e17c352 WIIIUI.lua:1834-1837): only the
+-- unconditional (non-theme-conditional) offsets -- the human/orc
+-- uiScale-threshold extraAlign fine-tune (e17c352 WIIIUI.lua:1839-1858) is a
+-- documented deferral, same convention as RightFillerGeometry's above.
+function WIIIUI.Theme.MailIndicatorGeometry(uiScale)
+  return {
+    offsetX = uiScale * -0.0054,
+    offsetY = uiScale * 0.18,
+    iconSize = uiScale * 0.085 - 3,
+  }
+end
+
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
   local leftWidth = uiScale / 2
