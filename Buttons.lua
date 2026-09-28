@@ -1,11 +1,7 @@
 -- spec 0001 §Module split "Buttons.lua": LibActionButton-1.0 header + 36
--- grid buttons (rows B/M/T) + 9 extra slots (13-21), override bindings,
--- hearthstone auto-place, retire of bars 1-3 (R2).
--- The bottom row (WIIIUI_GridB) is built at LAB's default state (0),
--- showing actions 1-12, the same fixed-row treatment as the middle/top rows
--- and the extras: RegisterStateDriver and the full per-page SetState table
--- (spec §Buttons and paging, D3 "bottom-row paging") are a separate seam,
--- out of this file's scope.
+-- grid buttons (rows B/M/T) + 9 extra slots (13-21), the bottom row's
+-- per-page state driver, override bindings, hearthstone auto-place, retire
+-- of bars 1-3 (R2).
 local _, WIIIUI = ...
 
 WIIIUI.Buttons = WIIIUI.Buttons or {}
@@ -36,6 +32,74 @@ local ROWS = {
 }
 
 local header
+
+-- spec 0001 §Buttons and paging "Bottom-row state driver" (D3), written
+-- fresh from https://warcraft.wiki.gg/wiki/Macro_conditionals and
+-- Blizzard_ActionBarController/ActionBarController.lua (Gethe/wow-ui-source
+-- forever branch), not copied from Bartender (CLAUDE.md "Libraries").
+-- vehicleui/possessbar/overridebar/shapeshift ("the temporary shapeshift
+-- action bar is replacing the main action bar" per the wiki -- a TEMPORARY
+-- form, distinct from the permanent stances/forms bonusbar:1-4 cover below)
+-- all route to the runtime-resolved "possess" state (ONSTATE_PAGE_SNIPPET,
+-- below); bar:2-6 are the vanilla Shift-paged bars; [bonusbar:1,stealth]8
+-- (druid Prowl: Cat Form + stealthed) is a more specific clause placed
+-- before the plain [bonusbar:1]7 so it wins while prowling, per
+-- macro-conditional first-match-wins evaluation order. The exact ordering
+-- needs in-game verification (Prowl, stances, vehicle) -- slice 13 Notes.
+local PAGE_STATE_CONDITIONAL =
+  "[vehicleui][possessbar][overridebar][shapeshift] possess;"
+  .. " [bar:2]2;[bar:3]3;[bar:4]4;[bar:5]5;[bar:6]6;"
+  .. " [bonusbar:1,stealth]8;[bonusbar:1]7;[bonusbar:2]8;[bonusbar:3]9;[bonusbar:4]10;"
+  .. " 1"
+
+-- spec 0001 §Buttons and paging: "The _onstate-page snippet resolves
+-- possess at runtime with HasVehicleActionBar/GetVehicleBarIndex,
+-- HasOverrideActionBar/GetOverrideBarIndex, HasTempShapeshiftActionBar/
+-- GetTempShapeshiftBarIndex, GetBonusBarIndex, then
+-- control:ChildUpdate('state', page)." self/stateid/newstate are the
+-- SecureHandlerStateTemplate-provided locals for an _onstate-<id> snippet
+-- (warcraft.wiki.gg SecureHandlerStateTemplate); control is the
+-- SecureHandlerWrapScript-provided alias for the owning frame handle
+-- (warcraft.wiki.gg SecureHandlerWrapScript). ChildUpdate("state", page)
+-- runs each LAB button's own "_childupdate-state" attribute (vendored
+-- libs/LibActionButton-1.0/LibActionButton-1.0.lua:362-365), which is what
+-- actually applies the SetState(page, ...) table below to the button. The
+-- seven bare function names (not C_ActionBar.-namespaced) are the
+-- Blizzard_DeprecatedActionBar/Deprecated_ActionBar.lua wrappers (forever
+-- branch) -- plain globals, matching what a macro-conditional/secure-snippet
+-- environment can call; whether they're actually whitelisted there is an
+-- in-game check (slice 13 Notes), not something this file can prove.
+local ONSTATE_PAGE_SNIPPET = [[
+  local page = newstate
+  if newstate == "possess" then
+    if HasVehicleActionBar() then
+      page = GetVehicleBarIndex()
+    elseif HasOverrideActionBar() then
+      page = GetOverrideBarIndex()
+    elseif HasTempShapeshiftActionBar() then
+      page = GetTempShapeshiftBarIndex()
+    else
+      page = GetBonusBarIndex()
+    end
+  end
+  control:ChildUpdate("state", page)
+]]
+
+-- spec 0001 §Buttons and paging: "Each bottom button gets SetState(p,
+-- 'action', (p-1)*12 + i) for p = 1..14 (plus the runtime-resolved possess
+-- page), set at build." 14 is the direct macro-conditional numeric states
+-- (1-10) plus the four pages only reachable through the runtime-resolved
+-- "possess" state above (11-14: vehicle/override/temp-shapeshift/bonus-bar
+-- fallback each resolve to one of these).
+local PAGE_COUNT = 14
+
+local function applyPageStates(buttons)
+  for p = 1, PAGE_COUNT do
+    for i = 1, 12 do
+      buttons[i]:SetState(p, "action", (p - 1) * 12 + i)
+    end
+  end
+end
 
 local function getOrCreateButton(namePrefix, i)
   local name = namePrefix .. i
@@ -121,6 +185,18 @@ function WIIIUI.Buttons.BuildButtons()
       end
 
       WIIIUI.Buttons.rows[row.key] = buttons
+
+      -- spec 0001 §Buttons and paging "Bottom-row state driver": only
+      -- GridB is state-paged; GridM/GridT stay fixed (Bar 2/Bar 3, as
+      -- vanilla, §Buttons and paging "Grid rows"). Tied to this same
+      -- build-once guard so a second WIIIUI.Layout() call neither
+      -- re-registers the state driver nor duplicates the per-page
+      -- SetState table.
+      if row.key == "GridB" then
+        applyPageStates(buttons)
+        header:SetAttribute("_onstate-page", ONSTATE_PAGE_SNIPPET)
+        RegisterStateDriver(header, "page", PAGE_STATE_CONDITIONAL)
+      end
     end
 
     anchorRow(buttons, rowOriginY[rowIndex], uiScale, geometry, grid)
