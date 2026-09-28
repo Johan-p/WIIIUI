@@ -228,6 +228,9 @@ function WIIIUI.Layout()
   if WIIIUI.Blizzard then
     WIIIUI.Blizzard.BuildMinimap()
   end
+  if WIIIUI.InfoIcons then
+    WIIIUI.InfoIcons.BuildWeaponIcons()
+  end
   if WIIIUI.Config then
     WIIIUI.Config.BuildConfig()
   end

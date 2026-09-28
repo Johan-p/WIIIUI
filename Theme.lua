@@ -311,3 +311,40 @@ function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
     leftOffsetY = 0,
   }
 end
+
+-- Vanilla AlignWeaponFrame (e17c352 WIIIUI.lua:2258-2281, 2297, 2365): the
+-- weapon-icon frame is (xpBarLeft+xpBarMiddle+xpBarRight width)*0.17 square,
+-- anchored BOTTOMLEFT to xpBarLeft's own BOTTOMLEFT at (1, uiScale*-0.14),
+-- offset per slot (slot 2: +uiScale*0.3607 X; slot 3: +uiScale*0.3607 X,
+-- -uiScale*0.1412 Y). This port's XP bar is one plain StatusBar anchored at
+-- XPBarGeometry's own anchorOffsetX/Y off left.portraitTexture
+-- (Bars.lua's buildXPBar) -- its BOTTOMLEFT is the same point vanilla's
+-- xpBarLeft (the bar's own left endcap) anchored from, so InfoIcons.lua
+-- anchors weapon icons to that same StatusBar instead of a separate
+-- xpBarLeft frame. Size reuses XPBarGeometry's total width, which is
+-- already the combined left+middle+right span (Finding 2 above). Label/value
+-- text offsets port weaponDamageText/weaponNumbersText's own anchors
+-- (BOTTOMLEFT to the icon frame's TOPLEFT); extraSpace/the uiScale<=210
+-- nudge are the exact vanilla thresholds, kept even though CLAMPS' uiScale
+-- floor (Core.lua, 240) makes the <=210 branch unreachable today.
+local WEAPON_ICON_SLOT_OFFSETS = {
+  { x = 0, y = 0 },
+  { x = 0.3607, y = 0 },
+  { x = 0.3607, y = -0.1412 },
+}
+
+function WIIIUI.Theme.WeaponIconGeometry(uiScale, slotIndex)
+  local slotOffset = WEAPON_ICON_SLOT_OFFSETS[slotIndex] or WEAPON_ICON_SLOT_OFFSETS[1]
+  local extraSpace = uiScale <= 250 and 1 or 0
+  local lowScaleNudge = uiScale <= 210 and -3 or 0
+
+  return {
+    size = WIIIUI.Theme.XPBarGeometry(uiScale).width * 0.17,
+    offsetX = 1 + uiScale * slotOffset.x,
+    offsetY = uiScale * -0.14 + uiScale * slotOffset.y,
+    labelOffsetX = uiScale * 0.1294,
+    labelOffsetY = uiScale * -0.065,
+    valueOffsetX = uiScale * 0.1294,
+    valueOffsetY = uiScale * -0.1667 - extraSpace + lowScaleNudge,
+  }
+end
