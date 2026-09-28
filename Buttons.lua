@@ -1,11 +1,11 @@
 -- spec 0001 §Module split "Buttons.lua": LibActionButton-1.0 header + 36
 -- grid buttons (rows B/M/T) + 9 extra slots (13-21), override bindings,
 -- hearthstone auto-place, retire of bars 1-3 (R2).
--- The bottom row (WIIIUI_GridB) is still built at LAB's default state (0),
+-- The bottom row (WIIIUI_GridB) is built at LAB's default state (0),
 -- showing actions 1-12, the same fixed-row treatment as the middle/top rows
--- and the extras -- RegisterStateDriver and the full per-page SetState table
--- (spec §Buttons and paging) are slice 13's job (D3, "bottom-row paging"),
--- not yet landed in this worktree.
+-- and the extras: RegisterStateDriver and the full per-page SetState table
+-- (spec §Buttons and paging, D3 "bottom-row paging") are a separate seam,
+-- out of this file's scope.
 local _, WIIIUI = ...
 
 WIIIUI.Buttons = WIIIUI.Buttons or {}
@@ -233,14 +233,23 @@ local function findHearthstoneBagSlot()
   end
 end
 
--- HasAction/PlaceAction: Blizzard_DeprecatedActionBar/Deprecated_ActionBar.lua
--- and FrameXML's own action-bar globals respectively (spec 0001 §WoW APIs
--- relied on). PickupContainerItem puts the item on the cursor; PlaceAction
--- places whatever's on the cursor into the given slot and empties the cursor
--- when the slot was empty (warcraft.wiki.gg API_PlaceAction) -- no
--- ClearCursor needed, since this only runs when the slot was confirmed empty.
+-- C_ActionBar.HasAction: Blizzard_APIDocumentationGenerated/
+-- ActionBarFrameDocumentation.lua (Namespace = "C_ActionBar", spec 0001 §WoW
+-- APIs relied on) -- the real, non-deprecated API; the old global HasAction
+-- only exists behind a CVar-gated deprecation fallback Blizzard says will be
+-- removed. GetCursorInfo/ClearCursor: Blizzard_ActionBar/Shared/
+-- ActionButton.lua (forever). The cursor-empty check before
+-- PickupContainerItem stops this from disturbing whatever the player is
+-- already holding (a bag item, a merchant purchase, a pickup mid-trade); the
+-- kind/id check after PickupContainerItem only calls PlaceAction if the
+-- cursor actually holds the hearthstone, and clears it otherwise (safe here
+-- since the cursor was confirmed empty on entry).
 function WIIIUI.Buttons.PlaceHearthstone()
-  if HasAction(WIIIUI.EXTRA_SLOT_BASE) then
+  if GetCursorInfo() then
+    return
+  end
+
+  if C_ActionBar.HasAction(WIIIUI.EXTRA_SLOT_BASE) then
     return
   end
 
@@ -251,7 +260,14 @@ function WIIIUI.Buttons.PlaceHearthstone()
   end
 
   C_Container.PickupContainerItem(bag, slot)
-  PlaceAction(WIIIUI.EXTRA_SLOT_BASE)
+
+  local kind, id = GetCursorInfo()
+
+  if kind == "item" and id == HEARTHSTONE_ITEM_ID then
+    PlaceAction(WIIIUI.EXTRA_SLOT_BASE)
+  else
+    ClearCursor()
+  end
 end
 
 WIIIUI.On("BAG_UPDATE_DELAYED", function()
