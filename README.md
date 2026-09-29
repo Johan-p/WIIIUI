@@ -1,4 +1,9 @@
-## $\color{#f00}{\textsf{NEW - Align Center Option, Chat area width option.}}$
+## WoW Forever version
+- Full redesign to align with new addon standars from Blizzard
+- Integrated bars
+
+
+## Align Center Option, Chat area width option.
 - Option to center entire UI
 - **Disabled** (default) → The UI uses the classic Warcraft III–style anchoring based on the screen edges.  
 - Three modes, With chat area, no chat area with inventory, no chat area
@@ -55,17 +60,6 @@ Download MoveAnything addon [here](https://legacy-wow.com/vanilla-addons/MoveAny
 
 ![cog_pos](https://user-images.githubusercontent.com/97316608/148687659-82e5ddfa-b4a4-412d-a739-0f3123ebffe6.png)
 
-
-## Please support
-[Click here to donate via ko-fi](https://ko-fi.com/fiur_)  
-[Click here to donate via PayPal](https://www.paypal.com/paypalme/FiurBusiness)  
-
-#### Crypto
-ETH: 0x51086260a62ceAD7f3A930708a50ad2F3d36eB08  
-BTC: bc1qqzrnnw3nnn9m7plsmwp8e9jhzkvqjc42kg4dym  
-BNB: bnb1m5rau82ydfvcualt7hf54h2yvsfumj3sv7g2t7  
-  
-If you have other crypto you want to donate with, please contact me at Discord: Fiur#8658
 
 ## Themes
 ### Human Theme
