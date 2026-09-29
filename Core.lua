@@ -134,6 +134,14 @@ end
 -- state; nothing outside ApplyOrQueue/Flush reads or writes them.
 local pending, order = {}, {}
 
+-- spec 0006 §Phase 2 Slice 04: the one error-report seam. geterrorhandler is
+-- Blizzard's own route to the Lua-error popup (API_geterrorhandler;
+-- Blizzard_SharedXMLBase/ErrorUtil.lua:3,18-19 on forever). Used as the
+-- xpcall message handler so the origin stack survives.
+local function report(err)
+  geterrorhandler()(err)
+end
+
 function WIIIUI.ApplyOrQueue(key, fn)
   if InCombatLockdown() then
     if not pending[key] then
@@ -142,7 +150,7 @@ function WIIIUI.ApplyOrQueue(key, fn)
     pending[key] = fn
     return false
   end
-  fn()
+  xpcall(fn, report)
   return true
 end
 
@@ -153,7 +161,7 @@ function WIIIUI.Flush()
   local runOrder, runPending = order, pending
   pending, order = {}, {}
   for _, key in ipairs(runOrder) do
-    pcall(runPending[key])
+    xpcall(runPending[key], report)
   end
 end
 
@@ -190,8 +198,16 @@ local function dispatch(_, event, ...)
   if not list then
     return
   end
+  -- Closure instead of xpcall arg forwarding: plain Lua 5.1 (the test
+  -- runner) doesn't forward extra args; the client does.
+  local n, args = select("#", ...), { ... }
+  local fn
+  local function call()
+    return fn(unpack(args, 1, n))
+  end
   for i = 1, #list do
-    list[i](...)
+    fn = list[i]
+    xpcall(call, report)
   end
 end
 
@@ -213,53 +229,33 @@ function WIIIUI.On(event, fn, unit)
   handlers[event][#handlers[event] + 1] = fn
 end
 
--- spec 0001 §A.3/§Module split: "WIIIUI.Layout() orchestration" -- the
--- single public entrypoint PLAYER_LOGIN queues through
--- ApplyOrQueue("layout", WIIIUI.Layout) (§A.4). Each region file (Console.lua
--- now; Bars.lua/Portrait.lua/etc. in later phases) owns its own Build*
--- function; Core.lua only calls them, so this list grows without Core.lua
--- depending on any region file existing before it's built.
--- WIIIUI.Buttons is existence-checked (not yet another list entry) because
--- console_test.lua/bars_test.lua/events_test.lua/retire_test.lua load
--- Core/Theme/Console/Bars/Portrait without Buttons.lua and call
--- WIIIUI.Layout() directly (or override Layout to a no-op) -- same
--- existence-check convention as the retire handler below. Portrait stays
--- unconditional (slice 08): every file that calls WIIIUI.Layout() for real
--- already loads Portrait.lua alongside it.
-function WIIIUI.Layout()
-  -- spec 0001 §Customizer "Apply", second round: "Revert first ... called
-  -- in two places: first thing in WIIIUI.Layout() ... before
-  -- Console.BuildLeft." Every module's Build* then runs on uncustomized
-  -- objects, including Console's ultra-wide GetLeft/GetRight reads.
-  if WIIIUI.Customizer then
-    WIIIUI.Customizer.Revert()
-  end
+-- spec 0006 §Phase 2 Slice 04: each module registers its own Build* step at
+-- the end of its file, so the build order is TOC order and Core names no
+-- module. Steps are xpcalled in Layout() so one failing region doesn't blank
+-- the rest of the console (or the cogwheel).
+local steps, registered = {}, {}
 
-  WIIIUI.Console.BuildLeft()
-  WIIIUI.Console.BuildGrid()
-  WIIIUI.Console.BuildRight()
-  WIIIUI.Bars.BuildBars()
-  WIIIUI.Portrait.BuildPortrait()
-  if WIIIUI.Buttons then
-    WIIIUI.Buttons.BuildButtons()
+function WIIIUI.RegisterBuild(name, fn, opts)
+  opts = opts or {}
+  for _, dep in ipairs(opts.after or {}) do
+    if not registered[dep] then
+      error("WIIIUI.RegisterBuild: " .. name .. " needs " .. dep .. " registered first (TOC order)", 2)
+    end
   end
-  if WIIIUI.Blizzard then
-    WIIIUI.Blizzard.BuildMinimap()
-    WIIIUI.Blizzard.BuildMicroMenu()
-  end
-  if WIIIUI.InfoIcons then
-    WIIIUI.InfoIcons.BuildWeaponIcons()
-    WIIIUI.InfoIcons.BuildArmorIcon()
-  end
-  if WIIIUI.Config then
-    WIIIUI.Config.BuildConfig()
-  end
-  -- spec 0001 §Customizer "Apply": "WIIIUI.Customizer.Apply() is the last
-  -- step of WIIIUI.Layout()." Runs after every other Build* call above, on
-  -- the uncustomized base each of them just (re-)established, and layers
-  -- overrides on top.
-  if WIIIUI.Customizer then
-    WIIIUI.Customizer.Apply()
+  registered[name] = true
+  steps[#steps + 1] = { name = name, fn = fn, first = opts.first and true or false }
+end
+
+-- The public entrypoint PLAYER_LOGIN queues through ApplyOrQueue
+-- ("layout", WIIIUI.Layout); spec 0001 §Customizer "Apply": Revert runs
+-- first (so every Build* sees uncustomized objects) and Apply last.
+function WIIIUI.Layout()
+  for pass = 1, 2 do
+    for _, step in ipairs(steps) do
+      if step.first == (pass == 1) then
+        xpcall(step.fn, report)
+      end
+    end
   end
 end
 
@@ -315,8 +311,8 @@ end
 -- bindings are later phases, not yet built.
 -- spec 0004 §3: "12 retires the action bars through WIIIUI.Retire, so it
 -- uses 07's seam" -- WIIIUI.Buttons.RetireBlizzardBars (Buttons.lua,
--- existence-checked the same way as the Layout() call above, since
--- retire_test.lua/older tests load Core.lua alone) joins the same "retire"
+-- existence-checked, since retire_test.lua/older tests load Core.lua alone)
+-- joins the same "retire"
 -- queue key as PlayerFrame, so both apply (or queue) as one atomic unit.
 -- "bindings" is its own queue key per spec 0001 §A.4's PLAYER_LOGIN list --
 -- WIIIUI.Buttons.ApplyBindings applies the initial override bindings once at

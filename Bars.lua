@@ -1,15 +1,15 @@
 -- spec 0001 §Module split "Bars.lua": health/power bars + text, power
 -- colour by UnitPowerType token (C1), plus §1.2's secret-safe % text, HP
--- gradient and low-HP pulse. Vanilla AlignHealthMana (e17c352
+-- gradient. Vanilla AlignHealthMana (e17c352
 -- WIIIUI.lua:1980-2059) reused Blizzard's PlayerFrameHealthBar/
 -- PlayerFrameManaBar, reparented to UIParent; PlayerFrame is now retired
 -- (R2, Core.lua's WIIIUI.Retire), which hides its children too, so this
 -- file builds WIIIUI's own StatusBar frames at the same position/size
 -- instead. The raw "cur / max" text (default) is CLAUDE.md's own sanctioned
 -- unguarded route (concatenation, SetValue and SetMinMaxValues are all
--- secret-tolerant); % text, the gradient and the pulse go through
--- WIIIUI.Safe (Core.lua) since they touch UnitHealthPercent/
--- UnitPowerPercent's SecretReturns results.
+-- secret-tolerant); % text and the gradient go through WIIIUI.Safe
+-- (Core.lua) since they touch UnitHealthPercent/UnitPowerPercent's
+-- SecretReturns results.
 local _, WIIIUI = ...
 
 WIIIUI.Bars = WIIIUI.Bars or {}
@@ -39,19 +39,6 @@ local XP_BAR_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\xpProgressBar"
 -- alone. The rested overlay's colour stays user-configurable via
 -- wc3UI_Options.xpRestedXpColor (CLAUDE.md Domain model), not this constant.
 local XP_BAR_MAIN_COLOR_R, XP_BAR_MAIN_COLOR_G, XP_BAR_MAIN_COLOR_B = 0.5, 0, 0.5
-
--- Vanilla LowHPWarning (e17c352 WIIIUI.lua:3875-3939): the low-HP flash
--- lives on PortraitBackground, ported forward here per spec 0001's
--- architecture note ("Bars.lua ... low-HP pulse ... Every secret-value
--- guard lives here"). white_background.tga already ships in art/other/
--- (the same file vanilla toggled between white_background/black_background
--- -- this port uses SetVertexColor for the fixed red tint instead, spec
--- 0001 §1.2, so only one of the two files is needed).
-local LOW_HP_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\white_background"
-local LOW_HP_OVERLAY_WIDTH_FRACTION = 0.35
-local LOW_HP_OVERLAY_HEIGHT_FRACTION = 0.35
-local LOW_HP_OVERLAY_HEIGHT_PAD = 20
-local LOW_HP_PULSE_DURATION = 1
 
 -- Vanilla never sets a static health-bar colour in AlignHealthMana itself
 -- (Blizzard's own texture supplied it). This is the fallback colour the bar
@@ -182,169 +169,6 @@ local function updateHealthGradient(bar)
   end)
 end
 
--- spec 0001 §1.2: "Low-HP pulse ... overlay is a frame holding the red
--- portrait-background texture. Its child texture runs a looping
--- AnimationGroup Alpha 0<->1 (1 s each way, the vanilla timing)." Anchored
--- to left.portraitTexture (not WIIIUI.Portrait.button/model) because
--- Bars.lua's BuildBars runs before Portrait.lua's BuildPortrait in
--- WIIIUI.Layout() (WIIIUI.toc load order) -- the portrait art texture is
--- already built by Console.BuildLeft by the time this runs, matching how
--- Portrait.lua itself anchors its own button to the same texture. Building
--- the animation is plain non-secret widget setup (no unit value involved),
--- so unlike the curve/SetAlpha calls below it isn't wrapped in WIIIUI.Safe.
-local function buildLowHpOverlay(anchor, uiScale)
-  local overlay = WIIIUI.Bars.lowHpOverlay
-
-  if not overlay then
-    overlay = CreateFrame("Frame", nil, UIParent)
-    overlay:SetFrameStrata("LOW")
-
-    local texture = overlay:CreateTexture(nil, "BACKGROUND")
-    texture:SetAllPoints(overlay)
-    texture:SetTexture(LOW_HP_TEXTURE)
-    texture:SetVertexColor(1, 0, 0, 1)
-
-    -- "Its child texture runs a looping AnimationGroup Alpha 0<->1" --
-    -- BOUNCE plays the single 0->1 animation forward then backward each
-    -- cycle, giving the 1s-each-way ping-pong with one animation instead
-    -- of two (warcraft.wiki.gg API_AnimationGroup_SetLooping).
-    local animGroup = texture:CreateAnimationGroup()
-    local pulse = animGroup:CreateAnimation("Alpha")
-    pulse:SetFromAlpha(0)
-    pulse:SetToAlpha(1)
-    pulse:SetDuration(LOW_HP_PULSE_DURATION)
-    animGroup:SetLooping("BOUNCE")
-    animGroup:Play()
-
-    overlay.texture = texture
-    overlay.animGroup = animGroup
-    WIIIUI.Bars.lowHpOverlay = overlay
-  end
-
-  overlay:ClearAllPoints()
-  if anchor then
-    overlay:SetPoint("CENTER", anchor, "CENTER", 0, 0)
-  end
-  overlay:SetSize(
-    uiScale * LOW_HP_OVERLAY_WIDTH_FRACTION,
-    uiScale * LOW_HP_OVERLAY_HEIGHT_FRACTION + LOW_HP_OVERLAY_HEIGHT_PAD
-  )
-
-  return overlay
-end
-
--- Called by Portrait.BuildPortrait once the model window exists (Bars builds
--- first in WIIIUI.Layout(), so BuildBars can only anchor to the art texture):
--- the pulse covers exactly the model window, one frame level below it
--- (fix6 B4). SetAllPoints sizes it, so the fallback size above is replaced.
-function WIIIUI.Bars.AnchorLowHpOverlay(model, level)
-  local overlay = WIIIUI.Bars.lowHpOverlay
-  if not overlay or not model then
-    return
-  end
-
-  overlay:ClearAllPoints()
-  overlay:SetAllPoints(model)
-  overlay:SetFrameLevel(level)
-end
-
--- spec 0001 §1.2: "A Step curve with points (0,1), (hpWarning/100,1),
--- (hpWarning/100+0.0001,0), (1,0) ... The curve is rebuilt when hpWarning
--- changes." Cached alongside the threshold it was built for (not just
--- built once at login) so this file alone -- without a Config.lua hook --
--- notices a changed wc3UI_Options.hpWarning on the next health event.
--- lowHpCurveFailed*/fingerprint cache a build failure (missing
--- Enum.LuaCurveType/C_CurveUtil) against the threshold *and* the
--- prerequisite-existence fingerprint it failed at (same reasoning as
--- healthCurveFingerprint above), so a known-failing build isn't retried on
--- every health event, but still recovers on the next event once the
--- missing piece reappears, without waiting for hpWarning to change.
-local function lowHpCurveFingerprint()
-  return C_CurveUtil ~= nil and Enum ~= nil and Enum.LuaCurveType ~= nil
-end
-
-local lowHpCurve, lowHpCurveThreshold
-local lowHpCurveFailed, lowHpCurveFailedThreshold, lowHpCurveFailedFingerprint
-
-local function getLowHpCurve()
-  local threshold = wc3UI_Options.hpWarning
-
-  if lowHpCurve and lowHpCurveThreshold == threshold then
-    return lowHpCurve
-  end
-
-  local fingerprint = lowHpCurveFingerprint()
-
-  if
-    lowHpCurveFailed
-    and lowHpCurveFailedThreshold == threshold
-    and lowHpCurveFailedFingerprint == fingerprint
-  then
-    return nil
-  end
-
-  local ok, curve = WIIIUI.Safe(function()
-    local cutoff = threshold / 100
-    local c = C_CurveUtil.CreateCurve()
-    c:SetType(Enum.LuaCurveType.Step)
-    c:AddPoint(0, 1)
-    c:AddPoint(cutoff, 1)
-    c:AddPoint(cutoff + 0.0001, 0)
-    c:AddPoint(1, 0)
-    return c
-  end)
-
-  if ok then
-    lowHpCurve = curve
-    lowHpCurveThreshold = threshold
-    lowHpCurveFailed = false
-  else
-    lowHpCurve = nil
-    lowHpCurveThreshold = nil
-    lowHpCurveFailed = true
-    lowHpCurveFailedThreshold = threshold
-    lowHpCurveFailedFingerprint = fingerprint
-  end
-
-  return lowHpCurve
-end
-
--- spec 0001 §1.2: "overlay:SetAlpha(UnitHealthPercent('player', true,
--- stepCurve)) ... Effective alpha = parent (secret 0/1) x child (animated),
--- so there is no comparison, no arithmetic and no OnUpdate." Never calls
--- Show/Hide based on the secret result itself -- only WIIIUI.Safe's own ok
--- flag (a plain boolean, not a unit value) drives the one degrade action.
-local function updateLowHpPulse()
-  local overlay = WIIIUI.Bars.lowHpOverlay
-  if not overlay then
-    return
-  end
-
-  -- A corpse's health percent is 0, which the step curve maps to "warn":
-  -- the pulse must stay off while dead or a ghost (fix6 B4).
-  -- UnitIsDeadOrGhost is not secret (UnitDocumentation.lua, forever).
-  if UnitIsDeadOrGhost("player") then
-    overlay:Hide()
-    return
-  end
-
-  local curve = getLowHpCurve()
-  if not curve then
-    overlay:Hide()
-    return
-  end
-
-  local ok = WIIIUI.Safe(function()
-    overlay:SetAlpha(UnitHealthPercent("player", true, curve))
-  end)
-
-  if ok then
-    overlay:Show()
-  else
-    overlay:Hide()
-  end
-end
-
 local function updateHealth()
   local bar = WIIIUI.Bars.health
   if not bar then
@@ -359,7 +183,6 @@ local function updateHealth()
   end
 
   updateHealthGradient(bar)
-  updateLowHpPulse()
 end
 
 local function updatePower()
@@ -435,8 +258,8 @@ local function buildXPBar(anchor, uiScale)
   -- SetStatusBarColor -- MergeDefaults only checks xpRestedXpColor is a
   -- table, not that it holds 4 numbers, so a hand-edited SavedVariable like
   -- {} would otherwise reach SetStatusBarColor(nil, ...) and throw, aborting
-  -- the rest of WIIIUI.Layout() (Portrait/Buttons/Config never get built,
-  -- since ApplyOrQueue calls WIIIUI.Layout without a pcall). Falls back to
+  -- the rest of the build steps' input (a throw here is xpcalled per step,
+  -- but this bar would not be built). Falls back to
   -- WIIIUI.DEFAULTS.xpRestedXpColor, matching CLAUDE.md's "degrade to
   -- hidden rather than wrong" spirit for corrupted saved data.
   local restColor = wc3UI_Options.xpRestedXpColor
@@ -531,8 +354,9 @@ end
 -- bars anchor to minimapFrame (the minimap art texture, WIIIUI.Console.left.
 -- minimapTexture -- see BuildLeft's own citation of this same vanilla
 -- naming quirk). Console.BuildLeft/BuildGrid/BuildRight already ran earlier
--- in this same WIIIUI.Layout() call (Core.lua's canonical module order), so
--- the minimap texture exists by the time this runs.
+-- in this same WIIIUI.Layout() call (TOC order; this step registers
+-- after Console.BuildRight), so the minimap texture exists by the time this
+-- runs.
 function WIIIUI.Bars.BuildBars()
   local uiScale = wc3UI_Options.uiScale
   local left = WIIIUI.Console.left
@@ -582,7 +406,6 @@ function WIIIUI.Bars.BuildBars()
     1
   )
 
-  buildLowHpOverlay(left and left.portraitTexture, uiScale)
   buildXPBar(left and left.portraitTexture, uiScale)
 
   updateHealth()
@@ -600,12 +423,6 @@ WIIIUI.On("UNIT_MAXHEALTH", updateHealth, "player")
 WIIIUI.On("UNIT_POWER_UPDATE", updatePower, "player")
 WIIIUI.On("UNIT_MAXPOWER", updatePower, "player")
 WIIIUI.On("UNIT_DISPLAYPOWER", updatePower, "player")
-
--- Death/resurrection changes the pulse's dead-or-ghost gate without a health
--- event necessarily following (spirit release, ghost resurrection).
-WIIIUI.On("PLAYER_DEAD", updateLowHpPulse)
-WIIIUI.On("PLAYER_ALIVE", updateLowHpPulse)
-WIIIUI.On("PLAYER_UNGHOST", updateLowHpPulse)
 
 -- PLAYER_XP_UPDATE/UPDATE_EXHAUSTION/PLAYER_LEVEL_UP are plain RegisterEvent
 -- calls, not RegisterUnitEvent, despite this file's other events using the
@@ -649,3 +466,5 @@ end
 WIIIUI.On("PLAYER_LOGIN", function()
   WIIIUI.ApplyOrQueue("trackingBarStarve", starveTrackingBars)
 end)
+
+WIIIUI.RegisterBuild("Bars.BuildBars", WIIIUI.Bars.BuildBars, { after = { "Console.BuildRight" } })

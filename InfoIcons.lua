@@ -606,8 +606,8 @@ end
 -- Vanilla AlignWeaponFrame's own anchor point, xpBarLeft (e17c352 WIIIUI.lua
 -- :2281) -- WIIIUI.Bars.xp here (Theme.lua's WeaponIconGeometry citation).
 -- Bars.lua's BuildBars already ran earlier in this same WIIIUI.Layout() call
--- (Core.lua's canonical module order: Bars.lua loads and therefore builds
--- before InfoIcons.lua), so the XP bar exists by the time this runs.
+-- (TOC order: Bars.lua loads and therefore registers before InfoIcons.lua,
+-- which also declares after = Bars.BuildBars), so the XP bar exists by the time this runs.
 function WIIIUI.InfoIcons.BuildWeaponIcons()
   local uiScale = wc3UI_Options.uiScale
   local xpBar = WIIIUI.Bars and WIIIUI.Bars.xp
@@ -739,3 +739,6 @@ WIIIUI.On("UPDATE_SHAPESHIFT_FORM", refreshAllSlots)
 -- passes no unit, so it appends to that event's handler list instead of
 -- erroring.
 WIIIUI.On("PLAYER_REGEN_ENABLED", refreshAllSlots)
+
+WIIIUI.RegisterBuild("InfoIcons.BuildWeaponIcons", WIIIUI.InfoIcons.BuildWeaponIcons, { after = { "Bars.BuildBars" } })
+WIIIUI.RegisterBuild("InfoIcons.BuildArmorIcon", WIIIUI.InfoIcons.BuildArmorIcon, { after = { "Bars.BuildBars" } })

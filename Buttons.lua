@@ -539,3 +539,5 @@ end)
 WIIIUI.On("PLAYER_LOGIN", function()
   WIIIUI.ApplyOrQueue("hearthstone", WIIIUI.Buttons.PlaceHearthstone)
 end)
+
+WIIIUI.RegisterBuild("Buttons.BuildButtons", WIIIUI.Buttons.BuildButtons, { after = { "Console.BuildRight" } })

@@ -733,8 +733,8 @@ end
 -- and, every call after that, re-syncs each control's displayed value from
 -- wc3UI_Options (so a setting changed elsewhere -- e.g. the Customizer,
 -- later phases -- is reflected the next time WIIIUI.Layout() runs). Called
--- from Core.lua's WIIIUI.Layout() the same way Buttons.BuildButtons is:
--- existence-checked.
+-- from Core.lua's WIIIUI.Layout() as a registered build step, like
+-- Buttons.BuildButtons.
 function WIIIUI.Config.BuildConfig()
   ensureHover()
   ensureCogwheel()
@@ -783,3 +783,5 @@ function WIIIUI.Config.BuildConfig()
 
   WIIIUI.Config.ShowTab(WIIIUI.Config.activeTab)
 end
+
+WIIIUI.RegisterBuild("Config.BuildConfig", WIIIUI.Config.BuildConfig)

@@ -343,8 +343,8 @@ end
 
 -- spec 0001 §Customizer "Apply", second round: "WIIIUI.Customizer.Revert()
 -- writes back every value the customizer wrote since the last revert, then
--- empties the session baseline." Called first in WIIIUI.Layout() (Core.lua,
--- before Console.BuildLeft) and first in Apply() itself -- when Layout
+-- empties the session baseline." Registered with first = true, so WIIIUI.Layout()
+-- runs it before every other step, and called first in Apply() itself -- when Layout
 -- already reverted, the second call finds an empty baseline and does
 -- nothing.
 --
@@ -1247,3 +1247,9 @@ function WIIIUI.Customizer.BuildEditor(panel)
   WIIIUI.Customizer.RefreshEditor()
   return editor
 end
+
+-- Revert runs before every Build* so each sees uncustomized objects; Apply
+-- registers last (Customizer.lua is the last TOC file) so it layers over them
+-- (spec 0001 §Customizer "Apply").
+WIIIUI.RegisterBuild("Customizer.Revert", WIIIUI.Customizer.Revert, { first = true })
+WIIIUI.RegisterBuild("Customizer.Apply", WIIIUI.Customizer.Apply)

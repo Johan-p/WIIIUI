@@ -237,3 +237,6 @@ end
 -- §..." into UI copy (ui-reviewer finding, slice 17 gate iteration 1).
 WIIIUI.LAYOUT_STRING = "Not available in this build -- check for an addon update."
 WIIIUI.LAYOUT_BUILD = "not yet exported"
+
+WIIIUI.RegisterBuild("Blizzard.BuildMinimap", WIIIUI.Blizzard.BuildMinimap, { after = { "Console.BuildLeft" } })
+WIIIUI.RegisterBuild("Blizzard.BuildMicroMenu", WIIIUI.Blizzard.BuildMicroMenu)

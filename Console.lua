@@ -715,3 +715,7 @@ function WIIIUI.Console.BuildRight()
 
   WIIIUI.Console.SyncAnchors()
 end
+
+WIIIUI.RegisterBuild("Console.BuildLeft", WIIIUI.Console.BuildLeft)
+WIIIUI.RegisterBuild("Console.BuildGrid", WIIIUI.Console.BuildGrid, { after = { "Console.BuildLeft" } })
+WIIIUI.RegisterBuild("Console.BuildRight", WIIIUI.Console.BuildRight, { after = { "Console.BuildGrid" } })
