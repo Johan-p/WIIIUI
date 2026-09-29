@@ -161,6 +161,11 @@ function WIIIUI.Console.BuildLeft()
 
   if not left then
     left = CreateFrame("Frame", nil, UIParent)
+    -- Vanilla's WIIIUI_Frame template sized every console root 1x1
+    -- (e17c352 WIIIUI.xml:8). A single anchor with no size leaves the rect
+    -- invalid on modern clients and nothing anchored through it renders
+    -- (API_ScriptRegion_IsRectValid, warcraft.wiki.gg).
+    left:SetSize(1, 1)
     left:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
     -- Vanilla WIIIUI_leftpart is framestrata="LOW" (e17c352 WIIIUI.xml:5,
     -- the virtual WIIIUI_Frame template's default) -- below the grid and
@@ -492,6 +497,8 @@ function WIIIUI.Console.BuildRight()
 
   if not right then
     right = CreateFrame("Frame", nil, UIParent)
+    -- 1x1 like left: an unsized root's rect is invalid (see BuildLeft).
+    right:SetSize(1, 1)
     right:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
     -- Vanilla WIIIUI_rightpart is framestrata="HIGH" (e17c352
     -- WIIIUI.xml:3120) -- the inventory/lid/chat-area console draws above
