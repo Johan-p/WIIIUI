@@ -257,21 +257,46 @@ function WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
 end
 
 -- Vanilla AlignActionBars (e17c352 WIIIUI.lua:2639-2667): button size and
--- horizontal spacing within a row. row2/row3 stack the multi-bar rows above
--- the bottom row by one button height plus a fixed uiScale-scaled gap each
--- (e17c352 WIIIUI.lua:2660, 2665: extraY = actionButton:GetHeight() +
--- uiScale*0.0667, then + actionButton:GetHeight() + uiScale*0.04444);
--- actionButton:GetHeight() there equals size, so the port computes both
--- purely from uiScale rather than reading a built button's height back.
--- The per-index pixel nudges vanilla applies at buttons 7/10/12
--- (WIIIUI.lua:2560-2574, mostly commented out in vanilla itself) are a
--- documented deferral, same convention as Console.lua's filler-nudge notes.
+-- row stacking. row2/row3 stack the multi-bar rows above the bottom row by
+-- one button height plus a fixed uiScale-scaled gap each (e17c352
+-- WIIIUI.lua:2660, 2665: extraY = actionButton:GetHeight() + uiScale*0.0667,
+-- then + actionButton:GetHeight() + uiScale*0.04444); actionButton:GetHeight()
+-- there equals size, so the port computes both purely from uiScale rather
+-- than reading a built button's height back.
+--
+-- Column spacing is NOT vanilla's uiScale*0.159259 chain (WIIIUI.lua:2632,
+-- 2637): that pitch is 0.6 units/cell wider than the art's cell pitch and the
+-- buttons drifted off the last columns (fix4). Vanilla hid the drift with
+-- per-index nudges (WIIIUI.lua:2540-2574: -3 at 4, +2 at 5, +1 at 10, +1 at
+-- 12) tuned by eye at uiScale 240-260; they are replaced by columnOffsetX,
+-- each column's centre taken from the grid art itself so it holds at every
+-- uiScale. actionslots_grid.tga (512x512) shows 4 cells per tile, centred at
+-- x = 39 / 126 / 213 / 300 px (woven lines at 82.5 / 169.7 / 256.5 px), and
+-- the next tile starts on the previous tile's 4th cell: columns 1-3 come from
+-- tile1, 4-6 from tile2, 7-9 from tile3 and 10-12 from tile4 (its cells 2-4).
+-- Tile origins are GridGeometry's own, so the two cannot disagree. Offsets are
+-- the button's left edge relative to the grid's left (column centre minus half
+-- the button), so column 1 needs no separate origin.
+local GRID_ART_CELL_X = { 39, 126, 213, 39, 126, 213, 39, 126, 213, 126, 213, 300 }
+
 function WIIIUI.Theme.ActionButtonGeometry(uiScale)
   local size = uiScale * 0.11111
+  local grid = WIIIUI.Theme.GridGeometry(uiScale)
+  local artUnit = grid.size / 512
+  local tileLeft = { 0 }
+  tileLeft[2] = tileLeft[1] + grid.size + grid.slot2OffsetX
+  tileLeft[3] = tileLeft[2] + grid.size + grid.slot3OffsetX
+  tileLeft[4] = tileLeft[3] + grid.size + grid.slot4OffsetX
+
+  local columnOffsetX = {}
+  for column = 1, 12 do
+    local tile = column <= 9 and math.floor((column - 1) / 3) + 1 or 4
+    columnOffsetX[column] = tileLeft[tile] + GRID_ART_CELL_X[column] * artUnit - size / 2
+  end
 
   return {
     size = size,
-    spacing = uiScale * 0.159259,
+    columnOffsetX = columnOffsetX,
     row1OffsetY = 5,
     row2OffsetY = size + uiScale * 0.0667,
     row3OffsetY = size + uiScale * 0.0667 + size + uiScale * 0.04444,
