@@ -430,6 +430,20 @@ local function resolveParentOfTarget(value)
   return WIIIUI.Customizer.Resolve(value)
 end
 
+-- spec 0001 §Customizer "Parent of / Parent position of" (slice 21): a value
+-- outside the registry (or of the wrong kind) is never an error -- it falls
+-- back to UIParent with a warning. SetOverride (below) is the normal
+-- catcher and stores "UIParent" instead; this Apply-time path only matters
+-- for a bad value that reached the saved table another way (a hand edit),
+-- where Apply must still never write the saved table. lastWarnings is
+-- recorded the way lastErrors is (never saved, reset every Apply), so
+-- SetOverride can surface each new one once.
+WIIIUI.Customizer.lastWarnings = {}
+
+local function invalidTargetMessage(field, value)
+  return field .. " '" .. tostring(value) .. "' is not a customizer id or UIParent; using UIParent"
+end
+
 -- spec 0001 §Customizer "Apply": "Hide = true reparents the object to
 -- WIIIUI.hider; it does not call Hide() ... Only true is stored ... Hide
 -- wins over ParentOf." Never called for a secure entry (applyEntry's own
@@ -447,7 +461,8 @@ local function applyParent(id, obj, overrides)
     else
       local target = resolveParentOfTarget(parentOf)
       if not target then
-        error("Customizer: unknown ParentOf '" .. tostring(parentOf) .. "' for " .. id, 0)
+        WIIIUI.Customizer.lastWarnings[id] = invalidTargetMessage("ParentOf", parentOf)
+        target = UIParent
       end
       obj:SetParent(target)
     end
@@ -505,7 +520,8 @@ local function applyAnchor(id, obj, overrides)
   if overrides.ParentPosOf ~= nil then
     newRelativeTo = resolveAnchorTarget(overrides.ParentPosOf)
     if not newRelativeTo then
-      error("Customizer: unknown ParentPosOf '" .. tostring(overrides.ParentPosOf) .. "' for " .. id, 0)
+      WIIIUI.Customizer.lastWarnings[id] = invalidTargetMessage("ParentPosOf", overrides.ParentPosOf)
+      newRelativeTo = UIParent
     end
   end
 
@@ -681,6 +697,7 @@ function WIIIUI.Customizer.Apply()
   local themeSettings = enabled and wc3UI_Options.edit_theme_settings[wc3UI_Options.theme]
 
   WIIIUI.Customizer.lastErrors = {}
+  WIIIUI.Customizer.lastWarnings = {}
 
   for _, entry in ipairs(registry) do
     local overrides = (themeSettings and themeSettings[entry.id]) or EMPTY_OVERRIDES
@@ -696,6 +713,15 @@ end
 -- Storage
 --------------------------------------------------------------------------
 
+-- The one chat-warning seam of this file. DEFAULT_CHAT_FRAME is
+-- existence-checked (absent under the headless stub unless a test installs
+-- one), like every other optional Blizzard global here.
+local function say(message)
+  if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("WIIIUI: " .. message)
+  end
+end
+
 -- spec 0001 §Customizer "Storage": "edit_theme_settings[theme][id] = {
 -- [field] = value }, overridden fields only." value == nil clears the field
 -- (and drops the id's table once empty) rather than writing a nil.
@@ -703,6 +729,32 @@ function WIIIUI.Customizer.GetOverride(id, field)
   local themeSettings = wc3UI_Options.edit_theme_settings and wc3UI_Options.edit_theme_settings[wc3UI_Options.theme]
   local entry = themeSettings and themeSettings[id]
   return entry and entry[field]
+end
+
+local function applyAndReport()
+  local beforeWarn = WIIIUI.Customizer.lastWarnings
+  local beforeApply = WIIIUI.Customizer.lastErrors
+  local beforeRevert = WIIIUI.Customizer.lastRevertErrors
+  WIIIUI.Customizer.Apply()
+  local afterApply = WIIIUI.Customizer.lastErrors
+  local afterRevert = WIIIUI.Customizer.lastRevertErrors
+  local afterWarn = WIIIUI.Customizer.lastWarnings
+
+  for errId, message in pairs(afterApply) do
+    if not beforeApply[errId] then
+      say(tostring(message))
+    end
+  end
+  for errId, message in pairs(afterRevert) do
+    if not beforeRevert[errId] then
+      say("revert failed for " .. errId .. ": " .. tostring(message))
+    end
+  end
+  for warnId, message in pairs(afterWarn) do
+    if not beforeWarn[warnId] then
+      say(warnId .. ": " .. message)
+    end
+  end
 end
 
 -- spec 0001 §Customizer "Combat and implicit protection": "Every customizer
@@ -729,6 +781,13 @@ end
 -- Revert() first, so a revert failure surfaced by this same edit is no more
 -- silent than an apply failure already was.
 function WIIIUI.Customizer.SetOverride(id, field, value)
+  local invalidParent = field == "ParentOf" and value ~= nil and not resolveParentOfTarget(value)
+  local invalidAnchor = field == "ParentPosOf" and value ~= nil and not resolveAnchorTarget(value)
+  if invalidParent or invalidAnchor then
+    say(id .. ": " .. invalidTargetMessage(field, value))
+    value = "UIParent"
+  end
+
   wc3UI_Options.edit_theme_settings = wc3UI_Options.edit_theme_settings or {}
   local theme = wc3UI_Options.theme
   wc3UI_Options.edit_theme_settings[theme] = wc3UI_Options.edit_theme_settings[theme] or {}
@@ -746,24 +805,21 @@ function WIIIUI.Customizer.SetOverride(id, field, value)
     themeSettings[id][field] = value
   end
 
-  WIIIUI.ApplyOrQueue("custom:" .. id, function()
-    local beforeApply = WIIIUI.Customizer.lastErrors
-    local beforeRevert = WIIIUI.Customizer.lastRevertErrors
-    WIIIUI.Customizer.Apply()
-    local afterApply = WIIIUI.Customizer.lastErrors
-    local afterRevert = WIIIUI.Customizer.lastRevertErrors
+  WIIIUI.ApplyOrQueue("custom:" .. id, applyAndReport)
+end
 
-    for errId, message in pairs(afterApply) do
-      if not beforeApply[errId] and DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("WIIIUI: " .. tostring(message))
-      end
-    end
-    for errId, message in pairs(afterRevert) do
-      if not beforeRevert[errId] and DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("WIIIUI: revert failed for " .. errId .. ": " .. tostring(message))
-      end
-    end
-  end)
+-- spec 0001 §Customizer "Storage": "Reset wipes edit_theme_settings[theme]"
+-- -- the current theme only. The saved wipe is immediate (a table write,
+-- combat-safe); the revert-and-reapply goes through the same ApplyOrQueue
+-- key SetOverride uses, so protected frames (the grid, extras, portrait
+-- button) are only touched out of combat.
+function WIIIUI.Customizer.ResetTheme()
+  if wc3UI_Options.edit_theme_settings then
+    wc3UI_Options.edit_theme_settings[wc3UI_Options.theme] = nil
+  end
+
+  WIIIUI.ApplyOrQueue("custom:reset", applyAndReport)
+  WIIIUI.Customizer.RefreshEditor()
 end
 
 --------------------------------------------------------------------------
@@ -1033,6 +1089,18 @@ function WIIIUI.Customizer.BuildEditor(panel)
     pageIndicator:SetPoint("BOTTOM", editor, "BOTTOM", 0, 0)
     pageIndicator:SetText(editor.page .. " / " .. pageCount())
     editor.pageIndicator = pageIndicator
+
+    -- slice 21: Reset (spec 0001 §Customizer "Storage"). Bottom-right of
+    -- the editor: the blocks fill the top-left (3 x BLOCK_WIDTH wide, one
+    -- block tall) and the page indicator sits bottom-center, so neither
+    -- overlaps this corner. In-game only: visual clearance at real font
+    -- metrics.
+    local resetButton = CreateFrame("Button", nil, editor, "UIPanelButtonTemplate")
+    resetButton:SetSize(120, 22)
+    resetButton:SetText("Reset theme")
+    resetButton:SetPoint("BOTTOMRIGHT", editor, "BOTTOMRIGHT", 0, 0)
+    resetButton:SetScript("OnClick", function() WIIIUI.Customizer.ResetTheme() end)
+    editor.resetButton = resetButton
 
     WIIIUI.Customizer.editor = editor
   end
