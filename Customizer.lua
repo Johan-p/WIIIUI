@@ -362,7 +362,17 @@ end
 -- customizer changes or restores a texture.
 local function syncConsoleAnchors()
   if WIIIUI.Console and WIIIUI.Console.SyncAnchors then
-    WIIIUI.Console.SyncAnchors()
+    return WIIIUI.Console.SyncAnchors()
+  end
+  return true
+end
+
+-- Raising variant for applyEntry: a companion that cannot mirror an override
+-- (an anchor cycle) rolls that entry back through Apply's own pcall.
+local function syncConsoleAnchorsOrRaise()
+  local ok, err = syncConsoleAnchors()
+  if not ok then
+    error("Customizer: companion anchor sync failed: " .. tostring(err), 0)
   end
 end
 
@@ -416,6 +426,31 @@ local function anyFieldSet(overrides, fields)
       return true
     end
   end
+  return false
+end
+
+local CHAIN_HOPS = 12
+
+local function isRegionObject(object)
+  local objectType = object.GetObjectType and object:GetObjectType()
+  return objectType == "Texture" or objectType == "FontString"
+end
+
+-- Does following `object`'s first anchor upward reach a Texture/FontString?
+local function anchorChainHitsRegion(object)
+  local current = object
+
+  for _ = 1, CHAIN_HOPS do
+    local _, relativeTo = current:GetPoint(1)
+    if not relativeTo then
+      return false
+    end
+    if isRegionObject(relativeTo) then
+      return true
+    end
+    current = relativeTo
+  end
+
   return false
 end
 
@@ -490,7 +525,10 @@ end
 
 local function invalidTargetMessage(id, field, value)
   local reason
-  if registryById[value] then
+  if registryById[value] and registryById[value].kind ~= "texture" then
+    reason = "'" .. tostring(value) .. "' is anchored to a texture; " .. field
+      .. " needs a frame whose own anchors are frames for a secure or protected frame; using UIParent"
+  elseif registryById[value] then
     reason = "'" .. tostring(value) .. "' is a texture; " .. field .. " needs a frame or button"
       .. (field == "ParentPosOf" and " for a secure or protected frame" or "") .. "; using UIParent"
   else
@@ -578,9 +616,13 @@ local function applyAnchor(id, obj, overrides)
 
     -- Regions may anchor to regions; only a frame that is protected (itself
     -- or implicitly, via IsProtected) is barred from a texture target.
+    -- A frame target counts too when its own anchor chain runs through a
+    -- region: the protected obj would make it implicitly protected, and it
+    -- would then anchor to that region (chain walk, bounded).
     local targetEntry = registryById[overrides.ParentPosOf]
-    if newRelativeTo and targetEntry and targetEntry.kind == "texture"
+    if newRelativeTo and targetEntry
         and registryById[id].kind ~= "texture" and registryById[id].kind ~= "fontstring"
+        and (targetEntry.kind == "texture" or anchorChainHitsRegion(newRelativeTo))
         and obj:IsProtected() then
       newRelativeTo = nil
     end
@@ -695,14 +737,25 @@ local function applyEntry(entry, overrides)
     return
   end
 
+  local isRegionEntry = entry.kind == "texture" or entry.kind == "fontstring"
+
   if not entry.secure then
     applyParent(id, obj, overrides)
+    -- A texture's companion is a protected frame that follows its parent and
+    -- anchors, so a texture's ParentOf/anchor change reaches the protection
+    -- graph only once the companion is re-mirrored: sync before the check.
+    if isRegionEntry and overrides.ParentOf ~= nil then
+      syncConsoleAnchorsOrRaise()
+    end
     if overrides.ParentOf ~= nil then
       checkCombatToggledProtection(id, "ParentOf")
     end
   end
 
   applyAnchor(id, obj, overrides)
+  if isRegionEntry and anyFieldSet(overrides, ANCHOR_FIELDS) then
+    syncConsoleAnchorsOrRaise()
+  end
   if overrides.ParentPosOf ~= nil then
     checkCombatToggledProtection(id, "ParentPosOf")
   end
@@ -770,6 +823,7 @@ function WIIIUI.Customizer.Apply()
     local ok, err = pcall(applyEntry, entry, overrides)
     if not ok then
       revertEntry(entry.id)
+      syncConsoleAnchors()
       WIIIUI.Customizer.lastErrors[entry.id] = err
     end
   end

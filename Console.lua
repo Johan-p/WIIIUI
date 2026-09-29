@@ -57,10 +57,33 @@ local function companionOf(region)
   return frame
 end
 
-local function syncAnchor(region)
-  local frame = companionOf(region)
+local function collectPoints(frame)
+  local points = {}
 
-  frame:ClearAllPoints()
+  for i = 1, frame:GetNumPoints() do
+    points[i] = { frame:GetPoint(i) }
+  end
+
+  return points
+end
+
+local function applyPoints(frame, points)
+  for _, p in ipairs(points) do
+    frame:SetPoint(p[1], p[2], p[3], p[4], p[5])
+  end
+end
+
+-- Mirrors `region` onto its (already cleared) companion. The parent follows
+-- the texture's own: the customizer can re-parent a texture, and the rect only
+-- matches while both share a scale. Raises on the first failing SetPoint.
+local function fillCompanion(region)
+  local frame = companionOf(region)
+  local parent = region:GetParent()
+
+  if frame:GetParent() ~= parent then
+    frame:SetParent(parent)
+  end
+
   frame:SetSize(region:GetSize())
 
   for i = 1, region:GetNumPoints() do
@@ -70,23 +93,47 @@ local function syncAnchor(region)
       relativeTo = companionOf(relativeTo)
     end
 
-    frame:SetPoint(point, relativeTo or region:GetParent(), relativePoint, x, y)
+    frame:SetPoint(point, relativeTo or parent, relativePoint, x, y)
   end
 end
 
--- Re-mirrors every companion; called at the end of each Build* and after the
--- customizer's Apply. Each companion is its own pcall: a customizer override
--- that makes two textures depend on each other is rejected by the client on
--- the texture itself, and must not abort the rest of the sync (or Layout).
--- A companion created mid-loop (a target of a mirrored anchor) is appended and
--- reached by the same loop.
+-- Re-mirrors every companion. Two passes: every companion is cleared first, so
+-- no companion's anchor to another can produce a transient cycle while the
+-- others still hold old points. A companion whose mirror fails gets its prior
+-- points back (never left empty) and the first failure is returned as
+-- `false, message` -- the customizer turns that into a rollback of the
+-- offending entry. A companion created mid-loop (a target of a mirrored
+-- anchor) is appended and reached by the same loop; it has no prior points.
+-- Called at the end of each Build*, after the customizer's Apply, and after
+-- each customizer revert.
 function WIIIUI.Console.SyncAnchors()
+  local prior = {}
+
+  for i, region in ipairs(anchorRegions) do
+    local frame = anchorFrames[region]
+
+    prior[i] = collectPoints(frame)
+    frame:ClearAllPoints()
+  end
+
+  local firstError
   local i = 1
 
   while anchorRegions[i] do
-    pcall(syncAnchor, anchorRegions[i])
+    local ok, err = pcall(fillCompanion, anchorRegions[i])
+
+    if not ok then
+      local frame = anchorFrames[anchorRegions[i]]
+
+      firstError = firstError or err
+      frame:ClearAllPoints()
+      pcall(applyPoints, frame, prior[i] or {})
+    end
+
     i = i + 1
   end
+
+  return firstError == nil, firstError
 end
 
 -- The Frame protected code anchors to in place of `region` (a texture). A new
@@ -101,7 +148,7 @@ function WIIIUI.Console.AnchorFrame(region)
 
   local frame = companionOf(region)
 
-  pcall(syncAnchor, region)
+  pcall(fillCompanion, region)
 
   return frame
 end
