@@ -239,6 +239,14 @@ local function capture(id, key, value)
   end
 end
 
+-- security-specialist finding (Low), slice 20 gate-fix round 2: recorded
+-- (never saved) the same way lastErrors already records Apply()'s own
+-- per-entry pcall failures, so a revertOne failure -- in Revert() below or
+-- in revertEntry() -- is never completely silent. Reset at the start of
+-- every Revert() call, the same convention lastErrors uses at the start of
+-- every Apply() call.
+WIIIUI.Customizer.lastRevertErrors = {}
+
 -- revertEntry (Apply()'s per-entry pcall failure branch) is always called
 -- for the entry Apply() is CURRENTLY processing, and Apply() always calls
 -- Revert() (which empties captureOrder) before its loop starts, so in
@@ -314,12 +322,21 @@ end
 -- than WIIIUI.Customizer.Revert(): only this one id's baseline, so a failed
 -- entry doesn't undo fields already written by earlier entries in the same
 -- Apply() loop.
+-- security-specialist finding (Low), slice 20 gate-fix round 2: wrapped the
+-- same way Revert()'s own loop below is, for the same reason -- a bad
+-- revertOne here can't wedge this specific rollback path either. Doesn't
+-- change the caller's contract: baseline[id]/captureOrder are still cleared
+-- unconditionally, so a failed revert here still can't leave a stale
+-- baseline entry behind for a later Revert() to trip over.
 local function revertEntry(id)
   local data = baseline[id]
   if not data then
     return
   end
-  revertOne(id, data)
+  local ok, err = pcall(revertOne, id, data)
+  if not ok then
+    WIIIUI.Customizer.lastRevertErrors[id] = err
+  end
   baseline[id] = nil
   removeFromCaptureOrder(id)
 end
@@ -341,11 +358,16 @@ end
 -- WIIIUI.Layout(), so a stuck entry there would otherwise fail identically
 -- on every later Layout() call until /reload.
 function WIIIUI.Customizer.Revert()
+  WIIIUI.Customizer.lastRevertErrors = {}
+
   for i = #captureOrder, 1, -1 do
     local id = captureOrder[i]
     local data = baseline[id]
     if data then
-      pcall(revertOne, id, data)
+      local ok, err = pcall(revertOne, id, data)
+      if not ok then
+        WIIIUI.Customizer.lastRevertErrors[id] = err
+      end
     end
   end
 
@@ -701,6 +723,11 @@ end
 -- found by comparing before and after." DEFAULT_CHAT_FRAME is
 -- existence-checked (absent under the headless stub, so tests stay silent)
 -- the same way every other optional Blizzard global in this codebase is.
+--
+-- security-specialist finding (Low), slice 20 gate-fix round 2: the same
+-- before/after diff, applied to lastRevertErrors -- Apply() always calls
+-- Revert() first, so a revert failure surfaced by this same edit is no more
+-- silent than an apply failure already was.
 function WIIIUI.Customizer.SetOverride(id, field, value)
   wc3UI_Options.edit_theme_settings = wc3UI_Options.edit_theme_settings or {}
   local theme = wc3UI_Options.theme
@@ -720,13 +747,20 @@ function WIIIUI.Customizer.SetOverride(id, field, value)
   end
 
   WIIIUI.ApplyOrQueue("custom:" .. id, function()
-    local before = WIIIUI.Customizer.lastErrors
+    local beforeApply = WIIIUI.Customizer.lastErrors
+    local beforeRevert = WIIIUI.Customizer.lastRevertErrors
     WIIIUI.Customizer.Apply()
-    local after = WIIIUI.Customizer.lastErrors
+    local afterApply = WIIIUI.Customizer.lastErrors
+    local afterRevert = WIIIUI.Customizer.lastRevertErrors
 
-    for errId, message in pairs(after) do
-      if not before[errId] and DEFAULT_CHAT_FRAME then
+    for errId, message in pairs(afterApply) do
+      if not beforeApply[errId] and DEFAULT_CHAT_FRAME then
         DEFAULT_CHAT_FRAME:AddMessage("WIIIUI: " .. tostring(message))
+      end
+    end
+    for errId, message in pairs(afterRevert) do
+      if not beforeRevert[errId] and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("WIIIUI: revert failed for " .. errId .. ": " .. tostring(message))
       end
     end
   end)
