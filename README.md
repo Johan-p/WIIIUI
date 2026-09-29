@@ -57,6 +57,14 @@ Requires **World of Warcraft: Forever** or **retail**. Vanilla 1.12 and unoffici
 5. Start the game, or restart it if it was running. A new addon needs a full restart, not just `/reload`.
 6. Make sure **WIIIUI** is ticked in the AddOns list on the character select screen.
 
+**Alternative: install with git** (no renaming needed, and updating is just `git pull`). Open a terminal in your AddOns folder and run:
+
+```
+git clone https://github.com/Johan-p/WIIIUI-Forever-Fork.git WIIIUI
+```
+
+The trailing `WIIIUI` sets the folder name. To update later, run `git pull` inside the `WIIIUI` folder and restart the game.
+
 Settings are saved per character. Blizzard's own bottom bars are replaced by WIIIUI, so no Bartender or similar addon is needed.
 
 ### Don't forgot to open the config menu for configuration options, accessible in the lower right corner!
