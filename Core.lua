@@ -165,14 +165,94 @@ function WIIIUI.Flush()
   end
 end
 
--- spec 0001 §1.2/§A.3: "The guard seam is WIIIUI.Safe(fn, ...), which
--- returns ok, result." / "WIIIUI.Safe(fn, ...) = pcall." The one
--- secret-value guard seam (CLAUDE.md "Secret-value tolerant"): every
--- HP/power-percent-text, HP-gradient, low-HP-pulse and portrait-combat-text
--- call site that might touch a secret unit value goes through this instead
--- of a bare pcall of its own.
-function WIIIUI.Safe(fn, ...)
-  return pcall(fn, ...)
+-- spec 0006 Slice 06 / Amendments item 2: the one owner of secret-value reads.
+-- issecretvalue (FrameScriptDocumentation.lua, forever branch) is called only
+-- in this table; a decision on a possibly-secret value goes through Read.
+WIIIUI.Secret = {}
+
+function WIIIUI.Secret.IsSecret(value)
+  return issecretvalue ~= nil and issecretvalue(value) == true
+end
+
+local function passThroughPlain(ok, ...)
+  if not ok then
+    return nil
+  end
+  for i = 1, select("#", ...) do
+    if WIIIUI.Secret.IsSecret((select(i, ...))) then
+      return nil
+    end
+  end
+  return ...
+end
+
+-- Returns fn's results unchanged, or a lone nil if it threw or any result is
+-- secret, so callers decide on plain values and nil takes the degrade path.
+function WIIIUI.Secret.Read(fn, ...)
+  return passThroughPlain(pcall(fn, ...))
+end
+
+-- Tiers: "cur / max" (the vanilla text), then cur alone. Each is its own
+-- pcall so a text that can't be built never reaches the caller; secrets are
+-- only concatenated and handed to SetText, never read (spec 0006 Amendments
+-- item 2: no thousands-separator tier).
+function WIIIUI.Secret.PairText(fs, cur, max)
+  if pcall(function()
+    fs:SetText(cur .. " / " .. max)
+  end) then
+    return
+  end
+  pcall(fs.SetText, fs, cur)
+end
+
+-- Lazily builds a Blizzard curve object. Only the most recent successful
+-- param is cached (a free-typed threshold must not grow the cache); a
+-- failure is cached per (param, fingerprint()), so a build that can't work
+-- isn't retried on every health event but is retried as soon as the
+-- fingerprint (a cheap existence check of what the build needs) changes.
+local NO_PARAM = {}
+
+function WIIIUI.Secret.CachedCurve(build, fingerprint)
+  local built, failedAt = {}, {}
+
+  return function(param)
+    local key = param
+    if key == nil then
+      key = NO_PARAM
+    end
+
+    if built[key] then
+      return built[key]
+    end
+
+    local current = fingerprint and fingerprint()
+    if failedAt[key] ~= nil and failedAt[key].fingerprint == current then
+      return nil
+    end
+
+    local ok, curve = pcall(build, param)
+    if ok and curve ~= nil then
+      for other in pairs(built) do
+        if other ~= key then
+          built[other] = nil
+        end
+      end
+      built[key] = curve
+      failedAt[key] = nil
+      return curve
+    end
+
+    failedAt[key] = { fingerprint = current }
+    return nil
+  end
+end
+
+-- UnitClass is SecretWhenUnitIdentityRestricted / MayReturnNothing
+-- (UnitDocumentation.lua, forever branch); nil means "unknown class".
+function WIIIUI.PlayerClassToken()
+  return WIIIUI.Secret.Read(function()
+    return (select(2, UnitClass("player")))
+  end)
 end
 
 -- spec 0001 §A.3: "WIIIUI.hider is an unnamed hidden Frame." Reused here as

@@ -7,7 +7,7 @@
 -- file builds WIIIUI's own StatusBar frames at the same position/size
 -- instead. The raw "cur / max" text (default) is CLAUDE.md's own sanctioned
 -- unguarded route (concatenation, SetValue and SetMinMaxValues are all
--- secret-tolerant); % text and the gradient go through WIIIUI.Safe
+-- secret-tolerant); % text and the gradient go through WIIIUI.Secret
 -- (Core.lua) since they touch UnitHealthPercent/UnitPowerPercent's
 -- SecretReturns results.
 local _, WIIIUI = ...
@@ -64,12 +64,13 @@ local LEVEL_TEXT_FONT_SIZE = 12
 -- spec 0001 §1.2: "Health % text (HealthPercent) ... fs:SetFormattedText(
 -- '%.0f%%', UnitHealthPercent('player', true, CurveConstants.ScaleTo100))
 -- inside pcall ... Fallback: falls back to cur / max text." The guard seam
--- is WIIIUI.Safe (Core.lua); CurveConstants.ScaleTo100 is Blizzard's own
+-- is a plain pcall here (the % text is a degrade, not a decision) with
+-- WIIIUI.Secret.PairText (Core.lua) as the fallback; CurveConstants.ScaleTo100 is Blizzard's own
 -- pre-built curve (Blizzard_SharedXMLBase/CurveConstants.lua), not one
 -- WIIIUI builds.
 local function setHealthText(bar)
   if wc3UI_Options.HealthPercent then
-    local ok = WIIIUI.Safe(function()
+    local ok = pcall(function()
       bar.text:SetFormattedText("%.0f%%", UnitHealthPercent("player", true, CurveConstants.ScaleTo100))
     end)
     if ok then
@@ -77,14 +78,14 @@ local function setHealthText(bar)
     end
   end
 
-  bar.text:SetText(UnitHealth("player") .. " / " .. UnitHealthMax("player"))
+  WIIIUI.Secret.PairText(bar.text, UnitHealth("player"), UnitHealthMax("player"))
 end
 
 -- spec 0001 §1.2: "Power % text (PowerPercent) ... Same with
 -- UnitPowerPercent('player', nil, false, CurveConstants.ScaleTo100)."
 local function setPowerText(bar)
   if wc3UI_Options.PowerPercent then
-    local ok = WIIIUI.Safe(function()
+    local ok = pcall(function()
       bar.text:SetFormattedText("%.0f%%", UnitPowerPercent("player", nil, false, CurveConstants.ScaleTo100))
     end)
     if ok then
@@ -92,7 +93,7 @@ local function setPowerText(bar)
     end
   end
 
-  bar.text:SetText(UnitPower("player") .. " / " .. UnitPowerMax("player"))
+  WIIIUI.Secret.PairText(bar.text, UnitPower("player"), UnitPowerMax("player"))
 end
 
 -- spec 0001 §1.2: "HP gradient ... One ColorCurve built at login: 0 -> red,
@@ -102,55 +103,24 @@ end
 -- else -> r=2*(1-healthPercent),g=1,b=0 (50%=yellow, 100%=green) -- exactly
 -- the three sampled points below. Built lazily (not at file/module load)
 -- and cached, so a missing C_CurveUtil/AddPoint/CreateColor API (spec 0001
--- §1.2's own "Unverified" list) degrades this one feature via WIIIUI.Safe
+-- §1.2's own "Unverified" list) degrades this one feature via Secret.CachedCurve
 -- instead of erroring Bars.lua's whole load. ScriptObject_ColorCurveObject
 -- (warcraft.wiki.gg): "AddPoint takes an x and y value; ... the y should be
 -- a ColorMixin structure", built via CreateColor(r,g,b) (SharedXML/
 -- Color.lua via FrameXML/Util.lua).
--- healthColorCurveFailed*/fingerprint cache a build failure (missing
--- C_CurveUtil/CreateColor) so a known-failing build isn't retried on every
--- UNIT_HEALTH/UNIT_MAXHEALTH event -- but only while the reason it failed
--- hasn't changed. The fingerprint is a cheap existence check of the two
--- globals the build needs, taken *before* attempting the build; a failure
--- is skipped only when a later call's fingerprint still matches the one
--- recorded at failure time, so a build that starts succeeding again (the
--- globals reappear) still gets retried on the very next call, per spec
--- 0001 §1.2's own degrade-and-recover expectation for this route.
-local function healthCurveFingerprint()
+-- The build failure is cached against a cheap existence check of the two
+-- globals the build needs (Secret.CachedCurve), so a known-failing build isn't
+-- retried on every UNIT_HEALTH/UNIT_MAXHEALTH event but is retried as soon as
+-- those globals reappear (spec 0001 §1.2 degrade-and-recover).
+local getHealthColorCurve = WIIIUI.Secret.CachedCurve(function()
+  local c = C_CurveUtil.CreateColorCurve()
+  c:AddPoint(0, CreateColor(1, 0, 0))
+  c:AddPoint(0.5, CreateColor(1, 1, 0))
+  c:AddPoint(1, CreateColor(0, 1, 0))
+  return c
+end, function()
   return C_CurveUtil ~= nil and CreateColor ~= nil
-end
-
-local healthColorCurve, healthColorCurveFailed, healthColorCurveFailedFingerprint
-
-local function getHealthColorCurve()
-  if healthColorCurve then
-    return healthColorCurve
-  end
-
-  local fingerprint = healthCurveFingerprint()
-
-  if healthColorCurveFailed and healthColorCurveFailedFingerprint == fingerprint then
-    return nil
-  end
-
-  local ok, curve = WIIIUI.Safe(function()
-    local c = C_CurveUtil.CreateColorCurve()
-    c:AddPoint(0, CreateColor(1, 0, 0))
-    c:AddPoint(0.5, CreateColor(1, 1, 0))
-    c:AddPoint(1, CreateColor(0, 1, 0))
-    return c
-  end)
-
-  if ok then
-    healthColorCurve = curve
-    healthColorCurveFailed = false
-  else
-    healthColorCurveFailed = true
-    healthColorCurveFailedFingerprint = fingerprint
-  end
-
-  return healthColorCurve
-end
+end)
 
 -- spec 0001 §1.2: "local c = UnitHealthPercent('player', true, curve) ->
 -- bar:GetStatusBarTexture():SetVertexColor(c:GetRGB()) in pcall." Leaves
@@ -162,7 +132,8 @@ local function updateHealthGradient(bar)
     return
   end
 
-  WIIIUI.Safe(function()
+  -- Degrade, not a decision: the result is secret and only handed on.
+  pcall(function()
     local color = UnitHealthPercent("player", true, curve)
     bar:GetStatusBarTexture():SetVertexColor(color:GetRGB())
   end)
@@ -278,10 +249,9 @@ local function buildXPBar(anchor, uiScale)
 end
 
 -- spec 0001 §Event -> widget wiring: "PLAYER_XP_UPDATE, UPDATE_EXHAUSTION,
--- PLAYER_LEVEL_UP | XP bar, rested, level text (XP not secret; still
--- Safe)". Not a secret-value guard (XP is never secret, CLAUDE.md "Secret
--- values") -- WIIIUI.Safe here is the same generic "degrade rather than
--- error" seam Bars.lua's colour-curve builders already use, covering a
+-- PLAYER_LEVEL_UP | XP bar, rested, level text (XP is not secret, but the
+-- update is still wrapped in a pcall)". Not a secret-value guard (XP is never secret, CLAUDE.md "Secret
+-- values") -- a plain pcall: degrade, not a decision. It covers a
 -- missing UnitXP/UnitXPMax/GetXPExhaustion/UnitClass or a UnitXPMax==0 edge
 -- case without taking down the rest of WIIIUI.Layout().
 local function updateXP()
@@ -291,7 +261,7 @@ local function updateXP()
     return
   end
 
-  local ok = WIIIUI.Safe(function()
+  local ok = pcall(function()
     local maxXP = UnitXPMax("player")
     local curXP = UnitXP("player")
 

@@ -124,11 +124,14 @@ local RESISTANCE_NAMES = { [1] = "Holy", [2] = "Fire", [3] = "Nature", [4] = "Fr
 -- than guessed at (CLAUDE.md "Unconfirmed API").
 local DRUID_CLASS_FILENAME = "DRUID"
 
--- Every call here (UnitClass/GetNumShapeshiftForms/GetShapeshiftFormInfo) is
--- unguarded, same as computeStats/computeArmorStats below -- its two
--- callers already run inside WIIIUI.Safe.
+-- Every call here (GetNumShapeshiftForms/GetShapeshiftFormInfo; the class
+-- comes from the guarded PlayerClassToken) is unguarded, same as
+-- computeStats/computeArmorStats below -- its two callers already run inside
+-- pcall.
+-- A secret or failed class read gives nil, so callers fall back to the plain
+-- equipped-item icon; deliberate, rather than comparing a possibly-secret value.
 local function activeShapeshiftIcon()
-  if select(2, UnitClass("player")) ~= DRUID_CLASS_FILENAME then
+  if WIIIUI.PlayerClassToken() ~= DRUID_CLASS_FILENAME then
     return nil
   end
 
@@ -148,17 +151,17 @@ end
 
 -- security-specialist Finding (slice 19 gate-fix, generalized beyond the
 -- mainhand-only special case): every option previously resolved its icon
--- texture inside computeStats, entirely inside the one WIIIUI.Safe call that
+-- texture inside computeStats, entirely inside the single pcall that
 -- also does the SecretWhenUnitStatsRestricted arithmetic below -- a throw
 -- there aborted before the icon was ever returned, leaving the icon stale
 -- (or empty on the first build) for offhand/ranged/healing/spellpower too,
 -- not just mainhand. resolveIcon is now the one place that resolves an
--- option's icon texture; RefreshSlot calls it in its own WIIIUI.Safe, before
--- Safe(computeStats, option), so the icon always tracks the current form/
+-- option's icon texture; RefreshSlot calls it in its own pcall, before
+-- pcall(computeStats, option), so the icon always tracks the current form/
 -- equipped item even when the label/value degrade. None of
 -- GetInventoryItemTexture/C_PaperDollInfo.GetInventorySlotInfo/
 -- activeShapeshiftIcon read a secret value (this file's header comment) --
--- the Safe wrap at the call site is defense-in-depth, not a required guard.
+-- the pcall wrap at the call site is defense-in-depth, not a required guard.
 -- Ammo caveat: the hide-when-no-ammo-slot/hide-when-relic-slot decision
 -- stays inside computeStats (unchanged below) -- when the icon should be
 -- hidden, the value resolveIcon returns here is never shown, so it doesn't
@@ -196,10 +199,10 @@ end
 -- GetShieldBlock/GetBlockChance/GetSpellBonusDamage/GetSpellBonusHealing) is
 -- flagged SecretWhenUnitStatsRestricted on Forever (spec 0001 §1.7: "Stats
 -- are flagged SecretWhenUnitStatsRestricted, so every read goes through
--- WIIIUI.Safe; on failure the icon shows its label with an empty value").
+-- pcall; on failure the icon shows its label with an empty value").
 -- computeStats itself does the (potentially secret-throwing) arithmetic/
 -- formatting unguarded; its one caller, WIIIUI.InfoIcons.RefreshSlot, wraps
--- the whole call in WIIIUI.Safe (Bars.lua's own updateHealth/updatePower
+-- the whole call in pcall (Bars.lua's own updateHealth/updatePower
 -- convention), so any error here degrades to a shown label with a blank
 -- value rather than aborting WIIIUI.Layout(). The icon itself is no longer
 -- part of this return value -- resolveIcon above is the single source of
@@ -208,7 +211,7 @@ end
 -- C_Item.GetItemInfoInstant/C_PaperDollInfo.GetInventorySlotInfo/
 -- UnitHasRelicSlot are not flagged secret (identity/count/equip-loc data,
 -- not a unit stat) -- called directly, same as Bars.lua's own non-secret
--- calls (SetMinMaxValues args, etc.) outside its Safe-guarded blocks.
+-- calls (SetMinMaxValues args, etc.) outside its pcall-guarded blocks.
 local function computeStats(option)
   if option == MAINHAND_SLOT then
     local lowDmg, highDmg = UnitDamage("player")
@@ -289,7 +292,7 @@ local function computeStats(option)
   if option == AMMO_OPTION then
     -- spec 0001 §1.7: "hide the option when UnitHasRelicSlot('player')" --
     -- computeStats returns nil (not a table) for this one case; RefreshSlot
-    -- treats a nil, ok result as "hide", distinct from a Safe failure.
+    -- treats a nil, ok result as "hide", distinct from a pcall failure.
     if UnitHasRelicSlot("player") then
       return nil
     end
@@ -374,10 +377,10 @@ end
 -- GetDodgeChance/GetParryChance/GetBlockChance) is
 -- SecretWhenUnitStatsRestricted (this file's header comment); called
 -- unguarded here, same as computeStats above -- RefreshArmor's own
--- WIIIUI.Safe wrap (this function's one caller) covers it.
+-- pcall wrap (this function's one caller) covers it.
 -- Mirrors resolveIcon above for the armor slot -- the single source of
 -- truth for the armor icon's texture, resolved separately (RefreshArmor's
--- own WIIIUI.Safe) from computeArmorStats' SecretWhenUnitStatsRestricted
+-- own pcall) from computeArmorStats' SecretWhenUnitStatsRestricted
 -- reads so a throw there doesn't stall the icon on a stale form/item.
 local function resolveArmorIcon()
   return activeShapeshiftIcon() or GetInventoryItemTexture("player", CHEST_SLOT) or ARMOR_ICON_FALLBACK
@@ -418,7 +421,7 @@ local function computeArmorStats()
   }
 end
 
--- Static per-option label so a Safe failure (secret-value arithmetic
+-- Static per-option label so a pcall failure (secret-value arithmetic
 -- throwing) still "shows its label with an empty value" (spec 0001 §1.7)
 -- instead of a blank row -- computeStats' own more specific label (e.g.
 -- "Block:" vs the offhand's "Damage:") is only known on a successful read.
@@ -490,7 +493,7 @@ end
 
 -- spec 0001 §1.7's guard seam applied per-slot: option == "none" hides
 -- outright (no API call at all); computeStats returning nil, ok (the ammo
--- UnitHasRelicSlot case) also hides; a Safe failure keeps the icon shown
+-- UnitHasRelicSlot case) also hides; a pcall failure keeps the icon shown
 -- with its static label and a blank value, per the spec's "shows its label
 -- with an empty value" wording.
 function WIIIUI.InfoIcons.RefreshSlot(slotIndex)
@@ -511,13 +514,14 @@ function WIIIUI.InfoIcons.RefreshSlot(slotIndex)
 
   -- security-specialist Finding (slice 19 gate-fix, generalized to every
   -- option -- resolveIcon's own header comment): resolved here, outside the
-  -- stats-only Safe call below, so the icon always tracks the current form/
+  -- stats-only pcall below, so the icon always tracks the current form/
   -- equipped item even when the label/value degrade for any option, not
   -- just mainhand.
-  local iconOk, icon = WIIIUI.Safe(resolveIcon, option)
+  -- pcall: degrade, not a decision (a failure shows the static label).
+  local iconOk, icon = pcall(resolveIcon, option)
   widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or FIST_ICON })
 
-  local ok, result = WIIIUI.Safe(computeStats, option)
+  local ok, result = pcall(computeStats, option)
 
   if ok and result then
     widgets.label:SetText(result.label)
@@ -539,7 +543,7 @@ end
 
 -- spec 0001 §1.7's guard seam applied to the armor icon: unlike the 3
 -- weapon slots this icon has no wc3UI_Options key and no "none" state
--- (vanilla never hid it, e17c352 WIIIUI.lua:2407-2486) -- only a Safe
+-- (vanilla never hid it, e17c352 WIIIUI.lua:2407-2486) -- only a pcall
 -- failure changes its display, degrading to the static label with a blank
 -- value, same contract as RefreshSlot.
 local ARMOR_STATIC_LABEL = "Armor:"
@@ -559,10 +563,10 @@ function WIIIUI.InfoIcons.RefreshArmor()
   -- Resolved separately here (resolveArmorIcon, above) so the icon always
   -- tracks the current form/chest-slot item even when the armor text below
   -- degrades to blank.
-  local iconOk, icon = WIIIUI.Safe(resolveArmorIcon)
+  local iconOk, icon = pcall(resolveArmorIcon)
   widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or ARMOR_ICON_FALLBACK })
 
-  local ok, result = WIIIUI.Safe(computeArmorStats)
+  local ok, result = pcall(computeArmorStats)
 
   if ok and result then
     widgets.label:SetText(result.label)
@@ -583,7 +587,8 @@ function WIIIUI.InfoIcons.ShowTooltip(slotIndex)
     return
   end
 
-  WIIIUI.Safe(function()
+  -- pcall: degrade, not a decision.
+  pcall(function()
     GameTooltip:SetOwner(widgets.frame, "ANCHOR_RIGHT")
     for _, line in ipairs(widgets.tooltip) do
       GameTooltip:AddLine(line)
@@ -720,7 +725,7 @@ WIIIUI.On("UPDATE_SHAPESHIFT_FORM", refreshAllSlots)
 
 -- security-specialist's own suggestion (Finding 1, cheap and related):
 -- SecretWhenUnitStatsRestricted values (spec 0001 §1.7) may only recover
--- once combat/encounter restrictions lift, so a stat that failed Safe mid-
+-- once combat/encounter restrictions lift, so a stat that failed a pcall mid-
 -- combat and degraded to a blank value needs a refresh once combat ends.
 -- Core.lua:314 already registers PLAYER_REGEN_ENABLED with no unit filter
 -- (WIIIUI.Flush) -- WIIIUI.On's eventUnits guard only rejects a *different*

@@ -64,7 +64,7 @@ local PAGE_STATE_SUFFIX =
 local PROWL_CLAUSE = "[bonusbar:1,stealth]8;"
 
 -- spec 0001 §Buttons and paging "Bottom-row state driver" (amended
--- 2026-09-28): the Prowl clause is druid-only, gated through WIIIUI.Safe
+-- 2026-09-28): the Prowl clause is druid-only, gated through WIIIUI.PlayerClassToken
 -- since UnitClass carries SecretWhenUnitIdentityRestricted/MayReturnNothing
 -- (https://warcraft.wiki.gg/wiki/API_UnitClass) -- a secret, missing or
 -- erroring classFilename degrades to the base string (no Prowl clause)
@@ -75,10 +75,7 @@ local PROWL_CLAUSE = "[bonusbar:1,stealth]8;"
 -- is rebuilt fresh -- and a headless test can load this file fresh per
 -- UnitClass fixture.
 local function buildPageStateConditional()
-  local ok, isDruid = WIIIUI.Safe(function()
-    return select(2, UnitClass("player")) == "DRUID"
-  end)
-  local prowl = (ok and isDruid) and PROWL_CLAUSE or ""
+  local prowl = WIIIUI.PlayerClassToken() == "DRUID" and PROWL_CLAUSE or ""
   return PAGE_STATE_PREFIX .. prowl .. PAGE_STATE_SUFFIX
 end
 

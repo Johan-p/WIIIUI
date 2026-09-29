@@ -332,19 +332,15 @@ end
 -- hides the icon. The last two triggers cover joining a group and logging in
 -- already grouped, where PLAYER_ROLES_ASSIGNED doesn't fire. The result is
 -- SecretWhenUnitIdentityRestricted (UnitDocumentation.lua, forever), so it is
--- never compared unless issecretvalue says it is safe; a secret or failed
--- read hides the icon.
+-- read through Secret.Read: a secret or failed read is nil and hides the icon.
 local function updateRole()
   local icon = WIIIUI.Portrait.roleIcon
   if not icon then
     return
   end
 
-  local ok, role = WIIIUI.Safe(UnitGroupRolesAssigned, "player")
-  local atlas
-  if ok and not (issecretvalue and issecretvalue(role)) then
-    atlas = ROLE_ATLASES[role]
-  end
+  local role = WIIIUI.Secret.Read(UnitGroupRolesAssigned, "player")
+  local atlas = role ~= nil and ROLE_ATLASES[role] or nil
 
   if atlas then
     if atlas ~= icon.lastAtlas then
@@ -405,7 +401,7 @@ end
 -- centred on the button (same anchor as buildIcons) with the vanilla Y
 -- offset; the fade AnimationGroup (0.2 in / 0.7 hold / 0.3 out) is plain
 -- non-secret widget setup, so -- like buildLowHpOverlay's animation
--- below -- it isn't wrapped in WIIIUI.Safe.
+-- below -- it isn't wrapped in a pcall.
 local function buildHitText(parent, uiScale)
   local hitText = WIIIUI.Portrait.hitText
 
@@ -463,7 +459,7 @@ end
 -- destination widget differs (WIIIUI_PortraitHitText instead of
 -- PlayerFrame's HitIndicator.HitText). A pure function (no widget calls),
 -- so any error inside it (e.g. a missing CombatFeedbackText/Enum.Damageclass
--- global) is caught by updateCombatText's single WIIIUI.Safe wrapper below,
+-- global) is caught by updateCombatText's single pcall wrapper below,
 -- same as the widget calls that use its result. COMBAT_TEXT_BLOCK_REDUCED
 -- (Blizzard_FrameXML/Mainline/CombatFeedback.lua:50-52, forever branch,
 -- unguarded in Blizzard's own source) formats the BLOCK_REDUCED case, same
@@ -526,7 +522,7 @@ end
 -- spec 0001 §1.5: "formats BreakUpLargeNumbers(amount) (secret-tolerant);
 -- picks colour and size by event/flags strings, which are not secret;
 -- takes miss/block/etc words from Blizzard's CombatFeedbackText table; on
--- any failure, calls WIIIUI.Safe and skips the event." One Safe call wraps
+-- any failure, degrades and skips the event." One pcall wraps
 -- text-building and every widget call together, so a missing global, a
 -- schoolMask comparison that turns out to be secret in some context (the
 -- spec's own "Unverified" item), or anything else in between all take the
@@ -539,7 +535,8 @@ local function updateCombatText(_, feedbackEvent, flags, amount, schoolMask)
     return
   end
 
-  local ok = WIIIUI.Safe(function()
+  -- Degrade, not a decision: any failure hides the text.
+  local ok = pcall(function()
     local text, r, g, b, heightScale = combatFeedbackParams(feedbackEvent, flags, amount, schoolMask)
 
     hitText:SetText(text)
@@ -571,7 +568,7 @@ local LOW_HP_PULSE_DURATION = 1
 -- covers exactly the model window, one frame level below it (fix6 B4).
 -- Building the animation is plain non-secret widget setup (no unit value
 -- involved), so unlike the curve/SetAlpha calls below it isn't wrapped in
--- WIIIUI.Safe.
+-- a pcall.
 local function buildLowHpOverlay(model)
   local overlay = WIIIUI.Portrait.lowHpOverlay
 
@@ -610,66 +607,27 @@ end
 -- changes." Cached alongside the threshold it was built for (not just
 -- built once at login) so this file alone -- without a Config.lua hook --
 -- notices a changed wc3UI_Options.hpWarning on the next health event.
--- lowHpCurveFailed*/fingerprint cache a build failure (missing
--- Enum.LuaCurveType/C_CurveUtil) against the threshold *and* the
--- prerequisite-existence fingerprint it failed at (same reasoning as
--- Bars.lua's healthCurveFingerprint), so a known-failing build isn't retried on
--- every health event, but still recovers on the next event once the
--- missing piece reappears, without waiting for hpWarning to change.
-local function lowHpCurveFingerprint()
+-- A build failure is cached against the threshold and the
+-- prerequisite-existence fingerprint (Secret.CachedCurve), so a known-failing
+-- build isn't retried on every health event, but still recovers on the next
+-- event once the missing piece reappears.
+local getLowHpCurve = WIIIUI.Secret.CachedCurve(function(threshold)
+  local cutoff = threshold / 100
+  local c = C_CurveUtil.CreateCurve()
+  c:SetType(Enum.LuaCurveType.Step)
+  c:AddPoint(0, 1)
+  c:AddPoint(cutoff, 1)
+  c:AddPoint(cutoff + 0.0001, 0)
+  c:AddPoint(1, 0)
+  return c
+end, function()
   return C_CurveUtil ~= nil and Enum ~= nil and Enum.LuaCurveType ~= nil
-end
-
-local lowHpCurve, lowHpCurveThreshold
-local lowHpCurveFailed, lowHpCurveFailedThreshold, lowHpCurveFailedFingerprint
-
-local function getLowHpCurve()
-  local threshold = wc3UI_Options.hpWarning
-
-  if lowHpCurve and lowHpCurveThreshold == threshold then
-    return lowHpCurve
-  end
-
-  local fingerprint = lowHpCurveFingerprint()
-
-  if
-    lowHpCurveFailed
-    and lowHpCurveFailedThreshold == threshold
-    and lowHpCurveFailedFingerprint == fingerprint
-  then
-    return nil
-  end
-
-  local ok, curve = WIIIUI.Safe(function()
-    local cutoff = threshold / 100
-    local c = C_CurveUtil.CreateCurve()
-    c:SetType(Enum.LuaCurveType.Step)
-    c:AddPoint(0, 1)
-    c:AddPoint(cutoff, 1)
-    c:AddPoint(cutoff + 0.0001, 0)
-    c:AddPoint(1, 0)
-    return c
-  end)
-
-  if ok then
-    lowHpCurve = curve
-    lowHpCurveThreshold = threshold
-    lowHpCurveFailed = false
-  else
-    lowHpCurve = nil
-    lowHpCurveThreshold = nil
-    lowHpCurveFailed = true
-    lowHpCurveFailedThreshold = threshold
-    lowHpCurveFailedFingerprint = fingerprint
-  end
-
-  return lowHpCurve
-end
+end)
 
 -- spec 0001 §1.2: "overlay:SetAlpha(UnitHealthPercent('player', true,
 -- stepCurve)) ... Effective alpha = parent (secret 0/1) x child (animated),
 -- so there is no comparison, no arithmetic and no OnUpdate." Never calls
--- Show/Hide based on the secret result itself -- only WIIIUI.Safe's own ok
+-- Show/Hide based on the secret result itself -- only the pcall's own ok
 -- flag (a plain boolean, not a unit value) drives the one degrade action.
 local function updateLowHpPulse()
   local overlay = WIIIUI.Portrait.lowHpOverlay
@@ -685,13 +643,14 @@ local function updateLowHpPulse()
     return
   end
 
-  local curve = getLowHpCurve()
+  local curve = getLowHpCurve(wc3UI_Options.hpWarning)
   if not curve then
     overlay:Hide()
     return
   end
 
-  local ok = WIIIUI.Safe(function()
+  -- Degrade, not a decision: the alpha is secret and only handed on.
+  local ok = pcall(function()
     overlay:SetAlpha(UnitHealthPercent("player", true, curve))
   end)
 
