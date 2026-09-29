@@ -76,22 +76,24 @@ end
 -- spec 0001 §Settings schema: weaponIconSelected1..3 legitimately hold either
 -- a number or "none", with a different-typed default per slot -- the generic
 -- type(current) ~= type(value) branch below would wipe a valid cross-type
--- saved value, so these three keys validate against the allowed set instead.
-local WEAPON_ICON_KEYS = {
-  weaponIconSelected1 = true,
-  weaponIconSelected2 = true,
-  weaponIconSelected3 = true,
-}
+-- saved value, so these keys validate against InfoIcons.OPTION_IDS instead
+-- (spec 0006 Slice 07: the option list has one owner). Read at merge time:
+-- ADDON_LOADED fires after every file has loaded.
+local function isWeaponIconKey(key)
+  return key:find("^weaponIconSelected%d$") ~= nil
+end
 
-local WEAPON_ICON_VALUES = {
-  [16] = true,
-  [17] = true,
-  [18] = true,
-  [0] = true,
-  [98] = true,
-  [99] = true,
-  ["none"] = true,
-}
+local function optionSet()
+  local ids = WIIIUI.InfoIcons and WIIIUI.InfoIcons.OPTION_IDS
+  if not ids then
+    return nil
+  end
+  local set = {}
+  for _, id in ipairs(ids) do
+    set[id] = true
+  end
+  return set
+end
 
 function WIIIUI.MergeDefaults(saved)
   local merged = {}
@@ -103,10 +105,14 @@ function WIIIUI.MergeDefaults(saved)
 
   -- Missing keys are added; a wrong-type key is reset to the default.
   -- Table defaults are deep-copied so callers never share DEFAULTS' tables.
+  -- Without InfoIcons loaded (a Core-only test; never in the client) there is
+  -- no option list, so a set value is kept as-is and only a missing one is
+  -- defaulted.
+  local validOptions = optionSet()
   for key, value in pairs(WIIIUI.DEFAULTS) do
     local current = merged[key]
-    if WEAPON_ICON_KEYS[key] then
-      if current == nil or not WEAPON_ICON_VALUES[current] then
+    if isWeaponIconKey(key) then
+      if current == nil or (validOptions and not validOptions[current]) then
         merged[key] = value
       end
     elseif current == nil or type(current) ~= type(value) then

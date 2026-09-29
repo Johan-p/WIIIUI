@@ -11,38 +11,6 @@ local _, WIIIUI = ...
 
 WIIIUI.InfoIcons = WIIIUI.InfoIcons or {}
 
--- Vanilla weaponIconSelected values (e17c352 WIIIUI.lua:2267,2271,2275,
--- 1696-1719): 16 main hand, 17 offhand/block, 18 ranged, 0 ammo, 98 healing,
--- 99 spell power, "none" hidden. Mirrors Core.lua's own WEAPON_ICON_VALUES
--- set (DEFAULTS merge-time validation) -- kept as an independent local copy
--- here so WIIIUI.InfoIcons.ResolveOption is a self-contained guard against
--- any raw/unvalidated value reaching a build, not just ones that already
--- passed MergeDefaults.
-local VALID_OPTIONS = {
-  [16] = true,
-  [17] = true,
-  [18] = true,
-  [0] = true,
-  [98] = true,
-  [99] = true,
-  ["none"] = true,
-}
-
--- Core.lua's DEFAULTS: weaponIconSelected1 = 16, weaponIconSelected2/3 =
--- "none".
-local SLOT_DEFAULT = { 16, "none", "none" }
-
--- spec 0001 §1.7 acceptance: "an invalid saved choice falls back to 16/
--- 'none' per the settings schema." slotIndex selects which of the three
--- per-slot defaults applies; an out-of-range slotIndex falls back to slot
--- 1's default rather than erroring.
-function WIIIUI.InfoIcons.ResolveOption(value, slotIndex)
-  if VALID_OPTIONS[value] then
-    return value
-  end
-  return SLOT_DEFAULT[slotIndex] or SLOT_DEFAULT[1]
-end
-
 local MAINHAND_SLOT, OFFHAND_SLOT, RANGED_SLOT = 16, 17, 18
 local AMMO_OPTION, HEALING_OPTION, SPELLPOWER_OPTION = 0, 98, 99
 local AMMO_SLOT_NAME = "AmmoSlot"
@@ -421,18 +389,70 @@ local function computeArmorStats()
   }
 end
 
--- Static per-option label so a pcall failure (secret-value arithmetic
--- throwing) still "shows its label with an empty value" (spec 0001 §1.7)
--- instead of a blank row -- computeStats' own more specific label (e.g.
--- "Block:" vs the offhand's "Damage:") is only known on a successful read.
-local STATIC_LABELS = {
-  [MAINHAND_SLOT] = "Damage:",
-  [OFFHAND_SLOT] = "Damage:",
-  [RANGED_SLOT] = "Damage:",
-  [AMMO_OPTION] = "Ammo:",
-  [HEALING_OPTION] = "Healing:",
-  [SPELLPOWER_OPTION] = "Spell:",
+-- Vanilla weaponIconSelected values (e17c352 WIIIUI.lua:2267,2271,2275,
+-- 1696-1719): 16 main hand, 17 offhand/block, 18 ranged, 0 ammo, 98 healing,
+-- 99 spell power, "none" hidden. The one owner of the option list (spec 0006
+-- Slice 07): Core's merge validates against OPTION_IDS and Config's rows cycle
+-- OPTION_IDS/OPTION_LABELS. Order is the config menu's (vanilla WIIIUI.xml:
+-- 1132-1222 button order). menuLabel is the Config text, staticLabel the
+-- console text shown when a stat read throws (spec 0001 §1.7: "shows its label
+-- with an empty value"); they differ ("Spell Power" vs "Spell:") because they
+-- are different surfaces. "none" has no provider functions: it hides outright.
+local function makeOption(id, menuLabel, staticLabel)
+  return {
+    id = id,
+    menuLabel = menuLabel,
+    staticLabel = staticLabel,
+    icon = function() return resolveIcon(id) end,
+    stats = function() return computeStats(id) end,
+    fallbackIcon = FIST_ICON,
+  }
+end
+
+local OPTIONS = {
+  makeOption(MAINHAND_SLOT, "Main Hand", "Damage:"),
+  makeOption(OFFHAND_SLOT, "Off Hand", "Damage:"),
+  makeOption(RANGED_SLOT, "Ranged", "Damage:"),
+  makeOption(AMMO_OPTION, "Ammo", "Ammo:"),
+  makeOption(SPELLPOWER_OPTION, "Spell Power", "Spell:"),
+  makeOption(HEALING_OPTION, "Healing", "Healing:"),
+  { id = "none", menuLabel = "None" },
 }
+
+local OPTION_BY_ID, OPTION_IDS, OPTION_LABELS = {}, {}, {}
+for index, entry in ipairs(OPTIONS) do
+  OPTION_BY_ID[entry.id] = entry
+  OPTION_IDS[index] = entry.id
+  OPTION_LABELS[entry.id] = entry.menuLabel
+end
+
+WIIIUI.InfoIcons.OPTIONS = OPTIONS
+WIIIUI.InfoIcons.OPTION_IDS = OPTION_IDS
+WIIIUI.InfoIcons.OPTION_LABELS = OPTION_LABELS
+
+-- The armor icon has no wc3UI_Options key and no "none" state (vanilla never
+-- hid it, e17c352 WIIIUI.lua:2407-2486): neverHides makes refresh treat every
+-- outcome but a successful read as "show the static label, blank value".
+local ARMOR = {
+  staticLabel = "Armor:",
+  icon = resolveArmorIcon,
+  stats = computeArmorStats,
+  fallbackIcon = ARMOR_ICON_FALLBACK,
+  neverHides = true,
+}
+WIIIUI.InfoIcons.ARMOR = ARMOR
+
+-- spec 0001 §1.7 acceptance: "an invalid saved choice falls back to 16/
+-- 'none' per the settings schema." The per-slot default comes from
+-- WIIIUI.DEFAULTS; an out-of-range slotIndex falls back to slot 1's default
+-- rather than erroring. A self-contained guard so a raw/unvalidated value
+-- reaching a build is still caught, not only ones that passed MergeDefaults.
+function WIIIUI.InfoIcons.ResolveOption(value, slotIndex)
+  if OPTION_BY_ID[value] then
+    return value
+  end
+  return WIIIUI.DEFAULTS["weaponIconSelected" .. (slotIndex or 1)] or WIIIUI.DEFAULTS.weaponIconSelected1
+end
 
 -- Vanilla WIIIUI_weaponIcon_N / Wc3_UI_weaponIcon_tex_N / Wc3_UI_weaponIcon_
 -- frame_N (e17c352 WIIIUI.xml:2363-2542): one outer frame, an icon backdrop
@@ -491,11 +511,38 @@ local function ensureIconWidgets(slotIndex)
   return widgets
 end
 
--- spec 0001 §1.7's guard seam applied per-slot: option == "none" hides
--- outright (no API call at all); computeStats returning nil, ok (the ammo
--- UnitHasRelicSlot case) also hides; a pcall failure keeps the icon shown
--- with its static label and a blank value, per the spec's "shows its label
--- with an empty value" wording.
+-- spec 0001 §1.7's guard seam, shared by the weapon slots and the armor icon
+-- (spec 0006 Slice 07). The icon is resolved in its own pcall, outside the
+-- stats pcall: the SecretWhenUnitStatsRestricted reads in provider.stats can
+-- throw, and a throw there must not leave the icon stale on an old form/item.
+-- A stats result of nil, ok (the ammo slot's UnitHasRelicSlot / no-ammo-slot
+-- case) hides the icon unless provider.neverHides; a pcall failure keeps it
+-- shown with the static label and a blank value ("shows its label with an
+-- empty value").
+local function refresh(widgets, provider)
+  -- pcall: degrade, not a decision (a failure shows the fallback icon).
+  local iconOk, icon = pcall(provider.icon)
+  widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or provider.fallbackIcon })
+
+  local ok, result = pcall(provider.stats)
+
+  if ok and result then
+    widgets.label:SetText(result.label)
+    widgets.value:SetText(result.text)
+    widgets.tooltip = result.tooltip
+    widgets.frame:Show()
+  elseif ok and not provider.neverHides then
+    widgets.tooltip = nil
+    widgets.frame:Hide()
+  else
+    widgets.label:SetText(provider.staticLabel or "")
+    widgets.value:SetText("")
+    widgets.tooltip = nil
+    widgets.frame:Show()
+  end
+end
+
+-- option == "none" hides outright, with no API call at all.
 function WIIIUI.InfoIcons.RefreshSlot(slotIndex)
   local widgets = WIIIUI.InfoIcons[slotIndex]
   if not widgets then
@@ -512,72 +559,13 @@ function WIIIUI.InfoIcons.RefreshSlot(slotIndex)
     return
   end
 
-  -- security-specialist Finding (slice 19 gate-fix, generalized to every
-  -- option -- resolveIcon's own header comment): resolved here, outside the
-  -- stats-only pcall below, so the icon always tracks the current form/
-  -- equipped item even when the label/value degrade for any option, not
-  -- just mainhand.
-  -- pcall: degrade, not a decision (a failure shows the static label).
-  local iconOk, icon = pcall(resolveIcon, option)
-  widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or FIST_ICON })
-
-  local ok, result = pcall(computeStats, option)
-
-  if ok and result then
-    widgets.label:SetText(result.label)
-    widgets.value:SetText(result.text)
-    widgets.tooltip = result.tooltip
-    widgets.frame:Show()
-  elseif ok then
-    -- computeStats(option) returned nil for a non-"none" option (the ammo
-    -- slot's UnitHasRelicSlot hide, spec 0001 §1.7).
-    widgets.tooltip = nil
-    widgets.frame:Hide()
-  else
-    widgets.label:SetText(STATIC_LABELS[option] or "")
-    widgets.value:SetText("")
-    widgets.tooltip = nil
-    widgets.frame:Show()
-  end
+  refresh(widgets, OPTION_BY_ID[option])
 end
-
--- spec 0001 §1.7's guard seam applied to the armor icon: unlike the 3
--- weapon slots this icon has no wc3UI_Options key and no "none" state
--- (vanilla never hid it, e17c352 WIIIUI.lua:2407-2486) -- only a pcall
--- failure changes its display, degrading to the static label with a blank
--- value, same contract as RefreshSlot.
-local ARMOR_STATIC_LABEL = "Armor:"
 
 function WIIIUI.InfoIcons.RefreshArmor()
   local widgets = WIIIUI.InfoIcons.armor
-  if not widgets then
-    return
-  end
-
-  -- security-specialist Finding (slice 19 gate-fix): mirrors RefreshSlot's
-  -- resolveIcon fix above -- computeArmorStats resolves
-  -- activeShapeshiftIcon() only after UnitArmor/C_PaperDollInfo.
-  -- GetArmorEffectiveness (SecretWhenUnitStatsRestricted), so a throw there
-  -- aborted the whole function before the icon was ever returned, leaving a
-  -- druid's form icon stale (or an empty backdrop on the first build).
-  -- Resolved separately here (resolveArmorIcon, above) so the icon always
-  -- tracks the current form/chest-slot item even when the armor text below
-  -- degrades to blank.
-  local iconOk, icon = pcall(resolveArmorIcon)
-  widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or ARMOR_ICON_FALLBACK })
-
-  local ok, result = pcall(computeArmorStats)
-
-  if ok and result then
-    widgets.label:SetText(result.label)
-    widgets.value:SetText(result.text)
-    widgets.tooltip = result.tooltip
-    widgets.frame:Show()
-  else
-    widgets.label:SetText(ARMOR_STATIC_LABEL)
-    widgets.value:SetText("")
-    widgets.tooltip = nil
-    widgets.frame:Show()
+  if widgets then
+    refresh(widgets, ARMOR)
   end
 end
 
@@ -600,52 +588,12 @@ end
 -- Vanilla AlignWeaponFrame's own anchor point, xpBarLeft (e17c352 WIIIUI.lua
 -- :2281) -- WIIIUI.Bars.xp here (Theme.lua's WeaponIconGeometry citation).
 -- Bars.lua's BuildBars already ran earlier in this same WIIIUI.Layout() call
--- (TOC order: Bars.lua loads and therefore registers before InfoIcons.lua,
--- which also declares after = Bars.BuildBars), so the XP bar exists by the time this runs.
-function WIIIUI.InfoIcons.BuildWeaponIcons()
-  local uiScale = wc3UI_Options.uiScale
+-- (both builds declare after = Bars.BuildBars), so the XP bar exists by the
+-- time this runs. Shared by the weapon slots and the armor icon: labelWidth
+-- sizes both text boxes; valueHeight, when given, overrides the 30-high value
+-- box ensureIconWidgets makes for the weapon rows.
+local function placeIcon(widgets, geometry, labelWidth, valueHeight)
   local xpBar = WIIIUI.Bars and WIIIUI.Bars.xp
-
-  for slotIndex = 1, 3 do
-    local widgets = ensureIconWidgets(slotIndex)
-    local geometry = WIIIUI.Theme.WeaponIconGeometry(uiScale, slotIndex)
-
-    widgets.frame:SetSize(geometry.size, geometry.size)
-    widgets.frame:ClearAllPoints()
-    if xpBar then
-      widgets.frame:SetPoint("BOTTOMLEFT", xpBar, "BOTTOMLEFT", geometry.offsetX, geometry.offsetY)
-    end
-
-    widgets.icon:SetSize(geometry.size, geometry.size)
-    widgets.icon:ClearAllPoints()
-    widgets.icon:SetPoint("BOTTOMLEFT", widgets.frame, "BOTTOMLEFT", 0, 0)
-
-    widgets.border:SetSize(geometry.size, geometry.size)
-    widgets.border:ClearAllPoints()
-    widgets.border:SetPoint("BOTTOMLEFT", widgets.frame, "BOTTOMLEFT", 0, 0)
-
-    widgets.label:SetWidth(geometry.labelWidth)
-    widgets.label:ClearAllPoints()
-    widgets.label:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.labelOffsetX, geometry.labelOffsetY)
-
-    widgets.value:SetWidth(geometry.labelWidth)
-    widgets.value:ClearAllPoints()
-    widgets.value:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.valueOffsetX, geometry.valueOffsetY)
-
-    WIIIUI.InfoIcons.RefreshSlot(slotIndex)
-  end
-end
-
--- spec 0001 §Phased plan "F. Info icons" F2; same anchor point as
--- BuildWeaponIcons (WIIIUI.Bars.xp), one row below it via ArmorIconGeometry's
--- own offsetY -- ensureIconWidgets is keyed by "armor" here instead of a
--- numeric slotIndex; it only ever uses its argument as a WIIIUI.InfoIcons[]
--- table key, so a string key works unchanged.
-function WIIIUI.InfoIcons.BuildArmorIcon()
-  local uiScale = wc3UI_Options.uiScale
-  local xpBar = WIIIUI.Bars and WIIIUI.Bars.xp
-  local widgets = ensureIconWidgets("armor")
-  local geometry = WIIIUI.Theme.ArmorIconGeometry(uiScale)
 
   widgets.frame:SetSize(geometry.size, geometry.size)
   widgets.frame:ClearAllPoints()
@@ -661,21 +609,43 @@ function WIIIUI.InfoIcons.BuildArmorIcon()
   widgets.border:ClearAllPoints()
   widgets.border:SetPoint("BOTTOMLEFT", widgets.frame, "BOTTOMLEFT", 0, 0)
 
-  -- Vanilla armorText/armorValue's own flat SetWidth(100) (e17c352
-  -- WIIIUI.lua:2438, 2444) -- ArmorIconGeometry's own header comment: no
-  -- neighbour icon to its right, so no uiScale-derived labelWidth needed.
-  widgets.label:SetWidth(100)
+  widgets.label:SetWidth(labelWidth)
   widgets.label:ClearAllPoints()
   widgets.label:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.labelOffsetX, geometry.labelOffsetY)
 
-  -- ensureIconWidgets' 30-high value box suits the weapon rows; the armor
-  -- value is 15 high in vanilla (armorValue:SetHeight(15), e17c352
-  -- WIIIUI.lua:2445), so its top-justified text does not start over the label.
-  widgets.value:SetWidth(100)
-  widgets.value:SetHeight(15)
+  widgets.value:SetWidth(labelWidth)
+  if valueHeight then
+    widgets.value:SetHeight(valueHeight)
+  end
   widgets.value:ClearAllPoints()
   widgets.value:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.valueOffsetX, geometry.valueOffsetY)
+end
 
+function WIIIUI.InfoIcons.BuildWeaponIcons()
+  local uiScale = wc3UI_Options.uiScale
+
+  for slotIndex = 1, 3 do
+    local widgets = ensureIconWidgets(slotIndex)
+    local geometry = WIIIUI.Theme.WeaponIconGeometry(uiScale, slotIndex)
+
+    placeIcon(widgets, geometry, geometry.labelWidth)
+    WIIIUI.InfoIcons.RefreshSlot(slotIndex)
+  end
+end
+
+-- spec 0001 §Phased plan "F. Info icons" F2; ensureIconWidgets is keyed by
+-- "armor" here instead of a numeric slotIndex; it only ever uses its argument
+-- as a WIIIUI.InfoIcons[] table key, so a string key works unchanged. The
+-- armor text boxes are a flat 100 wide (vanilla armorText/armorValue
+-- SetWidth(100), e17c352 WIIIUI.lua:2438, 2444: no neighbour icon to the
+-- right, ArmorIconGeometry's header comment) and the value is 15 high
+-- (armorValue:SetHeight(15), WIIIUI.lua:2445) so its top-justified text does
+-- not start over the label.
+function WIIIUI.InfoIcons.BuildArmorIcon()
+  local widgets = ensureIconWidgets("armor")
+  local geometry = WIIIUI.Theme.ArmorIconGeometry(wc3UI_Options.uiScale)
+
+  placeIcon(widgets, geometry, 100, 15)
   WIIIUI.InfoIcons.RefreshArmor()
 end
 

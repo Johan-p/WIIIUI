@@ -31,20 +31,6 @@ local THEME_LIST = {
 
 local ZONE_TEXT_POS_LABELS = { [1] = "Top", [2] = "Bottom", [3] = "Hidden" }
 
--- weaponIconSelected1..3 choices, in vanilla's button order (e17c352
--- WIIIUI.xml:1132-1222: main, offhand, ranged, ammo, spell, heal, none). The
--- values are InfoIcons.lua's own option numbers.
-local INFO_ICON_VALUES = { 16, 17, 18, 0, 99, 98, "none" }
-local INFO_ICON_LABELS = {
-  [16] = "Main Hand",
-  [17] = "Off Hand",
-  [18] = "Ranged",
-  [0] = "Ammo",
-  [99] = "Spell Power",
-  [98] = "Healing",
-  none = "None",
-}
-
 -- Display labels for every control-table row below (checkbox/editbox/cycle
 -- rows show these next to their widget; note rows show these before the
 -- "Set in Edit Mode" suffix).
@@ -121,30 +107,28 @@ local function makeRangeControl(key, min, max)
 end
 
 -- e17c352 ChangeWeaponIcon (WIIIUI.lua:5243): store the choice, then
--- re-align that one icon. InfoIcons.RefreshSlot redraws just that slot and is
--- existence-checked because config_test.lua loads Config.lua without
--- InfoIcons.lua; it goes through ApplyOrQueue like every frame change.
+-- re-align that one icon. InfoIcons.RefreshSlot redraws just that slot; it goes
+-- through ApplyOrQueue like every frame change. InfoIcons.lua loads before this
+-- file (TOC order), so its option lists exist at file scope.
 local function makeInfoIconControl(slotIndex)
   local key = "weaponIconSelected" .. slotIndex
   return {
     key = key,
     kind = "cycle",
-    values = INFO_ICON_VALUES,
-    valueLabels = INFO_ICON_LABELS,
+    values = WIIIUI.InfoIcons.OPTION_IDS,
+    valueLabels = WIIIUI.InfoIcons.OPTION_LABELS,
     get = function() return wc3UI_Options[key] end,
     set = function(value)
       -- Same fallback as MergeDefaults and InfoIcons.ResolveOption: the
       -- slot's own default (16 for slot 1), not "none".
-      if INFO_ICON_LABELS[value] == nil then
+      if WIIIUI.InfoIcons.OPTION_LABELS[value] == nil then
         value = WIIIUI.DEFAULTS[key]
       end
       wc3UI_Options[key] = value
     end,
     apply = function()
       WIIIUI.ApplyOrQueue("infoIconSlot" .. slotIndex, function()
-        if WIIIUI.InfoIcons then
-          WIIIUI.InfoIcons.RefreshSlot(slotIndex)
-        end
+        WIIIUI.InfoIcons.RefreshSlot(slotIndex)
       end)
     end,
   }
