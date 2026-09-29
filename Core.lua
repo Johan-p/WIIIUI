@@ -236,6 +236,14 @@ function WIIIUI.Layout()
   if WIIIUI.Config then
     WIIIUI.Config.BuildConfig()
   end
+  -- spec 0001 §Customizer "Apply": "WIIIUI.Customizer.Apply() is the last,
+  -- existence-checked step of WIIIUI.Layout()." Runs after every other
+  -- Build* call above so it can read back the anchor/size/texture each of
+  -- them just applied (Console.lua/Bars.lua/Portrait.lua's own GetPoint(1)
+  -- baseline for the anchor group) and layer overrides on top.
+  if WIIIUI.Customizer then
+    WIIIUI.Customizer.Apply()
+  end
 end
 
 -- spec 0001 §A.4: "ADDON_LOADED('WIIIUI'): merge defaults only."

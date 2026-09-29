@@ -396,10 +396,15 @@ end
 -- frame's own right edge (Gethe/wow-ui-source forever branch,
 -- Blizzard_SharedXML/SecureScrollTemplates.xml) -- SCROLL_INSET_RIGHT leaves
 -- enough panel margin that the scrollbar doesn't sit on the panel's border.
-local SCROLL_INSET_TOP = 50
+-- Bumped from vanilla's own 50 to leave room below the panel title for the
+-- General/Customize tab buttons ensureTabs adds (slice 20).
+local SCROLL_INSET_TOP = 74
 local SCROLL_INSET_BOTTOM = 16
 local SCROLL_INSET_LEFT = 16
 local SCROLL_INSET_RIGHT = 34
+local TAB_BUTTON_WIDTH = 100
+local TAB_BUTTON_HEIGHT = 22
+local TAB_ROW_Y = -45
 
 -- Vanilla WIIIUI_cogwheel_hover (e17c352 WIIIUI.xml:62-88): 30x30, anchored
 -- BOTTOMRIGHT of UIParent at (7,-6). Always shown -- it is the invisible hit
@@ -462,9 +467,10 @@ end
 
 -- Vanilla WIIIUI_menu (e17c352 WIIIUI.xml:147-160): 650x600, anchored LEFT
 -- of UIParent at (200,0), tooltip-background + dialog-border backdrop.
--- Vanilla's General/Customize tab buttons are not built here -- the
--- Customize tab doesn't exist until Phase G (spec 0001 Phased plan), so this
--- panel is the General tab's content directly, no tab switcher yet.
+-- Vanilla's General/Customize tab buttons: ensureTabs, below, builds them
+-- (spec 0001 §Customizer, slice 20's own "Files slice 20 touches besides
+-- Customizer.lua" list) -- General is this file's own scroll-content rows;
+-- Customize is a frame Customizer.lua owns, parented to this panel.
 local function ensurePanel()
   local panel = WIIIUI.Config.panel
   if panel then
@@ -524,6 +530,60 @@ local function ensureScrollFrame(panel)
   WIIIUI.Config.scrollFrame = scrollFrame
   WIIIUI.Config.scrollContent = content
   return content
+end
+
+-- spec 0001 §Customizer: "Config.lua gets the General/Customize tab switch
+-- on its panel." Two plain buttons; ShowTab shows the General scroll frame
+-- or the Customize tab's own frame (WIIIUI.Customizer.editor, built and
+-- owned by Customizer.lua) and hides the other. Existence-checked on
+-- WIIIUI.Customizer throughout, the same convention Config.lua already uses
+-- for WIIIUI.Blizzard's ZoneTextPos `available` field -- config_test.lua
+-- loads Config.lua without Customizer.lua, so the Customize tab is built
+-- (and clickable) only once Customizer.lua is also loaded; clicking it
+-- before that is a harmless no-op (WIIIUI.Config.ShowTab's own guard).
+WIIIUI.Config.activeTab = WIIIUI.Config.activeTab or "general"
+
+function WIIIUI.Config.ShowTab(tab)
+  WIIIUI.Config.activeTab = tab
+
+  if WIIIUI.Config.scrollFrame then
+    if tab == "general" then
+      WIIIUI.Config.scrollFrame:Show()
+    else
+      WIIIUI.Config.scrollFrame:Hide()
+    end
+  end
+
+  if WIIIUI.Customizer and WIIIUI.Customizer.editor then
+    if tab == "customize" then
+      WIIIUI.Customizer.editor:Show()
+    else
+      WIIIUI.Customizer.editor:Hide()
+    end
+  end
+end
+
+local function ensureTabs(panel)
+  local tabs = WIIIUI.Config.tabs
+  if tabs then
+    return tabs
+  end
+
+  local generalTab = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+  generalTab:SetSize(TAB_BUTTON_WIDTH, TAB_BUTTON_HEIGHT)
+  generalTab:SetPoint("TOPLEFT", panel, "TOPLEFT", ROW_X, TAB_ROW_Y)
+  generalTab:SetText("General")
+  generalTab:SetScript("OnClick", function() WIIIUI.Config.ShowTab("general") end)
+
+  local customizeTab = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+  customizeTab:SetSize(TAB_BUTTON_WIDTH, TAB_BUTTON_HEIGHT)
+  customizeTab:SetPoint("LEFT", generalTab, "RIGHT", 6, 0)
+  customizeTab:SetText("Customize")
+  customizeTab:SetScript("OnClick", function() WIIIUI.Config.ShowTab("customize") end)
+
+  tabs = { general = generalTab, customize = customizeTab }
+  WIIIUI.Config.tabs = tabs
+  return tabs
 end
 
 local LAYOUT_STRING_BOX_WIDTH = 300
@@ -628,6 +688,7 @@ function WIIIUI.Config.BuildConfig()
   ensureHover()
   ensureCogwheel()
   local panel = ensurePanel()
+  ensureTabs(panel)
   local content = ensureScrollFrame(panel)
 
   local y = CONTENT_START_Y
@@ -661,4 +722,13 @@ function WIIIUI.Config.BuildConfig()
   -- scroll frame's visible height -- size it to reach past the reload
   -- button (the last row) plus a bottom margin.
   content:SetHeight(-(reloadY - RELOAD_BUTTON_HEIGHT) + CONTENT_BOTTOM_PADDING)
+
+  -- spec 0001 §Customizer: "Customizer.lua owns the tab body, a frame
+  -- parented to WIIIUI.Config.panel." Existence-checked: config_test.lua
+  -- loads Config.lua without Customizer.lua.
+  if WIIIUI.Customizer then
+    WIIIUI.Customizer.BuildEditor(panel)
+  end
+
+  WIIIUI.Config.ShowTab(WIIIUI.Config.activeTab)
 end
