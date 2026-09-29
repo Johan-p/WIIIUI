@@ -361,3 +361,30 @@ function WIIIUI.Theme.WeaponIconGeometry(uiScale, slotIndex)
     labelWidth = uiScale * (WEAPON_ICON_SLOT_OFFSETS[2].x - labelOffsetXFraction),
   }
 end
+
+--- WIIIUI.Theme.ArmorIconGeometry (spec 0001 §Phased plan "F. Info icons"
+--- F2; vanilla AlignArmorFrame, e17c352 WIIIUI.lua:2407-2426): one permanent
+--- icon, not a 3-slot row -- armorIconFrame anchored BOTTOMLEFT to
+--- xpBarLeft's own BOTTOMLEFT at (1, uiScale*-0.280), one row below
+--- WeaponIconGeometry's own row (uiScale*-0.14), same size formula (17% of
+--- the XP bar's total width, e17c352 WIIIUI.lua:2414). Label/value anchor
+--- TOPLEFT off the icon frame with the armor row's own vanilla offsets
+--- (0.14 X; -0.065 / -0.1111111111111 Y, same <=210 low-scale nudge as
+--- WeaponIconGeometry, e17c352 WIIIUI.lua:2434, 2449). No labelWidth here:
+--- unlike the 3 weapon slots there's no neighbour icon to its right to
+--- overlap into, so InfoIcons.lua keeps vanilla's own flat SetWidth(100)
+--- (e17c352 WIIIUI.lua:2438, 2444) directly, matching this geometry
+--- function's own "pure uiScale-fraction position math" scope.
+function WIIIUI.Theme.ArmorIconGeometry(uiScale)
+  local lowScaleNudge = uiScale <= 210 and -3 or 0
+
+  return {
+    size = WIIIUI.Theme.XPBarGeometry(uiScale).width * 0.17,
+    offsetX = 1,
+    offsetY = uiScale * -0.280,
+    labelOffsetX = uiScale * 0.14,
+    labelOffsetY = uiScale * -0.065,
+    valueOffsetX = uiScale * 0.14,
+    valueOffsetY = uiScale * -0.1111111111111 + lowScaleNudge,
+  }
+end

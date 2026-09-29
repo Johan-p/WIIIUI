@@ -80,6 +80,70 @@ local LABEL_FONT_SIZE, VALUE_FONT_SIZE = 10, 10
 local SPELL_POWER_SCHOOLS = { 2, 3, 4, 5, 6, 7 }
 local SCHOOL_NAMES = { [2] = "Holy", [3] = "Fire", [4] = "Nature", [5] = "Frost", [6] = "Shadow", [7] = "Arcane" }
 
+-- spec 0001 §1.7 "Armor icon": UnitArmor("player") + reduction via
+-- C_PaperDollInfo.GetArmorEffectiveness(armor, UnitLevel("player")); tooltip
+-- adds GetDodgeChance/GetParryChance/GetBlockChance, UnitResistance(1..5)
+-- and latency (select(3, GetNetStats())). Blizzard_FrameXMLBase/
+-- Constants.lua:140 (forever branch): "INVSLOT_CHEST = 5" -- vanilla
+-- SetArmorIcon (e17c352 WIIIUI.lua:1736-1746) read this same slot for the
+-- armor icon's own texture, falling back to a generic cape icon when empty.
+local CHEST_SLOT = 5
+local ARMOR_ICON_FALLBACK = "Interface\\Icons\\INV_Misc_Cape_10"
+
+-- UnitResistance(unit, damageClass) (warcraft.wiki.gg API_UnitResistance;
+-- independently confirmed present on the forever branch's own
+-- UnitDocumentation.lua -- Wowpedia's "removed in Patch 8.0.1" note is a
+-- retail-UI-only removal, not an API removal, and doesn't apply here).
+-- damageClass order per the classic resistanceIndex convention (0 Physical
+-- -- that's armor's own job, excluded; 1 Holy .. 6 Arcane, spec 0001 §1.7
+-- only asks for 1..5) -- order **unverified in-game**, same caveat spec
+-- 0001 §1.7 states for SCHOOL_NAMES' own spell-school order above.
+local RESISTANCE_NAMES = { [1] = "Holy", [2] = "Fire", [3] = "Nature", [4] = "Frost", [5] = "Shadow" }
+
+-- spec 0001 §1.7 "Form icons (CheckIfInForm)": vanilla matched the active
+-- shapeshift form by its LOCALIZED name (e17c352 WIIIUI.lua:1609-1666:
+-- "Bear Form", "Cat Form", ...) to pick a hand-authored icon per form; the
+-- modern GetShapeshiftFormInfo(index) signature doesn't even return a name
+-- any more (warcraft.wiki.gg API_GetShapeshiftFormInfo: "icon, active,
+-- castable, spellID = GetShapeshiftFormInfo(index)"), which is exactly
+-- spec 0001 §1.7's own phrasing -- "icon (texture) instead of the name".
+-- This port therefore does no name/type matching and keeps no per-form
+-- icon table: it shows the active form's own icon verbatim, in place of
+-- both the mainhand weapon icon and the armor icon (vanilla's own
+-- SetWeaponIcon(iconWeapon)/SetArmorIcon(iconArmor) pairing, e17c352
+-- WIIIUI.lua:1660-1661). UnitClass's 2nd return (classFilename, e.g.
+-- "DRUID") is locale-independent, unlike its 1st (className) --
+-- UnitDocumentation.lua (forever): "className ... ConditionalSecret =
+-- true", "classFilename" carries no such flag.
+--
+-- Vanilla's Shaman/Ghost Wolf branch (e17c352 WIIIUI.lua:1671-1687,
+-- UnitBuff icon-path scan) is not ported here: spec 0001 §1.7 flags its own
+-- replacement, C_UnitAuras.GetPlayerAuraBySpellID(2645), "**verify**" on
+-- Forever. The function itself is confirmed present (UnitAuraDocumentation.
+-- lua, forever branch: "GetPlayerAuraBySpellID", SecretWhenUnitAuraRestricted
+-- = true), but spell ID 2645's correctness and this function's behaviour
+-- under that restriction flag are not -- left for an in-game check rather
+-- than guessed at (CLAUDE.md "Unconfirmed API").
+local DRUID_CLASS_FILENAME = "DRUID"
+
+-- Every call here (UnitClass/GetNumShapeshiftForms/GetShapeshiftFormInfo) is
+-- unguarded, same as computeStats/computeArmorStats below -- its two
+-- callers already run inside WIIIUI.Safe.
+local function activeShapeshiftIcon()
+  if select(2, UnitClass("player")) ~= DRUID_CLASS_FILENAME then
+    return nil
+  end
+
+  for formIndex = 1, GetNumShapeshiftForms() do
+    local icon, active = GetShapeshiftFormInfo(formIndex)
+    if active then
+      return icon
+    end
+  end
+
+  return nil
+end
+
 local function formatRange(low, high)
   return math.floor(low) .. " - " .. math.ceil(high)
 end
@@ -114,7 +178,7 @@ local function computeStats(option)
     return {
       label = "Damage:",
       text = formatRange(lowDmg, highDmg),
-      icon = GetInventoryItemTexture("player", MAINHAND_SLOT) or FIST_ICON,
+      icon = activeShapeshiftIcon() or GetInventoryItemTexture("player", MAINHAND_SLOT) or FIST_ICON,
       tooltip = tooltip,
     }
   end
@@ -258,6 +322,58 @@ local function computeStats(option)
   return nil
 end
 
+-- spec 0001 §1.7 "Armor icon": vanilla's own DR formula (e17c352 WIIIUI.lua
+-- :2432-2436, 2467-2472, a hand-rolled 400+85*level approximation) is
+-- deleted, replaced by the documented API -- confirmed against wow-ui-
+-- source live's own PaperDollFrame_GetArmorReduction (Blizzard_UIPanels_
+-- Game/Mainline/PaperDollFrame.lua:1889-1891): "return C_PaperDollInfo.
+-- GetArmorEffectiveness(armor, attackerLevel) * 100" -- the raw return is a
+-- 0-1 fraction, not a percent, so this port multiplies by 100 too before
+-- formatting. UnitArmor's 2nd return (effective) is the same value
+-- Blizzard's own code passes as `armor` (PaperDollFrame.lua:707-709:
+-- "local baselineArmor, effectiveArmor... PaperDollFrame_GetArmorReduction
+-- (effectiveArmor, ...)"). Every stat read below (UnitArmor/UnitResistance/
+-- GetDodgeChance/GetParryChance/GetBlockChance) is
+-- SecretWhenUnitStatsRestricted (this file's header comment); called
+-- unguarded here, same as computeStats above -- RefreshArmor's own
+-- WIIIUI.Safe wrap (this function's one caller) covers it.
+local function computeArmorStats()
+  local _, effective = UnitArmor("player")
+  local reduction = C_PaperDollInfo.GetArmorEffectiveness(effective, UnitLevel("player"))
+  local icon = activeShapeshiftIcon() or GetInventoryItemTexture("player", CHEST_SLOT) or ARMOR_ICON_FALLBACK
+
+  local tooltip = {
+    "|cffffd100Dodge:|r " .. string.format("%.1f%%", GetDodgeChance()),
+    "|cffffd100Parry:|r " .. string.format("%.1f%%", GetParryChance()),
+    "|cffffd100Block:|r " .. string.format("%.1f%%", GetBlockChance()),
+  }
+
+  for resistIndex = 1, 5 do
+    local _, _, effectiveResist = UnitResistance("player", resistIndex)
+    tooltip[#tooltip + 1] = "|cffffd100" .. (RESISTANCE_NAMES[resistIndex] or ("Resist " .. resistIndex))
+      .. ":|r " .. tostring(effectiveResist)
+  end
+
+  -- spec 0001 §1.7: "latency select(3, GetNetStats())" -- GetNetStats
+  -- (ConnectionDocumentation.lua, forever) returns bandwidthIn,
+  -- bandwidthOut, then one or more latency figures (home, and world when
+  -- present); select(3, ...) forwards all of them starting at the first
+  -- latency value without this file needing to know how many there are.
+  local latencies = { select(3, GetNetStats()) }
+  local latencyLabels = { "Latency (Home):", "Latency (World):" }
+
+  for index, latency in ipairs(latencies) do
+    tooltip[#tooltip + 1] = "|cffffd100" .. (latencyLabels[index] or "Latency:") .. "|r " .. tostring(latency) .. " ms"
+  end
+
+  return {
+    label = "Armor:",
+    text = string.format("%.1f%%", reduction * 100),
+    icon = icon,
+    tooltip = tooltip,
+  }
+end
+
 -- Static per-option label so a Safe failure (secret-value arithmetic
 -- throwing) still "shows its label with an empty value" (spec 0001 §1.7)
 -- instead of a blank row -- computeStats' own more specific label (e.g.
@@ -379,6 +495,35 @@ function WIIIUI.InfoIcons.RefreshSlot(slotIndex)
   end
 end
 
+-- spec 0001 §1.7's guard seam applied to the armor icon: unlike the 3
+-- weapon slots this icon has no wc3UI_Options key and no "none" state
+-- (vanilla never hid it, e17c352 WIIIUI.lua:2407-2486) -- only a Safe
+-- failure changes its display, degrading to the static label with a blank
+-- value, same contract as RefreshSlot.
+local ARMOR_STATIC_LABEL = "Armor:"
+
+function WIIIUI.InfoIcons.RefreshArmor()
+  local widgets = WIIIUI.InfoIcons.armor
+  if not widgets then
+    return
+  end
+
+  local ok, result = WIIIUI.Safe(computeArmorStats)
+
+  if ok and result then
+    widgets.label:SetText(result.label)
+    widgets.value:SetText(result.text)
+    widgets.icon:SetBackdrop({ bgFile = result.icon })
+    widgets.tooltip = result.tooltip
+    widgets.frame:Show()
+  else
+    widgets.label:SetText(ARMOR_STATIC_LABEL)
+    widgets.value:SetText("")
+    widgets.tooltip = nil
+    widgets.frame:Show()
+  end
+end
+
 function WIIIUI.InfoIcons.ShowTooltip(slotIndex)
   local widgets = WIIIUI.InfoIcons[slotIndex]
   if not widgets or not widgets.tooltip or not GameTooltip then
@@ -433,10 +578,50 @@ function WIIIUI.InfoIcons.BuildWeaponIcons()
   end
 end
 
+-- spec 0001 §Phased plan "F. Info icons" F2; same anchor point as
+-- BuildWeaponIcons (WIIIUI.Bars.xp), one row below it via ArmorIconGeometry's
+-- own offsetY -- ensureIconWidgets is keyed by "armor" here instead of a
+-- numeric slotIndex; it only ever uses its argument as a WIIIUI.InfoIcons[]
+-- table key, so a string key works unchanged.
+function WIIIUI.InfoIcons.BuildArmorIcon()
+  local uiScale = wc3UI_Options.uiScale
+  local xpBar = WIIIUI.Bars and WIIIUI.Bars.xp
+  local widgets = ensureIconWidgets("armor")
+  local geometry = WIIIUI.Theme.ArmorIconGeometry(uiScale)
+
+  widgets.frame:SetSize(geometry.size, geometry.size)
+  widgets.frame:ClearAllPoints()
+  if xpBar then
+    widgets.frame:SetPoint("BOTTOMLEFT", xpBar, "BOTTOMLEFT", geometry.offsetX, geometry.offsetY)
+  end
+
+  widgets.icon:SetSize(geometry.size, geometry.size)
+  widgets.icon:ClearAllPoints()
+  widgets.icon:SetPoint("BOTTOMLEFT", widgets.frame, "BOTTOMLEFT", 0, 0)
+
+  widgets.border:SetSize(geometry.size, geometry.size)
+  widgets.border:ClearAllPoints()
+  widgets.border:SetPoint("BOTTOMLEFT", widgets.frame, "BOTTOMLEFT", 0, 0)
+
+  -- Vanilla armorText/armorValue's own flat SetWidth(100) (e17c352
+  -- WIIIUI.lua:2438, 2444) -- ArmorIconGeometry's own header comment: no
+  -- neighbour icon to its right, so no uiScale-derived labelWidth needed.
+  widgets.label:SetWidth(100)
+  widgets.label:ClearAllPoints()
+  widgets.label:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.labelOffsetX, geometry.labelOffsetY)
+
+  widgets.value:SetWidth(100)
+  widgets.value:ClearAllPoints()
+  widgets.value:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.valueOffsetX, geometry.valueOffsetY)
+
+  WIIIUI.InfoIcons.RefreshArmor()
+end
+
 local function refreshAllSlots()
   for slotIndex = 1, 3 do
     WIIIUI.InfoIcons.RefreshSlot(slotIndex)
   end
+  WIIIUI.InfoIcons.RefreshArmor()
 end
 
 -- security-specialist/ui-reviewer Finding 1 (slice 18 gate-fix): the
@@ -453,12 +638,16 @@ end
 --   UPDATE_SHAPESHIFT_FORM: no payload; PLAYER_EQUIPMENT_CHANGED:
 --   equipmentSlot/hasCurrent, no unit token) -- RegisterEvent, no unit
 --   filter, since none of these fire per-unit.
--- UPDATE_SHAPESHIFT_FORM is registered for base-damage/stat refresh only
--- (the numbers shown can go stale across a stance/form change); the
--- form-icon overlay itself (vanilla's CheckIfInForm) is slice 19's scope,
--- not this file's. Vanilla's other three
--- (LEARNED_SPELL_IN_TAB/SPELLS_CHANGED/CHARACTER_POINTS_CHANGED) drove that
--- same form-icon override and stay out of scope with it.
+-- UPDATE_SHAPESHIFT_FORM drives both the base-damage/stat refresh (the
+-- numbers shown can go stale across a stance/form change) and, as of slice
+-- 19, activeShapeshiftIcon()'s own form-icon overlay (vanilla's
+-- CheckIfInForm) via the same refreshAllSlots call -- no separate event
+-- needed for the icon swap. Vanilla's other three (LEARNED_SPELL_IN_TAB/
+-- SPELLS_CHANGED/CHARACTER_POINTS_CHANGED) drove that same form-icon
+-- override in vanilla and stay out of scope: they're either confirmed
+-- dropped (CLAUDE.md roadmap item 5: LEARNED_SPELL_IN_TAB doesn't exist on
+-- Forever) or redundant with UPDATE_SHAPESHIFT_FORM for this port's own
+-- narrower use (icon only, not the vanilla name-based lookup).
 WIIIUI.On("UNIT_INVENTORY_CHANGED", refreshAllSlots, "player")
 WIIIUI.On("UNIT_ATTACK_POWER", refreshAllSlots, "player")
 WIIIUI.On("UNIT_RANGED_ATTACK_POWER", refreshAllSlots, "player")

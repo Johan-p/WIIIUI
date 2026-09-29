@@ -231,6 +231,7 @@ function WIIIUI.Layout()
   end
   if WIIIUI.InfoIcons then
     WIIIUI.InfoIcons.BuildWeaponIcons()
+    WIIIUI.InfoIcons.BuildArmorIcon()
   end
   if WIIIUI.Config then
     WIIIUI.Config.BuildConfig()
