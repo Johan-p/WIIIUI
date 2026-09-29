@@ -168,26 +168,90 @@ end
 -- TL/TR/ML/MR/BL/BR)." Fixed at LAB state 0, same "always-visible" treatment
 -- as GridM/GridT above -- no RegisterStateDriver entry ever targets these,
 -- so their action never changes with the bottom row's page (slice 14
--- acceptance criterion 1). No anchor: the spec's "Sizing and anchoring"
--- section covers only the 36-button grid rows; the extras' on-screen
--- position (minimap/inventory art) is not yet specified and is out of this
--- slice's scope.
-local function buildExtras()
-  local extras = WIIIUI.Buttons.extras
-
-  if extras then
-    return
-  end
-
-  extras = {}
+-- acceptance criterion 1).
+--
+-- spec 0001 slice 19b: anchoring via WIIIUI.Theme.ExtraSlotGeometry, every
+-- BuildButtons() call (not just build-once, since size/position scale with
+-- uiScale/theme) -- same split as anchorRow's own "create once, anchor
+-- every call" convention above. Minimap slots (kind "minimap") anchor to
+-- Console.left.minimapTexture; inventory slots (kind "inventory") anchor to
+-- Console.right.rightPartMiddle -- never to the live Minimap widget itself
+-- (spec 0001 slice 19b: an Edit Mode system's implicit-protection rule,
+-- warcraft.wiki.gg Patch_2.0.1/API_changes -- "the parent of a protected
+-- frame is implicitly protected also, as are any frames which it is
+-- anchored to" -- and API_ScriptRegion_IsProtected).
+-- A missing relativeTo (BuildLeft/BuildRight not built yet, or geometry
+-- returning nil for an out-of-range index) skips that slot's anchor rather
+-- than erroring, matching this file's existence-checked conventions
+-- elsewhere (RetireBlizzardBars, BAR_FRAME_RESOLVERS).
+local function anchorExtras(extras, uiScale, theme)
+  local left = WIIIUI.Console.left
+  local right = WIIIUI.Console.right
+  local relativeByKind = {
+    minimap = left and left.minimapTexture,
+    inventory = right and right.rightPartMiddle,
+  }
 
   for i = 1, EXTRA_SLOT_COUNT do
-    local button = getOrCreateButton("WIIIUI_Extra", i)
-    button:SetState(0, "action", WIIIUI.EXTRA_SLOT_BASE - 1 + i)
-    extras[i] = button
+    local button = extras[i]
+    local geometry = WIIIUI.Theme.ExtraSlotGeometry(uiScale, theme, i)
+    local relativeTo = geometry and relativeByKind[geometry.kind]
+
+    if button and geometry and relativeTo then
+      button:SetSize(geometry.size, geometry.size)
+      button:ClearAllPoints()
+      button:SetPoint(geometry.point, relativeTo, geometry.relativePoint, geometry.offsetX, geometry.offsetY)
+    end
+  end
+end
+
+-- spec 0001 slice 19b gate-fix (ui-reviewer High finding): the 6 inventory
+-- extras (Extra4..9) are children of `header` (a SecureHandlerStateTemplate),
+-- not of Console.right, so Console.lua's applyLayoutModes calling
+-- right:Hide() under centerSlimNoInv never cascades to them -- unlike
+-- vanilla, where the equivalent ActionButton_CustomInventory_N buttons were
+-- parented to rightFrame and hid along with it. Mirrors applyLayoutModes'
+-- own precedence (Console.lua: "centerSlimNoInv ... not centerSlim") so
+-- centerSlim's per-piece hiding still wins when both flags are set. The 3
+-- minimap extras (i=1..3) are untouched -- centerSlimNoInv only ever hid the
+-- right/inventory side in vanilla. Runs from buildExtras alongside
+-- anchorExtras, so it's on the same "create once, refresh every
+-- WIIIUI.Layout() call" path -- itself only ever reached through
+-- ApplyOrQueue("layout", ...) (Core.lua), so this Show/Hide is already
+-- combat-gated with no new queue path.
+local function applyInventoryExtraVisibility(extras)
+  local hideInventory = wc3UI_Options.centerSlimNoInv and not wc3UI_Options.centerSlim
+
+  for i = 4, EXTRA_SLOT_COUNT do
+    local button = extras[i]
+
+    if button then
+      if hideInventory then
+        button:Hide()
+      else
+        button:Show()
+      end
+    end
+  end
+end
+
+local function buildExtras(uiScale, theme)
+  local extras = WIIIUI.Buttons.extras
+
+  if not extras then
+    extras = {}
+
+    for i = 1, EXTRA_SLOT_COUNT do
+      local button = getOrCreateButton("WIIIUI_Extra", i)
+      button:SetState(0, "action", WIIIUI.EXTRA_SLOT_BASE - 1 + i)
+      extras[i] = button
+    end
+
+    WIIIUI.Buttons.extras = extras
   end
 
-  WIIIUI.Buttons.extras = extras
+  anchorExtras(extras, uiScale, theme)
+  applyInventoryExtraVisibility(extras)
 end
 
 function WIIIUI.Buttons.BuildButtons()
@@ -232,7 +296,7 @@ function WIIIUI.Buttons.BuildButtons()
     anchorRow(buttons, rowOriginY[rowIndex], uiScale, geometry, grid)
   end
 
-  buildExtras()
+  buildExtras(uiScale, wc3UI_Options.theme)
 end
 
 -- spec 0001 §Buttons and paging "Retire (R2)": MainActionBar,

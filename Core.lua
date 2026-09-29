@@ -217,6 +217,14 @@ end
 -- unconditional (slice 08): every file that calls WIIIUI.Layout() for real
 -- already loads Portrait.lua alongside it.
 function WIIIUI.Layout()
+  -- spec 0001 §Customizer "Apply", second round: "Revert first ... called
+  -- in two places: first thing in WIIIUI.Layout() ... before
+  -- Console.BuildLeft." Every module's Build* then runs on uncustomized
+  -- objects, including Console's ultra-wide GetLeft/GetRight reads.
+  if WIIIUI.Customizer then
+    WIIIUI.Customizer.Revert()
+  end
+
   WIIIUI.Console.BuildLeft()
   WIIIUI.Console.BuildGrid()
   WIIIUI.Console.BuildRight()
@@ -235,6 +243,13 @@ function WIIIUI.Layout()
   end
   if WIIIUI.Config then
     WIIIUI.Config.BuildConfig()
+  end
+  -- spec 0001 §Customizer "Apply": "WIIIUI.Customizer.Apply() is the last
+  -- step of WIIIUI.Layout()." Runs after every other Build* call above, on
+  -- the uncustomized base each of them just (re-)established, and layers
+  -- overrides on top.
+  if WIIIUI.Customizer then
+    WIIIUI.Customizer.Apply()
   end
 end
 
@@ -341,17 +356,22 @@ end
 -- spec 0001 §Buttons and paging "WIIIUI/Bindings.xml": "BINDING_HEADER_WIIIUI
 -- and the BINDING_NAME_CLICK ... strings ... in Core.lua." BINDING_HEADER_WIIIUI
 -- is the Key Bindings UI section title (vanilla's own BINDING_HEADER_WC3HEADER
--- string, e17c352 WIIIUI.lua:3); the 9 BINDING_NAME_CLICK labels are vanilla's
--- own Bindings.xml label text, in the same order (minimap top/middle/bottom,
--- then inventory TL/TR/ML/MR/BL/BR) -- "_G["BINDING_NAME_" .. command]"
--- convention, warcraft.wiki.gg Bindings.xml.
+-- string, e17c352 WIIIUI.lua:3). The 6 inventory labels below follow vanilla's
+-- own Bindings.xml binding, not file-declaration order: vanilla's
+-- CustomKeyBindings(4..9) maps to ActionButton_CustomInventory_(1..6), and
+-- vanilla Bindings.xml (e17c352) binds CustomKeyBindings(9/8/7/6/4/5) to
+-- Top Left / Top Right / Middle Left / Middle Right / Bottom Left / Bottom
+-- Right respectively -- inverted here to give each Extra(4..9) its label
+-- directly. Cross-checked against Theme.lua's INVENTORY_SLOT_GRID (ui-reviewer
+-- finding, slice 19b gate-fix). "_G["BINDING_NAME_" .. command]" convention,
+-- warcraft.wiki.gg Bindings.xml.
 BINDING_HEADER_WIIIUI = "Warcraft III - UI"
 _G["BINDING_NAME_CLICK WIIIUI_Extra1:LeftButton"] = "Top Minimap Button"
 _G["BINDING_NAME_CLICK WIIIUI_Extra2:LeftButton"] = "Middle Minimap Button"
 _G["BINDING_NAME_CLICK WIIIUI_Extra3:LeftButton"] = "Bottom Minimap Button"
-_G["BINDING_NAME_CLICK WIIIUI_Extra4:LeftButton"] = "Top Left Inventory"
-_G["BINDING_NAME_CLICK WIIIUI_Extra5:LeftButton"] = "Top Right Inventory"
-_G["BINDING_NAME_CLICK WIIIUI_Extra6:LeftButton"] = "Middle Left Inventory"
-_G["BINDING_NAME_CLICK WIIIUI_Extra7:LeftButton"] = "Middle Right Inventory"
-_G["BINDING_NAME_CLICK WIIIUI_Extra8:LeftButton"] = "Bottom Left Inventory"
-_G["BINDING_NAME_CLICK WIIIUI_Extra9:LeftButton"] = "Bottom Right Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra4:LeftButton"] = "Bottom Left Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra5:LeftButton"] = "Bottom Right Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra6:LeftButton"] = "Middle Right Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra7:LeftButton"] = "Middle Left Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra8:LeftButton"] = "Top Right Inventory"
+_G["BINDING_NAME_CLICK WIIIUI_Extra9:LeftButton"] = "Top Left Inventory"
