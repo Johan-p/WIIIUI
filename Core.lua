@@ -217,6 +217,14 @@ end
 -- unconditional (slice 08): every file that calls WIIIUI.Layout() for real
 -- already loads Portrait.lua alongside it.
 function WIIIUI.Layout()
+  -- spec 0001 §Customizer "Apply", second round: "Revert first ... called
+  -- in two places: first thing in WIIIUI.Layout() ... before
+  -- Console.BuildLeft." Every module's Build* then runs on uncustomized
+  -- objects, including Console's ultra-wide GetLeft/GetRight reads.
+  if WIIIUI.Customizer then
+    WIIIUI.Customizer.Revert()
+  end
+
   WIIIUI.Console.BuildLeft()
   WIIIUI.Console.BuildGrid()
   WIIIUI.Console.BuildRight()
@@ -236,11 +244,10 @@ function WIIIUI.Layout()
   if WIIIUI.Config then
     WIIIUI.Config.BuildConfig()
   end
-  -- spec 0001 §Customizer "Apply": "WIIIUI.Customizer.Apply() is the last,
-  -- existence-checked step of WIIIUI.Layout()." Runs after every other
-  -- Build* call above so it can read back the anchor/size/texture each of
-  -- them just applied (Console.lua/Bars.lua/Portrait.lua's own GetPoint(1)
-  -- baseline for the anchor group) and layer overrides on top.
+  -- spec 0001 §Customizer "Apply": "WIIIUI.Customizer.Apply() is the last
+  -- step of WIIIUI.Layout()." Runs after every other Build* call above, on
+  -- the uncustomized base each of them just (re-)established, and layers
+  -- overrides on top.
   if WIIIUI.Customizer then
     WIIIUI.Customizer.Apply()
   end

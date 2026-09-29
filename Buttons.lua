@@ -177,8 +177,9 @@ end
 -- Console.left.minimapTexture; inventory slots (kind "inventory") anchor to
 -- Console.right.rightPartMiddle -- never to the live Minimap widget itself
 -- (spec 0001 slice 19b: an Edit Mode system's implicit-protection rule,
--- warcraft.wiki.gg Object security -- "the parent of a protected frame is
--- implicitly protected also, as are any frames which it is anchored to").
+-- warcraft.wiki.gg Patch_2.0.1/API_changes -- "the parent of a protected
+-- frame is implicitly protected also, as are any frames which it is
+-- anchored to" -- and API_ScriptRegion_IsProtected).
 -- A missing relativeTo (BuildLeft/BuildRight not built yet, or geometry
 -- returning nil for an out-of-range index) skips that slot's anchor rather
 -- than erroring, matching this file's existence-checked conventions

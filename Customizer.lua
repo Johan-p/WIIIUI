@@ -20,6 +20,7 @@ local function addEntry(id, kind, opts)
   if opts then
     entry.secure = opts.secure
     entry.backdrop = opts.backdrop
+    entry.combatToggled = opts.combatToggled
   end
   registry[#registry + 1] = entry
   registryById[id] = entry
@@ -27,14 +28,19 @@ end
 
 -- frame kind (Contents table row 1-2, "Portrait.model"): Console.lua's three
 -- art-root frames, Bars.lua's four StatusBar frames, Portrait.lua's
--- PlayerModel.
+-- PlayerModel. Bars.xp/Bars.xpRested carry combatToggled = true (spec 0001
+-- §Customizer "Combat and implicit protection", second round): Bars.lua
+-- Show()s/Hide()s them from an event handler outside ApplyOrQueue, so a
+-- customizer edit that made either implicitly protected would lock in
+-- combat. Console.right is NOT flagged: its own Show/Hide (Console.lua)
+-- runs inside Layout, which is always out of combat.
 addEntry("Console.left", "frame")
 addEntry("Console.grid", "frame")
 addEntry("Console.right", "frame")
 addEntry("Bars.health", "frame")
 addEntry("Bars.power", "frame")
-addEntry("Bars.xp", "frame")
-addEntry("Bars.xpRested", "frame")
+addEntry("Bars.xp", "frame", { combatToggled = true })
+addEntry("Bars.xpRested", "frame", { combatToggled = true })
 addEntry("Portrait.model", "frame")
 
 -- button/secure (Contents table row 5): the portrait's secure unit button
@@ -79,10 +85,15 @@ addEntry("Bars.xp.levelText", "fontstring")
 -- InfoIcons.lua's 3 weapon slots (numeric keys) plus the armor slot (string
 -- key "armor", ensureIconWidgets' own WIIIUI.InfoIcons["armor"] convention).
 -- frame + border (backdrop = true, the "today, the four InfoIcons borders"
--- Backdrop-field exception) + label/value fontstrings, per slot.
+-- Backdrop-field exception) + label/value fontstrings, per slot. Only
+-- ".frame" carries combatToggled = true (spec 0001 §Customizer "Combat and
+-- implicit protection", second round: "Bars.xp, Bars.xpRested, and
+-- InfoIcons.1.frame, .2.frame, .3.frame and .armor.frame") -- ".border" is
+-- InfoIcons.lua's RefreshSlot backdrop rewrite, never shown/hidden/
+-- reparented itself.
 local INFO_ICON_SLOTS = { "1", "2", "3", "armor" }
 for _, slot in ipairs(INFO_ICON_SLOTS) do
-  addEntry("InfoIcons." .. slot .. ".frame", "frame")
+  addEntry("InfoIcons." .. slot .. ".frame", "frame", { combatToggled = true })
   addEntry("InfoIcons." .. slot .. ".border", "frame", { backdrop = true })
   addEntry("InfoIcons." .. slot .. ".label", "fontstring")
   addEntry("InfoIcons." .. slot .. ".value", "fontstring")
@@ -90,6 +101,16 @@ end
 
 WIIIUI.registry = registry
 WIIIUI.Customizer.byId = registryById
+
+-- spec 0001 §Customizer "Combat and implicit protection" (second round): the
+-- fixed set of combatToggled ids, computed once so applyEntry's protection
+-- check (below) doesn't re-walk the whole registry on every entry.
+local combatToggledIds = {}
+for _, entry in ipairs(registry) do
+  if entry.combatToggled then
+    combatToggledIds[#combatToggledIds + 1] = entry.id
+  end
+end
 
 -- spec 0001 §Customizer: "WIIIUI.Customizer.Resolve(id) splits the ID on '.'
 -- and walks down from the WIIIUI table. A numeric segment is tried as a
@@ -179,15 +200,114 @@ end
 -- Apply
 --------------------------------------------------------------------------
 
--- spec 0001 §Customizer "Apply": "The first time Apply writes one of those
--- fields (parent/strata/level/alpha/draw-layer/tex-coords/backdrop) on an
--- object in a session, it records the object's current value in a
--- module-local baseline[id][field], which is never saved. Once the override
--- is gone, Apply writes the baseline value back and drops it." Module-local,
--- not on WIIIUI or wc3UI_Options -- this is session-only restore state, the
--- same "private implementation state" convention Core.lua's own
--- ApplyOrQueue pending/order upvalues use.
+-- spec 0001 §Customizer "Apply" (amended 2026-09-29, second round): "revert,
+-- then re-apply" replaces the old "Layout re-applies anchor and size, only
+-- parent/strata/... need a baseline" model, which was false as built
+-- (several objects -- Console.left.minimapTexture, Console.grid.tile1,
+-- Console.right, Bars.xp.levelText, Bars.health/power.text, the InfoIcons
+-- label/value heights -- are anchored/sized only when created). One rule
+-- covers every field the same way: "Just before Apply writes a field on an
+-- object, it records the object's current value in the module-local
+-- baseline[id], which is never saved." Module-local, not on WIIIUI or
+-- wc3UI_Options -- session-only restore state, the same convention Core.lua's
+-- own ApplyOrQueue pending/order upvalues use. baseline[id].captured[field]
+-- disambiguates "not yet captured" from a legitimately falsy captured value
+-- (0, false, an unset "" texture path).
 local baseline = {}
+
+local function capture(id, key, value)
+  local data = baseline[id]
+  if not data then
+    data = { captured = {} }
+    baseline[id] = data
+  end
+  if not data.captured[key] then
+    data.captured[key] = true
+    data[key] = value
+  end
+end
+
+-- Shared write-back for one object's captured baseline -- every key is an
+-- independent restore, so order doesn't matter. Used by both
+-- WIIIUI.Customizer.Revert() (the whole session baseline) and
+-- revertEntry() below (one entry's rollback-on-error, spec 0001 §Customizer
+-- "Apply": "An entry that errors is rolled back to its uncustomized state").
+local function revertOne(id, data)
+  local obj = WIIIUI.Customizer.Resolve(id)
+  if not obj then
+    return
+  end
+
+  local c = data.captured
+
+  if c.parent then
+    obj:SetParent(data.parent)
+  end
+  if c.points then
+    obj:ClearAllPoints()
+    for _, p in ipairs(data.points) do
+      obj:SetPoint(p[1], p[2], p[3], p[4], p[5])
+    end
+  end
+  if c.width then
+    obj:SetWidth(data.width)
+  end
+  if c.height then
+    obj:SetHeight(data.height)
+  end
+  if c.texture then
+    obj:SetTexture(data.texture)
+  end
+  if c.frameStrata then
+    obj:SetFrameStrata(data.frameStrata)
+  end
+  if c.frameLevel then
+    obj:SetFrameLevel(data.frameLevel)
+  end
+  if c.transparency then
+    obj:SetAlpha(data.transparency)
+  end
+  if c.drawLayer then
+    obj:SetDrawLayer(data.drawLayer)
+  end
+  if c.texCoord then
+    local tc = data.texCoord
+    obj:SetTexCoord(tc[1], tc[2], tc[3], tc[4])
+  end
+  if c.backdrop then
+    obj:SetBackdrop(data.backdrop)
+  end
+end
+
+-- spec 0001 §Customizer "Apply": "An entry that errors is rolled back to its
+-- uncustomized state (the per-entry part of Revert, below) ... The pcall
+-- rollback then reverts this entry, which puts the graph back in the state
+-- from before the entry, and that state had passed the check." Narrower
+-- than WIIIUI.Customizer.Revert(): only this one id's baseline, so a failed
+-- entry doesn't undo fields already written by earlier entries in the same
+-- Apply() loop.
+local function revertEntry(id)
+  local data = baseline[id]
+  if not data then
+    return
+  end
+  revertOne(id, data)
+  baseline[id] = nil
+end
+
+-- spec 0001 §Customizer "Apply", second round: "WIIIUI.Customizer.Revert()
+-- writes back every value the customizer wrote since the last revert, then
+-- empties the session baseline." Called first in WIIIUI.Layout() (Core.lua,
+-- before Console.BuildLeft) and first in Apply() itself -- when Layout
+-- already reverted, the second call finds an empty baseline and does
+-- nothing.
+function WIIIUI.Customizer.Revert()
+  for id, data in pairs(baseline) do
+    revertOne(id, data)
+  end
+
+  baseline = {}
+end
 
 -- spec 0001 §Customizer "Apply": "Each entry is wrapped in its own pcall, so
 -- a bad saved value skips that entry and never aborts Layout." Recorded here
@@ -244,41 +364,17 @@ local function resolveParentOfTarget(value)
   return WIIIUI.Customizer.Resolve(value)
 end
 
--- Generic sticky-field helper: applies an override and remembers the
--- pre-override value (captured via getFn, once) so a later call with the
--- override gone can restore it. Shared by FrameStrata/FrameLevel/
--- Transparency/Backdrop/SetDrawLayer below -- every "sticky" field except
--- parent (its own composite ParentOf/Hide logic, applyParent) and tex-coords
--- (a 4-fields-to-1-call group, applyTexCoord).
-local function applyStickyField(id, field, overrideValue, applyFn, getFn)
-  if overrideValue ~= nil then
-    baseline[id] = baseline[id] or {}
-    if baseline[id][field] == nil then
-      local ok, current = pcall(getFn)
-      if ok then
-        baseline[id][field] = current
-      end
-    end
-    applyFn(overrideValue)
-  elseif baseline[id] and baseline[id][field] ~= nil then
-    applyFn(baseline[id][field])
-    baseline[id][field] = nil
-  end
-end
-
 -- spec 0001 §Customizer "Apply": "Hide = true reparents the object to
 -- WIIIUI.hider; it does not call Hide() ... Only true is stored ... Hide
 -- wins over ParentOf." Never called for a secure entry (applyEntry's own
--- guard) -- LAB keeps its buttons parented to their header.
+-- guard) -- LAB keeps its buttons parented to their header. Capture happens
+-- via the shared capture() helper -- Revert() above writes data.parent back.
 local function applyParent(id, obj, overrides)
   local hide = overrides.Hide == true
   local parentOf = overrides.ParentOf
 
   if hide or parentOf ~= nil then
-    baseline[id] = baseline[id] or {}
-    if baseline[id].Parent == nil then
-      baseline[id].Parent = obj:GetParent()
-    end
+    capture(id, "parent", obj:GetParent())
 
     if hide then
       obj:SetParent(WIIIUI.hider)
@@ -289,22 +385,36 @@ local function applyParent(id, obj, overrides)
       end
       obj:SetParent(target)
     end
-  elseif baseline[id] and baseline[id].Parent ~= nil then
-    obj:SetParent(baseline[id].Parent)
-    baseline[id].Parent = nil
   end
 end
 
--- spec 0001 §Customizer "Apply": "If any of Point, ParentPosOf,
--- RelativePoint, PosX or PosY is overridden, Apply reads GetPoint(1) as
--- Layout left it, replaces only the overridden parts, then calls
--- ClearAllPoints and SetPoint ... Width, Height, PosX and PosY are stored at
--- base 240 and scaled by uiScale/240." Layout() re-applies every object's
--- anchor on every call (Console.lua/Bars.lua/Portrait.lua's own
--- ClearAllPoints+SetPoint convention), so this only ever needs to act when
--- an anchor field is actually overridden -- there is nothing to restore
--- when the override is gone, Layout's own next call already did that before
--- Apply ever runs (Apply is the last step of Layout).
+-- spec 0001 §Customizer "Apply": "capture on write ... Anchor: all points:
+-- GetNumPoints(), then GetPoint(i) for each. To revert: ClearAllPoints, then
+-- one SetPoint per captured point." Captured once per baseline cycle, right
+-- before the mutating ClearAllPoints/SetPoint below.
+local function captureAnchor(id, obj)
+  if baseline[id] and baseline[id].captured.points then
+    return
+  end
+
+  local points = {}
+  local n = obj.GetNumPoints and obj:GetNumPoints() or 0
+  for i = 1, n do
+    local p, relativeTo, relativePoint, x, y = obj:GetPoint(i)
+    points[#points + 1] = { p, relativeTo, relativePoint, x, y }
+  end
+
+  capture(id, "points", points)
+end
+
+-- spec 0001 §Customizer "Apply": "Anchor merge. If any of Point,
+-- ParentPosOf, RelativePoint, PosX or PosY is overridden, Apply reads point 1
+-- of the reverted base, replaces only the overridden parts, then calls
+-- ClearAllPoints and SetPoint ... Because the merge starts from the base,
+-- clearing one part of a partial override ... returns that part to the base
+-- value." Reading GetPoint(1) here is safe precisely because Revert() (the
+-- first step of Layout()/Apply()) already put every object back at its
+-- uncustomized base before this runs.
 local function applyAnchor(id, obj, overrides)
   if not anyFieldSet(overrides, ANCHOR_FIELDS) then
     return
@@ -337,135 +447,156 @@ local function applyAnchor(id, obj, overrides)
   local newX = overrides.PosX ~= nil and (overrides.PosX * scale) or x
   local newY = overrides.PosY ~= nil and (overrides.PosY * scale) or y
 
+  -- Capture only after every validation above has had the chance to error:
+  -- an invalid override must leave nothing in the baseline to roll back.
+  captureAnchor(id, obj)
+
   obj:ClearAllPoints()
   obj:SetPoint(newPoint, newRelativeTo, newRelativePoint, newX, newY)
 end
 
--- Width/Height, like the anchor above, are re-applied by Layout() every
--- call, so overriding them only ever needs a plain SetWidth/SetHeight when
--- the field is set -- nothing to restore when it's cleared.
-local function applySize(obj, overrides)
+-- spec 0001 §Customizer "Combat and implicit protection" (second round):
+-- "In applyEntry, after the parent and anchor steps, Apply calls
+-- IsProtected() on every resolved combatToggled object. It does this only
+-- when the entry has a ParentOf or ParentPosOf override, because only those
+-- change the protection graph." Runs for every entry with such an override,
+-- not only combatToggled entries themselves -- protection flows from a
+-- protected source TO its parent and TO what it anchors to (Patch 2.0.1/API
+-- changes; API_ScriptRegion_IsProtected), so an unrelated entry's ParentOf/
+-- ParentPosOf can point a secure chain at a combat-toggled frame. Raising
+-- here (inside applyEntry's own pcall, Apply() below) rolls this entry back
+-- to the pre-entry state, which had already passed the check. If
+-- IsProtected() itself returns a secret value (SecretReturnsForAspect =
+-- ObjectSecurity on WIIIUI's own frames should never happen, but the check
+-- fails closed regardless), testing it in a boolean context throws the same
+-- way and the entry still rolls back -- no special-casing needed.
+local function checkCombatToggledProtection(overrides)
+  if overrides.ParentOf == nil and overrides.ParentPosOf == nil then
+    return
+  end
+
+  local fieldName = overrides.ParentOf ~= nil and "ParentOf" or "ParentPosOf"
+
+  for _, id in ipairs(combatToggledIds) do
+    local obj = WIIIUI.Customizer.Resolve(id)
+    if obj and obj:IsProtected() then
+      error("Customizer: " .. fieldName .. " would lock " .. id .. " in combat; entry skipped", 0)
+    end
+  end
+end
+
+-- Width/Height: capture the explicit size only (GetSize(true), the
+-- ignoreRect form -- 0 when no explicit size was ever set,
+-- API_ScriptRegion_GetSize), for the overridden dimension only, matching
+-- Revert()'s per-dimension SetWidth/SetHeight above.
+local function applySize(id, obj, overrides)
   local scale = (wc3UI_Options.uiScale or 240) / 240
 
   if overrides.Width ~= nil then
+    local w = obj:GetSize(true)
+    capture(id, "width", w)
     obj:SetWidth(overrides.Width * scale)
   end
   if overrides.Height ~= nil then
+    local _, h = obj:GetSize(true)
+    capture(id, "height", h)
     obj:SetHeight(overrides.Height * scale)
   end
 end
 
--- spec 0001 §Customizer "Apply": the sticky group -- "parent/strata/level/
--- alpha/draw-layer/tex-coords/backdrop." Transparency applies to every kind
--- (Region:SetAlpha/GetAlpha); FrameStrata/FrameLevel only to frame/button
--- (Fields' own gate); Backdrop only where entry.backdrop is set (the 4
--- InfoIcons borders); SetDrawLayer only to texture kind, per Fields.
-local function applyStickySimple(entry, obj, overrides)
-  applyStickyField(
-    entry.id, "Transparency", overrides.Transparency,
-    function(v) obj:SetAlpha(v) end,
-    function() return obj:GetAlpha() end
-  )
-
-  if entry.kind == "frame" or entry.kind == "button" then
-    applyStickyField(
-      entry.id, "FrameStrata", overrides.FrameStrata,
-      function(v) obj:SetFrameStrata(v) end,
-      function() return obj:GetFrameStrata() end
-    )
-    applyStickyField(
-      entry.id, "FrameLevel", overrides.FrameLevel,
-      function(v) obj:SetFrameLevel(v) end,
-      function() return obj:GetFrameLevel() end
-    )
-  end
-
-  if entry.backdrop then
-    applyStickyField(
-      entry.id, "Backdrop", overrides.Backdrop,
-      function(v) obj:SetBackdrop(v) end,
-      function() return obj.GetBackdrop and obj:GetBackdrop() end
-    )
-  end
-
-  if entry.kind == "texture" then
-    applyStickyField(
-      entry.id, "SetDrawLayer", overrides.SetDrawLayer,
-      function(v) obj:SetDrawLayer(v) end,
-      function() return obj.GetDrawLayer and obj:GetDrawLayer() end
-    )
-  end
-end
-
 -- TexCoordLeft/Right/Top/Bottom collapse to one SetTexCoord(left, right,
--- top, bottom) call -- a 4-fields-to-1-baseline group, so it can't reuse
--- applyStickyField's single-value shape directly.
-local function applyTexCoord(entry, obj, overrides)
-  local id = entry.id
-
+-- top, bottom) call, captured as a single 4-value group.
+local function applyTexCoord(id, obj, overrides)
   if not anyFieldSet(overrides, TEXCOORD_FIELDS) then
-    if baseline[id] and baseline[id].TexCoord then
-      local base = baseline[id].TexCoord
-      obj:SetTexCoord(base[1], base[2], base[3], base[4])
-      baseline[id].TexCoord = nil
-    end
     return
   end
 
-  baseline[id] = baseline[id] or {}
-
-  if not baseline[id].TexCoord then
-    local left, right, top, bottom = 0, 1, 0, 1
-    if obj.GetTexCoord then
-      local ok, ulx, uly, _, lly, urx = pcall(obj.GetTexCoord, obj)
-      if ok and ulx then
-        left, right, top, bottom = ulx, urx, uly, lly
-      end
+  local left, right, top, bottom = 0, 1, 0, 1
+  if obj.GetTexCoord then
+    local ok, ulx, uly, _, lly, urx = pcall(obj.GetTexCoord, obj)
+    if ok and ulx then
+      left, right, top, bottom = ulx, urx, uly, lly
     end
-    baseline[id].TexCoord = { left, right, top, bottom }
   end
 
-  local base = baseline[id].TexCoord
-  local left = overrides.TexCoordLeft or base[1]
-  local right = overrides.TexCoordRight or base[2]
-  local top = overrides.TexCoordTop or base[3]
-  local bottom = overrides.TexCoordBottom or base[4]
+  capture(id, "texCoord", { left, right, top, bottom })
 
-  obj:SetTexCoord(left, right, top, bottom)
+  local newLeft = overrides.TexCoordLeft or left
+  local newRight = overrides.TexCoordRight or right
+  local newTop = overrides.TexCoordTop or top
+  local newBottom = overrides.TexCoordBottom or bottom
+
+  obj:SetTexCoord(newLeft, newRight, newTop, newBottom)
 end
 
+-- spec 0001 §Customizer "Apply": "Order within one entry: parent (Hide,
+-- ParentOf), then anchor, then the protection check, then size, then
+-- texture, then strata, level, alpha, draw layer, tex coords and backdrop."
 local function applyEntry(entry, overrides)
-  local obj = WIIIUI.Customizer.Resolve(entry.id)
+  local id = entry.id
+  local obj = WIIIUI.Customizer.Resolve(id)
   if not obj then
     return
   end
 
   if not entry.secure then
-    applyParent(entry.id, obj, overrides)
+    applyParent(id, obj, overrides)
   end
 
-  applyAnchor(entry.id, obj, overrides)
-  applySize(obj, overrides)
+  applyAnchor(id, obj, overrides)
+
+  checkCombatToggledProtection(overrides)
+
+  applySize(id, obj, overrides)
 
   if entry.kind == "texture" and overrides.Texture ~= nil then
+    capture(id, "texture", obj:GetTexture())
     obj:SetTexture(overrides.Texture)
   end
 
-  applyStickySimple(entry, obj, overrides)
+  if entry.kind == "frame" or entry.kind == "button" then
+    if overrides.FrameStrata ~= nil then
+      capture(id, "frameStrata", obj:GetFrameStrata())
+      obj:SetFrameStrata(overrides.FrameStrata)
+    end
+    if overrides.FrameLevel ~= nil then
+      capture(id, "frameLevel", obj:GetFrameLevel())
+      obj:SetFrameLevel(overrides.FrameLevel)
+    end
+  end
+
+  if overrides.Transparency ~= nil then
+    capture(id, "transparency", obj:GetAlpha())
+    obj:SetAlpha(overrides.Transparency)
+  end
+
+  if entry.kind == "texture" and overrides.SetDrawLayer ~= nil then
+    local layer = obj.GetDrawLayer and obj:GetDrawLayer()
+    capture(id, "drawLayer", layer)
+    obj:SetDrawLayer(overrides.SetDrawLayer)
+  end
 
   if entry.kind == "texture" then
-    applyTexCoord(entry, obj, overrides)
+    applyTexCoord(id, obj, overrides)
+  end
+
+  if entry.backdrop and overrides.Backdrop ~= nil then
+    local current = obj.GetBackdrop and obj:GetBackdrop()
+    capture(id, "backdrop", current)
+    obj:SetBackdrop(overrides.Backdrop)
   end
 end
 
 -- spec 0001 §Customizer "Apply": "WIIIUI.Customizer.Apply() is the last step
--- of WIIIUI.Layout() ... It runs only when EnableCustomize is true. It
--- iterates the registry, never the saved table." When EnableCustomize is
--- false, overrides is EMPTY_OVERRIDES for every entry -- the same path a
--- theme switch or a cleared field takes -- so every sticky field's baseline
--- restores exactly as if every override had just been removed (one of the
--- four listed "an override goes when" triggers).
+-- of WIIIUI.Layout() ... It iterates the registry, never the saved table,
+-- and never writes the saved table. When EnableCustomize is false, every
+-- entry is applied as if it had no overrides." Revert() first (second
+-- round): a no-op when Layout already reverted, but Apply() is also called
+-- directly from SetOverride's queued closure below, where nothing else
+-- reverted first.
 function WIIIUI.Customizer.Apply()
+  WIIIUI.Customizer.Revert()
+
   local enabled = wc3UI_Options.EnableCustomize
   wc3UI_Options.edit_theme_settings = wc3UI_Options.edit_theme_settings or {}
 
@@ -477,6 +608,7 @@ function WIIIUI.Customizer.Apply()
     local overrides = (themeSettings and themeSettings[entry.id]) or EMPTY_OVERRIDES
     local ok, err = pcall(applyEntry, entry, overrides)
     if not ok then
+      revertEntry(entry.id)
       WIIIUI.Customizer.lastErrors[entry.id] = err
     end
   end
@@ -495,16 +627,24 @@ function WIIIUI.Customizer.GetOverride(id, field)
   return entry and entry[field]
 end
 
--- spec 0001 §Customizer "Combat (sharpened)": "Every customizer apply goes
--- through ApplyOrQueue, not only the secure entries ... An editor edit calls
--- ApplyOrQueue('custom:'..id, ...)." Console.grid's 36 secure grid buttons
--- (Buttons.lua's anchorRow) are anchored to it, and the portrait's secure
--- button anchors to Console.left.portraitTexture -- per warcraft.wiki.gg's
--- Object security page, "[the parent of a protected frame] is implicitly
--- protected also, as are any frames which it is anchored to"
--- (https://warcraft.wiki.gg/wiki/Object_security), so a non-secure ancestor
--- of a secure frame is locked in combat too, not only the secure frame
--- itself.
+-- spec 0001 §Customizer "Combat and implicit protection": "Every customizer
+-- apply goes through ApplyOrQueue, not only the secure entries ... An editor
+-- edit calls ApplyOrQueue('custom:'..id, ...)." Console.grid's 36 secure
+-- grid buttons (Buttons.lua's anchorRow) are anchored to it, and the
+-- portrait's secure button anchors to Console.left.portraitTexture -- per
+-- warcraft.wiki.gg's Patch_2.0.1/API_changes page, "the parent of a
+-- protected frame is implicitly protected also, as are any frames which it
+-- is anchored to" (https://warcraft.wiki.gg/wiki/Patch_2.0.1/API_changes;
+-- https://warcraft.wiki.gg/wiki/API_ScriptRegion_IsProtected), so a
+-- non-secure ancestor of a secure frame is locked in combat too, not only
+-- the secure frame itself.
+--
+-- "Player feedback. Apply does not write to wc3UI_Options: the override
+-- stays saved but has no effect ... SetOverride's queued closure runs Apply,
+-- then prints one chat line for each ID that has a new entry in lastErrors,
+-- found by comparing before and after." DEFAULT_CHAT_FRAME is
+-- existence-checked (absent under the headless stub, so tests stay silent)
+-- the same way every other optional Blizzard global in this codebase is.
 function WIIIUI.Customizer.SetOverride(id, field, value)
   wc3UI_Options.edit_theme_settings = wc3UI_Options.edit_theme_settings or {}
   local theme = wc3UI_Options.theme
@@ -523,7 +663,17 @@ function WIIIUI.Customizer.SetOverride(id, field, value)
     themeSettings[id][field] = value
   end
 
-  WIIIUI.ApplyOrQueue("custom:" .. id, WIIIUI.Customizer.Apply)
+  WIIIUI.ApplyOrQueue("custom:" .. id, function()
+    local before = WIIIUI.Customizer.lastErrors
+    WIIIUI.Customizer.Apply()
+    local after = WIIIUI.Customizer.lastErrors
+
+    for errId, message in pairs(after) do
+      if not before[errId] and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("WIIIUI: " .. tostring(message))
+      end
+    end
+  end)
 end
 
 --------------------------------------------------------------------------

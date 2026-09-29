@@ -408,7 +408,8 @@ local MINIMAP_SLOT_NUDGES = {
 -- addHeight). Ported relative to `minimapTexture`'s CENTER instead of the
 -- live Minimap widget (spec 0001 slice 19b: "never anchor to Blizzard's
 -- Minimap widget itself" -- a secure button anchored to it would make
--- Minimap implicitly protected in combat, warcraft.wiki.gg Object security)
+-- Minimap implicitly protected in combat, warcraft.wiki.gg
+-- Patch_2.0.1/API_changes + API_ScriptRegion_IsProtected)
 -- by folding in Minimap's own CENTER-relative offset from Blizzard.lua's
 -- BuildMinimap (this file's own MinimapGeometry) -- Minimap's BOTTOMRIGHT,
 -- in minimapTexture-CENTER-relative coordinates, is
