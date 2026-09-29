@@ -116,18 +116,20 @@ local ONSTATE_PAGE_SNIPPET = [[
 ]]
 
 -- spec 0001 §Buttons and paging: "Each bottom button gets SetState(p,
--- 'action', (p-1)*12 + i) for p = 1..14 (plus the runtime-resolved possess
--- page), set at build." 14 is the direct macro-conditional numeric states
--- (1-10) plus the four pages only reachable through the runtime-resolved
--- "possess" state above (11-14: vehicle/override/temp-shapeshift/bonus-bar
--- fallback each resolve to one of these).
-local PAGE_COUNT = 14
+-- 'action', (p-1)*12 + i) for p = 1..N, set at build." 1-10 are the direct
+-- macro-conditional states. The "possess" snippet above pages to
+-- GetVehicleBarIndex / GetTempShapeshiftBarIndex / GetOverrideBarIndex, which
+-- are pages 16 / 17 / 18 on modern clients (Dominos Action-Bar-Mappings wiki);
+-- 13-15 are MultiBar5-7 (forever Blizzard_ActionBar/Shared/MultiActionBars.lua
+-- :6-8). Covering 1..18 leaves no page without an entry, so LAB never blanks a
+-- button in a vehicle, override-bar or temp-shapeshift state.
+local PAGE_COUNT = 18
 
 -- Fixed buttons (rows 2-3, the 9 extras) are children of the same header, so
 -- the driver's ChildUpdate("state", page) reaches them too, and LAB shows a
 -- button empty for any state it has no entry for (LibActionButton-1.0.lua
--- :311-321). They get the one action under state 0 and under every page the
--- driver can emit (feature 0001 fix4, F2).
+-- :311-321). They get the one action under state 0 and under every page 1..
+-- PAGE_COUNT, which covers every page the driver can emit.
 local function applyFixedState(button, action)
   button:SetState(0, "action", action)
   for p = 1, PAGE_COUNT do
@@ -215,13 +217,11 @@ end
 
 -- Vanilla AlignActionBars (e17c352 WIIIUI.lua:2639-2667): button 1 of each
 -- row anchors BOTTOMLEFT to the grid frame (vanilla actionSlotGridMain,
--- this port's WIIIUI.Console.grid) at (uiScale*0.037037 - 6, originY - 1) --
--- approximating vanilla's own two-step chain (parentFrame's uiScale*0.037037,
--- -1 offset off actionSlotGridMain, plus actionButton1's own -6 offset off
--- MainMenuBarArtFrame), since MainMenuBarArtFrame no longer exists once
--- MainActionBar is retired (R2). Every button anchors to the grid at its own
--- art-derived column offset (Theme.ActionButtonGeometry), not chained off its
--- neighbour, so a pitch error cannot accumulate (fix4). Exact on-screen
+-- this port's WIIIUI.Console.grid), one row up by originY - 1. Every button,
+-- column 1 included, anchors to the grid at its own art-derived column offset
+-- (Theme.ActionButtonGeometry), not chained off its neighbour, so a pitch
+-- error cannot accumulate (fix4); vanilla's magic origin
+-- (uiScale*0.037037 - 6) is gone with MainMenuBarArtFrame (retired, R2). Exact
 -- placement is a tester visual check (CLAUDE.md "the look is the specification").
 local function anchorRow(buttons, originY, uiScale, geometry, grid)
   for i = 1, 12 do
@@ -234,17 +234,15 @@ local function anchorRow(buttons, originY, uiScale, geometry, grid)
 
     button:SetPoint(
       "BOTTOMLEFT", grid, "BOTTOMLEFT",
-      uiScale * 0.037037 - 6 + geometry.columnOffsetX[i], originY - 1
+      geometry.columnOffsetX[i], originY - 1
     )
   end
 end
 
 -- spec 0001 §Buttons and paging: "Extra1 (slot 13) is the top minimap slot;
 -- the order follows vanilla Bindings.xml (minimap 1-3, then inventory
--- TL/TR/ML/MR/BL/BR)." Fixed at LAB state 0, same "always-visible" treatment
--- as GridM/GridT above -- no RegisterStateDriver entry ever targets these,
--- so their action never changes with the bottom row's page (slice 14
--- acceptance criterion 1).
+-- TL/TR/ML/MR/BL/BR)." Fixed like GridM/GridT: the one action under every
+-- page, see applyFixedState.
 --
 -- spec 0001 slice 19b: anchoring via WIIIUI.Theme.ExtraSlotGeometry, every
 -- BuildButtons() call (not just build-once, since size/position scale with

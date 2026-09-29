@@ -274,7 +274,9 @@ end
 -- x = 39 / 126 / 213 / 300 px (woven lines at 82.5 / 169.7 / 256.5 px), and
 -- the next tile starts on the previous tile's 4th cell: columns 1-3 come from
 -- tile1, 4-6 from tile2, 7-9 from tile3 and 10-12 from tile4 (its cells 2-4).
--- Tile origins are GridGeometry's own, so the two cannot disagree.
+-- Tile origins are GridGeometry's own, so the two cannot disagree. Offsets are
+-- the button's left edge relative to the grid's left (column centre minus half
+-- the button), so column 1 needs no separate origin.
 local GRID_ART_CELL_X = { 39, 126, 213, 39, 126, 213, 39, 126, 213, 126, 213, 300 }
 
 function WIIIUI.Theme.ActionButtonGeometry(uiScale)
@@ -287,10 +289,9 @@ function WIIIUI.Theme.ActionButtonGeometry(uiScale)
   tileLeft[4] = tileLeft[3] + grid.size + grid.slot4OffsetX
 
   local columnOffsetX = {}
-  local firstCentre = tileLeft[1] + GRID_ART_CELL_X[1] * artUnit
   for column = 1, 12 do
     local tile = column <= 9 and math.floor((column - 1) / 3) + 1 or 4
-    columnOffsetX[column] = tileLeft[tile] + GRID_ART_CELL_X[column] * artUnit - firstCentre
+    columnOffsetX[column] = tileLeft[tile] + GRID_ART_CELL_X[column] * artUnit - size / 2
   end
 
   return {
