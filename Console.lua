@@ -25,6 +25,87 @@ local function getOrCreateTexture(parent, cacheKey, layer)
   return texture, isNew
 end
 
+-- Anchor companions: the client refuses to anchor a protected frame (the
+-- portrait's secure button, the LibActionButton buttons, and any frame they
+-- anchor to, which is implicitly protected) to a region -- "Cannot anchor
+-- protected frames to regions" (in-game error, Forever 1.60.1). The art here
+-- is all textures, so each texture a protected frame needs gets an invisible
+-- companion Frame that mirrors the texture's own points and size; protected
+-- frames anchor to the companion instead. The companion is derived from the
+-- texture's live state (GetPoint/GetSize), never from a second copy of the
+-- geometry, so the on-screen result is the texture's rect by construction and
+-- customizer overrides carry over through SyncAnchors. A companion's own
+-- anchors only ever name frames (other companions or real frames).
+local anchorFrames = {}
+local anchorRegions = {}
+
+local function isRegion(object)
+  local objectType = object.GetObjectType and object:GetObjectType()
+
+  return objectType == "Texture" or objectType == "FontString"
+end
+
+local function companionOf(region)
+  local frame = anchorFrames[region]
+
+  if not frame then
+    frame = CreateFrame("Frame", nil, region:GetParent())
+    anchorFrames[region] = frame
+    anchorRegions[#anchorRegions + 1] = region
+  end
+
+  return frame
+end
+
+local function syncAnchor(region)
+  local frame = companionOf(region)
+
+  frame:ClearAllPoints()
+  frame:SetSize(region:GetSize())
+
+  for i = 1, region:GetNumPoints() do
+    local point, relativeTo, relativePoint, x, y = region:GetPoint(i)
+
+    if relativeTo and isRegion(relativeTo) then
+      relativeTo = companionOf(relativeTo)
+    end
+
+    frame:SetPoint(point, relativeTo or region:GetParent(), relativePoint, x, y)
+  end
+end
+
+-- Re-mirrors every companion; called at the end of each Build* and after the
+-- customizer's Apply. Each companion is its own pcall: a customizer override
+-- that makes two textures depend on each other is rejected by the client on
+-- the texture itself, and must not abort the rest of the sync (or Layout).
+-- A companion created mid-loop (a target of a mirrored anchor) is appended and
+-- reached by the same loop.
+function WIIIUI.Console.SyncAnchors()
+  local i = 1
+
+  while anchorRegions[i] do
+    pcall(syncAnchor, anchorRegions[i])
+    i = i + 1
+  end
+end
+
+-- The Frame protected code anchors to in place of `region` (a texture). A new
+-- companion is mirrored immediately; an existing one is kept current by
+-- SyncAnchors (each Build* and the customizer), so this stays a plain lookup.
+function WIIIUI.Console.AnchorFrame(region)
+  local existing = anchorFrames[region]
+
+  if existing then
+    return existing
+  end
+
+  local frame = companionOf(region)
+
+  pcall(syncAnchor, region)
+
+  return frame
+end
+
 -- Vanilla WIIIUI_leftpart (e17c352 WIIIUI.xml:2091-2097): the virtual
 -- WIIIUI_Frame template it inherits anchors BOTTOM to its parent (UIParent)
 -- at offset 0,0.
@@ -98,6 +179,8 @@ function WIIIUI.Console.BuildLeft()
     extensionBackgroundGeometry.offsetX,
     extensionBackgroundGeometry.offsetY
   )
+
+  WIIIUI.Console.SyncAnchors()
 end
 
 -- Vanilla WIIIUI_actionslotGrid (e17c352 WIIIUI.xml:3045-3113): its own
@@ -132,9 +215,11 @@ function WIIIUI.Console.BuildGrid()
 
   grid:SetSize(geometry.size, geometry.size)
   grid:ClearAllPoints()
+  -- The grid is implicitly protected (the secure grid buttons anchor to it),
+  -- so it anchors to the extension texture's companion Frame, not the texture.
   grid:SetPoint(
     "BOTTOMLEFT",
-    extensionBackgroundTexture,
+    extensionBackgroundTexture and WIIIUI.Console.AnchorFrame(extensionBackgroundTexture),
     "BOTTOMLEFT",
     geometry.originOffsetX,
     geometry.originOffsetY
@@ -171,6 +256,8 @@ function WIIIUI.Console.BuildGrid()
   tile4:SetTexture(tilePath)
   tile4:ClearAllPoints()
   tile4:SetPoint("BOTTOMLEFT", tile3, "BOTTOMRIGHT", geometry.slot4OffsetX, 0)
+
+  WIIIUI.Console.SyncAnchors()
 end
 
 -- Vanilla WIIIUI_rightpart (e17c352 WIIIUI.xml:3120-3127): its own top-level
@@ -536,4 +623,6 @@ function WIIIUI.Console.BuildRight()
   -- defined above, re-derives visibility/anchors from wc3UI_Options every
   -- call -- see its own comments for the vanilla citations per mode.
   applyLayoutModes(right, WIIIUI.Console.left, theme, uiScale)
+
+  WIIIUI.Console.SyncAnchors()
 end
