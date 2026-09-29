@@ -46,15 +46,26 @@ Don't forget to check out [Known issues](https://github.com/Fiurs-Hearth/Warcraf
 Contact me on Discord: Fiur#8658
 
 ## Installation
-* [Download the addon](https://github.com/Fiurs-Hearth/WIIIUI/archive/refs/heads/master.zip)
-* Unpack the file
-* Open the unpacked file and rename the folder named `WIIIUI-master` to `WIIIUI`
-* Put the renamed folder into the AddOns folder: `World of Warcraft\Interface\AddOns`
-* Start or restart WoW if already running 
-* Recommended: [Set script memory to 0](https://imgur.com/a/V65UiKd), this helps against most game crashes caused by addons, click link for instructions.
+Requires **World of Warcraft: Forever** or **retail**. Vanilla 1.12 and unofficial clients are no longer supported.
 
-Download MoveAnything addon [here](https://legacy-wow.com/vanilla-addons/MoveAnything/).  
-*With this addon you can move basically any UI part that was not added by addons (such as mine)*
+1. [Download the addon](https://github.com/Johan-p/WIIIUI-Forever-Fork/archive/refs/heads/master.zip)
+2. Unpack the zip. Inside is a folder named `WIIIUI-Forever-Fork-master`.
+3. Rename that folder to `WIIIUI`. The folder name must be exactly `WIIIUI`, or the game ignores the addon.
+4. Put the renamed folder into your AddOns folder, so that `...\Interface\AddOns\WIIIUI\WIIIUI.toc` exists:
+   * **WoW Forever (beta):** `World of Warcraft\_classic_beta_\Interface\AddOns`
+   * **Retail:** `World of Warcraft\_retail_\Interface\AddOns`
+5. Start the game, or restart it if it was running. A new addon needs a full restart, not just `/reload`.
+6. Make sure **WIIIUI** is ticked in the AddOns list on the character select screen.
+
+**Alternative: install with git** (no renaming needed, and updating is just `git pull`). Open a terminal in your AddOns folder and run:
+
+```
+git clone https://github.com/Johan-p/WIIIUI-Forever-Fork.git WIIIUI
+```
+
+The trailing `WIIIUI` sets the folder name. To update later, run `git pull` inside the `WIIIUI` folder and restart the game.
+
+Settings are saved per character. Blizzard's own bottom bars are replaced by WIIIUI, so no Bartender or similar addon is needed.
 
 ### Don't forgot to open the config menu for configuration options, accessible in the lower right corner!
 
@@ -120,6 +131,8 @@ A video demonstrating the different menu options available.
 https://youtu.be/agffQHWyWh8
 
 ## Custom Themes
+
+> **Note for the Forever/retail version:** custom themes (the `custom1`-`custom8` art folders and the player-made themes below) have not been tested on World of Warcraft: Forever or retail and are not officially supported. They may work, but you will have to test them yourself. Customizations saved with the old vanilla version do not carry over. If proper custom theme support is a popular request, open an [issue](https://github.com/Johan-p/WIIIUI-Forever-Fork/issues) and it may be considered for a future version.
 
 The customization feature takes current settings of current theme and saves it as a base setting.
 Since it takes current settings and uses that as a base, some frames are set as hidden as base and needs to be unchecked to become visible (for example custom action slots).
