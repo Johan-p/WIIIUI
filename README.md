@@ -1,6 +1,6 @@
 ## WoW Forever version
 - Full redesign to align with new addon standars from Blizzard
-- Integrated bars
+- Integrated bars so no need for bartender or other addons to get this addon working
 
 
 ## Align Center Option, Chat area width option.
