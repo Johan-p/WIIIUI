@@ -204,6 +204,36 @@ local function anchorExtras(extras, uiScale, theme)
   end
 end
 
+-- spec 0001 slice 19b gate-fix (ui-reviewer High finding): the 6 inventory
+-- extras (Extra4..9) are children of `header` (a SecureHandlerStateTemplate),
+-- not of Console.right, so Console.lua's applyLayoutModes calling
+-- right:Hide() under centerSlimNoInv never cascades to them -- unlike
+-- vanilla, where the equivalent ActionButton_CustomInventory_N buttons were
+-- parented to rightFrame and hid along with it. Mirrors applyLayoutModes'
+-- own precedence (Console.lua: "centerSlimNoInv ... not centerSlim") so
+-- centerSlim's per-piece hiding still wins when both flags are set. The 3
+-- minimap extras (i=1..3) are untouched -- centerSlimNoInv only ever hid the
+-- right/inventory side in vanilla. Runs from buildExtras alongside
+-- anchorExtras, so it's on the same "create once, refresh every
+-- WIIIUI.Layout() call" path -- itself only ever reached through
+-- ApplyOrQueue("layout", ...) (Core.lua), so this Show/Hide is already
+-- combat-gated with no new queue path.
+local function applyInventoryExtraVisibility(extras)
+  local hideInventory = wc3UI_Options.centerSlimNoInv and not wc3UI_Options.centerSlim
+
+  for i = 4, EXTRA_SLOT_COUNT do
+    local button = extras[i]
+
+    if button then
+      if hideInventory then
+        button:Hide()
+      else
+        button:Show()
+      end
+    end
+  end
+end
+
 local function buildExtras(uiScale, theme)
   local extras = WIIIUI.Buttons.extras
 
@@ -220,6 +250,7 @@ local function buildExtras(uiScale, theme)
   end
 
   anchorExtras(extras, uiScale, theme)
+  applyInventoryExtraVisibility(extras)
 end
 
 function WIIIUI.Buttons.BuildButtons()
