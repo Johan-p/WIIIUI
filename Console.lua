@@ -153,15 +153,35 @@ function WIIIUI.Console.AnchorFrame(region)
   return frame
 end
 
+-- Default anchor of the left console: flush with the bottom-left screen edge
+-- (vanilla AlignUI and the ADDON_LOADED pass, e17c352 WIIIUI.lua:3818, 4853:
+-- leftFrame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT",
+-- minimapFrame:GetWidth()/2 - 1, 0)). minimapFrame's width is uiScale, so the
+-- offset is derived from Theme.MinimapGeometry on every call, never cached.
+-- `shift` moves it for the centering modes (applyLayoutModes).
+local function defaultLeftOffsetX(uiScale)
+  return WIIIUI.Theme.MinimapGeometry(uiScale).frameSize / 2 - 1
+end
+
+local function anchorLeft(left, uiScale, shift)
+  left:ClearAllPoints()
+  left:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", defaultLeftOffsetX(uiScale) + (shift or 0), 0)
+end
+
 -- Vanilla WIIIUI_leftpart (e17c352 WIIIUI.xml:2091-2097): the virtual
--- WIIIUI_Frame template it inherits anchors BOTTOM to its parent (UIParent)
--- at offset 0,0.
+-- WIIIUI_Frame template it inherits anchors BOTTOM to its parent (UIParent);
+-- AlignUI overrides that with the flush-left anchor above.
 function WIIIUI.Console.BuildLeft()
   local left = WIIIUI.Console.left
 
   if not left then
     left = CreateFrame("Frame", nil, UIParent)
-    left:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+    -- Vanilla's WIIIUI_Frame template sized every console root 1x1
+    -- (e17c352 WIIIUI.xml:8). A single anchor with no size leaves the rect
+    -- invalid on modern clients and nothing anchored through it renders
+    -- (API_ScriptRegion_IsRectValid, warcraft.wiki.gg).
+    left:SetSize(1, 1)
+    anchorLeft(left, wc3UI_Options.uiScale)
     -- Vanilla WIIIUI_leftpart is framestrata="LOW" (e17c352 WIIIUI.xml:5,
     -- the virtual WIIIUI_Frame template's default) -- below the grid and
     -- right consoles in the stack. API_Frame_GetFrameStrata,
@@ -437,8 +457,7 @@ local function applyLayoutModes(right, left, theme, uiScale)
       -- resolves GetLeft/GetRight synchronously after SetPoint, no frame
       -- delay needed -- so the measured span depends only on fixed geometry,
       -- never on a previous call's result.
-      left:ClearAllPoints()
-      left:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+      anchorLeft(left, uiScale)
 
       -- Reference edge per mode -- vanilla picks a different frame
       -- depending which piece is actually visible (e17c352 WIIIUI.lua:
@@ -467,23 +486,27 @@ local function applyLayoutModes(right, left, theme, uiScale)
         referenceEdge = referenceEdge + 18
       end
 
-      local leftEdge = left:GetLeft()
+      -- Vanilla moves the minimap texture itself and measures nothing on
+      -- leftFrame (e17c352 WIIIUI.lua:4815): it lands the texture's left edge
+      -- at (UIParent right - reference right)/2. The texture is `left`'s
+      -- child here, so measure the texture's current left edge (at the
+      -- default anchor just set) and shift `left` by the difference.
+      -- `left` is 1x1 and the texture is centred on it, so measuring `left`
+      -- itself would miss frameSize/2.
+      local minimapTexture = left.minimapTexture
+      local textureLeft = minimapTexture and minimapTexture:GetLeft()
       local uiParentRight = UIParent:GetRight()
 
       -- GetRight()/GetLeft() can return nil before a region's rect resolves
       -- (security-specialist finding, slice 05 gate) -- skip the re-centre
       -- and leave `left` at the default anchor just set above rather than
       -- computing arithmetic on nil.
-      if referenceEdge and leftEdge and uiParentRight then
-        local span = referenceEdge - leftEdge
-
-        left:ClearAllPoints()
-        left:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", (uiParentRight - span) / 2, 0)
+      if referenceEdge and textureLeft and uiParentRight then
+        anchorLeft(left, uiScale, (uiParentRight - referenceEdge) / 2 - textureLeft)
       end
     end
   elseif left then
-    left:ClearAllPoints()
-    left:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
+    anchorLeft(left, uiScale)
   end
 end
 
@@ -492,6 +515,8 @@ function WIIIUI.Console.BuildRight()
 
   if not right then
     right = CreateFrame("Frame", nil, UIParent)
+    -- 1x1 like left: an unsized root's rect is invalid (see BuildLeft).
+    right:SetSize(1, 1)
     right:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
     -- Vanilla WIIIUI_rightpart is framestrata="HIGH" (e17c352
     -- WIIIUI.xml:3120) -- the inventory/lid/chat-area console draws above

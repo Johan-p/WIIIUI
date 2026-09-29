@@ -265,6 +265,12 @@ function WIIIUI.Buttons.BuildButtons()
     -- spec 0001 §Buttons and paging: "Header: a SecureHandlerStateTemplate
     -- frame." warcraft.wiki.gg SecureHandlerStateTemplate.
     header = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
+    -- Sized and anchored like the console roots (Console.lua BuildLeft) so
+    -- its rect is valid: a frame with neither is not positionable on modern
+    -- clients (API_ScriptRegion_IsRectValid, warcraft.wiki.gg). Creation
+    -- only; BuildButtons runs out of combat (Core.lua's ApplyOrQueue).
+    header:SetSize(1, 1)
+    header:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
   end
 
   local uiScale = wc3UI_Options.uiScale
