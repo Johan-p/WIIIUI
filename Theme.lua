@@ -388,3 +388,97 @@ function WIIIUI.Theme.ArmorIconGeometry(uiScale)
     valueOffsetY = uiScale * -0.1111111111111 + lowScaleNudge,
   }
 end
+
+-- Vanilla Minimap_ActionButtons's per-theme resize (e17c352 WIIIUI.lua:
+-- 1547-1568): only the orc/human/undead/nightelf branches set a delta; any
+-- other theme name (custom1-8, or a bogus name ResolveThemeName already
+-- folds to orc before this table is consulted) falls through with all three
+-- deltas at 0, matching vanilla's own if/elseif chain having no `else`.
+local MINIMAP_SLOT_NUDGES = {
+  orc = { resize = 3, width = 2, height = 1 },
+  human = { resize = 4, width = 2, height = 2 },
+  undead = { resize = 4, width = 2, height = 2 },
+  nightelf = { resize = 4, width = 2, height = 2 },
+}
+
+-- Vanilla Minimap_ActionButtons (e17c352 WIIIUI.lua:1536-1607): number =
+-- 1-3, square at uiScale*0.08518 minus the per-theme resize, anchored
+-- BOTTOMLEFT to Minimap's own BOTTOMRIGHT at (uiScale*0.01851 + addWidth,
+-- uiScale*0.455555 - (number-1)*(uiScale*0.08518) - floor(number*0.34) +
+-- addHeight). Ported relative to `minimapTexture`'s CENTER instead of the
+-- live Minimap widget (spec 0001 slice 19b: "never anchor to Blizzard's
+-- Minimap widget itself" -- a secure button anchored to it would make
+-- Minimap implicitly protected in combat, warcraft.wiki.gg Object security)
+-- by folding in Minimap's own CENTER-relative offset from Blizzard.lua's
+-- BuildMinimap (this file's own MinimapGeometry) -- Minimap's BOTTOMRIGHT,
+-- in minimapTexture-CENTER-relative coordinates, is
+-- (minimapOffsetX + minimapSize/2, minimapOffsetY - minimapSize/2).
+local function minimapSlotGeometry(uiScale, theme, number)
+  local resolved = WIIIUI.Theme.ResolveThemeName(theme)
+  local nudge = MINIMAP_SLOT_NUDGES[resolved] or { resize = 0, width = 0, height = 0 }
+  local minimap = WIIIUI.Theme.MinimapGeometry(uiScale)
+  local minimapRight = minimap.minimapOffsetX + minimap.minimapSize / 2
+  local minimapBottom = minimap.minimapOffsetY - minimap.minimapSize / 2
+
+  return {
+    kind = "minimap",
+    size = uiScale * 0.08518 - nudge.resize,
+    point = "BOTTOMLEFT",
+    relativeKey = "minimapTexture",
+    relativePoint = "CENTER",
+    offsetX = minimapRight + uiScale * 0.01851 + nudge.width,
+    offsetY = minimapBottom + uiScale * 0.455555
+      - (number - 1) * (uiScale * 0.08518) - math.floor(number * 0.34) + nudge.height,
+  }
+end
+
+-- Vanilla InventorySlots's zigzag column/row sequence for inventoryNumber
+-- 1-6 (e17c352 WIIIUI.lua:2814-2875): the loop's own SetPoint call uses
+-- column/row *before* that same iteration mutates them, so slot i actually
+-- positions at the pair left over from slot i-1 -- traced by hand into this
+-- static table rather than re-implementing the mutating loop.
+local INVENTORY_SLOT_GRID = {
+  { col = 0, row = 0 },
+  { col = 1, row = 0 },
+  { col = 1, row = 1 },
+  { col = 0, row = 1 },
+  { col = 1, row = 2 },
+  { col = 0, row = 2 },
+}
+
+-- Vanilla InventorySlots (e17c352 WIIIUI.lua:2814-2875) + AlignInventorySlots
+-- (WIIIUI.lua:2809-2812): each button anchors BOTTOMLEFT to the
+-- WIIIUI_inventorySlots frame's CENTER at (column*(uiScale*0.156)-(1-column),
+-- row*(uiScale*0.148)); that frame is itself a 1x1-pixel frame (e17c352
+-- WIIIUI.xml:3313-3314) anchored BOTTOMLEFT to rightPart_middle at
+-- (uiScale*0.02, uiScale*0.016). Ported directly onto rightPartMiddle per
+-- spec 0001 slice 19b ("Inventory six: anchor to Console.right.
+-- rightPartMiddle"), folding in both offsets plus the 1x1 frame's own
+-- half-pixel CENTER-vs-BOTTOMLEFT difference (0.5, 0.5).
+local function inventorySlotGeometry(uiScale, inventoryNumber)
+  local grid = INVENTORY_SLOT_GRID[inventoryNumber]
+  local columnOffset = (grid.col == 1) and (uiScale * 0.156) or -1
+
+  return {
+    kind = "inventory",
+    size = uiScale * 0.1185185,
+    point = "BOTTOMLEFT",
+    relativeKey = "rightPartMiddle",
+    relativePoint = "BOTTOMLEFT",
+    offsetX = uiScale * 0.02 + 0.5 + columnOffset,
+    offsetY = uiScale * 0.016 + 0.5 + grid.row * (uiScale * 0.148),
+  }
+end
+
+-- spec 0001 slice 19b: one geometry entry point for the 9 extra slots
+-- (WIIIUI_Extra1..9 -- Buttons.lua's EXTRA_SLOT_BASE order, minimap 1-3 then
+-- inventory 1-6, matching vanilla Bindings.xml's own ordering and Core.lua's
+-- BINDING_NAME_CLICK strings). Returns nil for an out-of-range index.
+function WIIIUI.Theme.ExtraSlotGeometry(uiScale, theme, i)
+  if i >= 1 and i <= 3 then
+    return minimapSlotGeometry(uiScale, theme, i)
+  elseif i >= 4 and i <= 9 then
+    return inventorySlotGeometry(uiScale, i - 3)
+  end
+  return nil
+end
