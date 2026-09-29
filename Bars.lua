@@ -199,7 +199,7 @@ local function buildLowHpOverlay(anchor, uiScale)
     overlay = CreateFrame("Frame", nil, UIParent)
     overlay:SetFrameStrata("LOW")
 
-    local texture = overlay:CreateTexture(nil, "OVERLAY")
+    local texture = overlay:CreateTexture(nil, "BACKGROUND")
     texture:SetAllPoints(overlay)
     texture:SetTexture(LOW_HP_TEXTURE)
     texture:SetVertexColor(1, 0, 0, 1)
@@ -231,6 +231,21 @@ local function buildLowHpOverlay(anchor, uiScale)
   )
 
   return overlay
+end
+
+-- Called by Portrait.BuildPortrait once the model window exists (Bars builds
+-- first in WIIIUI.Layout(), so BuildBars can only anchor to the art texture):
+-- the pulse covers exactly the model window, one frame level below it
+-- (fix6 B4). SetAllPoints sizes it, so the fallback size above is replaced.
+function WIIIUI.Bars.AnchorLowHpOverlay(model, level)
+  local overlay = WIIIUI.Bars.lowHpOverlay
+  if not overlay or not model then
+    return
+  end
+
+  overlay:ClearAllPoints()
+  overlay:SetAllPoints(model)
+  overlay:SetFrameLevel(level)
 end
 
 -- spec 0001 §1.2: "A Step curve with points (0,1), (hpWarning/100,1),
@@ -302,6 +317,14 @@ end
 local function updateLowHpPulse()
   local overlay = WIIIUI.Bars.lowHpOverlay
   if not overlay then
+    return
+  end
+
+  -- A corpse's health percent is 0, which the step curve maps to "warn":
+  -- the pulse must stay off while dead or a ghost (fix6 B4).
+  -- UnitIsDeadOrGhost is not secret (UnitDocumentation.lua, forever).
+  if UnitIsDeadOrGhost("player") then
+    overlay:Hide()
     return
   end
 
@@ -441,6 +464,10 @@ local function buildXPBar(anchor, uiScale)
       xpBar:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", geometry.anchorOffsetX, geometry.anchorOffsetY)
     end
   end
+  -- Same strata as the left art, so the levels are relative to it (fix6 B5);
+  -- +4 matches the health/power bars.
+  local left = WIIIUI.Console.left
+  rested:SetFrameLevel((left and left:GetFrameLevel() or 1) + 4)
   bar:SetFrameLevel(rested:GetFrameLevel() + 1)
 end
 
@@ -539,6 +566,10 @@ function WIIIUI.Bars.BuildBars()
     local geometry = WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
 
     bar:SetFrameStrata("LOW")
+    -- Same strata as the left console art, so without an explicit level the
+    -- art can draw over the bars (fix6 B5); +4 clears the art, the low-HP
+    -- overlay and the portrait button/model levels set in Portrait.lua.
+    bar:SetFrameLevel((left and left:GetFrameLevel() or 1) + 4)
     bar:SetSize(geometry.width, geometry.height)
     bar:ClearAllPoints()
     bar:SetPoint("BOTTOMLEFT", minimapTexture, "BOTTOMRIGHT", geometry.offsetX, geometry.offsetY)
@@ -569,6 +600,12 @@ WIIIUI.On("UNIT_MAXHEALTH", updateHealth, "player")
 WIIIUI.On("UNIT_POWER_UPDATE", updatePower, "player")
 WIIIUI.On("UNIT_MAXPOWER", updatePower, "player")
 WIIIUI.On("UNIT_DISPLAYPOWER", updatePower, "player")
+
+-- Death/resurrection changes the pulse's dead-or-ghost gate without a health
+-- event necessarily following (spirit release, ghost resurrection).
+WIIIUI.On("PLAYER_DEAD", updateLowHpPulse)
+WIIIUI.On("PLAYER_ALIVE", updateLowHpPulse)
+WIIIUI.On("PLAYER_UNGHOST", updateLowHpPulse)
 
 -- PLAYER_XP_UPDATE/UPDATE_EXHAUSTION/PLAYER_LEVEL_UP are plain RegisterEvent
 -- calls, not RegisterUnitEvent, despite this file's other events using the

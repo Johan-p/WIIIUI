@@ -33,6 +33,20 @@ local THEME_LIST = {
 
 local ZONE_TEXT_POS_LABELS = { [1] = "Top", [2] = "Bottom", [3] = "Hidden" }
 
+-- weaponIconSelected1..3 choices, in vanilla's button order (e17c352
+-- WIIIUI.xml:1132-1222: main, offhand, ranged, ammo, spell, heal, none). The
+-- values are InfoIcons.lua's own option numbers.
+local INFO_ICON_VALUES = { 16, 17, 18, 0, 99, 98, "none" }
+local INFO_ICON_LABELS = {
+  [16] = "Main Hand",
+  [17] = "Off Hand",
+  [18] = "Ranged",
+  [0] = "Ammo",
+  [99] = "Spell Power",
+  [98] = "Healing",
+  none = "None",
+}
+
 -- Display labels for every control-table row below (checkbox/editbox/cycle
 -- rows show these next to their widget; note rows show these before the
 -- "Set in Edit Mode" suffix).
@@ -56,6 +70,9 @@ local LABELS = {
   centerSlim = "Center Slim Mode",
   centerSlimNoInv = "Center Slim (No Inventory)",
   ZoneTextPos = "Zone Text Position",
+  weaponIconSelected1 = "Info Icon 1",
+  weaponIconSelected2 = "Info Icon 2",
+  weaponIconSelected3 = "Info Icon 3",
   shapeshiftAuraPos = "Shapeshift Bar Position",
   castbarAlignmentOption = "Cast Bar Position",
   buffTopRight = "Buffs Top Right",
@@ -103,6 +120,36 @@ local function makeRangeControl(key, min, max)
       if number and number == number then
         wc3UI_Options[key] = clamp(number, min, max)
       end
+    end,
+  }
+end
+
+-- e17c352 ChangeWeaponIcon (WIIIUI.lua:5243): store the choice, then
+-- re-align that one icon. InfoIcons.RefreshSlot redraws just that slot and is
+-- existence-checked because config_test.lua loads Config.lua without
+-- InfoIcons.lua; it goes through ApplyOrQueue like every frame change.
+local function makeInfoIconControl(slotIndex)
+  local key = "weaponIconSelected" .. slotIndex
+  return {
+    key = key,
+    kind = "cycle",
+    values = INFO_ICON_VALUES,
+    valueLabels = INFO_ICON_LABELS,
+    get = function() return wc3UI_Options[key] end,
+    set = function(value)
+      -- Same fallback as MergeDefaults and InfoIcons.ResolveOption: the
+      -- slot's own default (16 for slot 1), not "none".
+      if INFO_ICON_LABELS[value] == nil then
+        value = WIIIUI.DEFAULTS[key]
+      end
+      wc3UI_Options[key] = value
+    end,
+    apply = function()
+      WIIIUI.ApplyOrQueue("infoIconSlot" .. slotIndex, function()
+        if WIIIUI.InfoIcons then
+          WIIIUI.InfoIcons.RefreshSlot(slotIndex)
+        end
+      end)
     end,
   }
 end
@@ -163,6 +210,9 @@ WIIIUI.Config.CONTROLS = {
       wc3UI_Options.ZoneTextPos = value
     end,
   },
+  makeInfoIconControl(1),
+  makeInfoIconControl(2),
+  makeInfoIconControl(3),
   makeNoteControl("shapeshiftAuraPos"),
   makeNoteControl("castbarAlignmentOption"),
   makeNoteControl("buffTopRight"),
@@ -280,7 +330,8 @@ end
 
 local function cycleButtonText(row)
   local value = row.get()
-  return label(row.key) .. ": " .. (ZONE_TEXT_POS_LABELS[value] or tostring(value))
+  local labels = row.valueLabels or ZONE_TEXT_POS_LABELS
+  return label(row.key) .. ": " .. (labels[value] or tostring(value))
 end
 
 local function buildCycle(panel, row, x, y)
