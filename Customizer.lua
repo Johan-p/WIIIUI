@@ -709,6 +709,23 @@ local FIELD_ROW_HEIGHT = 16
 local FIELD_BOX_WIDTH = 90
 local FIELD_LABEL_WIDTH = 90
 
+-- ui-reviewer finding (Medium), slice 20 gate-fix: an unconstrained title
+-- FontString renders at natural width and can bleed into the next block --
+-- blocks sit edge-to-edge with no gap (RefreshEditor below:
+-- (blockIndex - 1) * BLOCK_WIDTH). SetWidth(BLOCK_WIDTH) + SetWordWrap(true)
+-- is the same pattern Config.lua's buildNote already uses for the same
+-- reason (Config.lua's own "Width/wrap guard" comment, slice 17 gate
+-- iteration 2). Two rows are reserved unconditionally rather than measuring
+-- and repositioning the field rows per refresh: the longest registry id
+-- ("Console.left.extensionBackgroundTexture", 40 chars) wraps to 2 lines at
+-- BLOCK_WIDTH under GameFontHighlightSmall's rough metrics, and named
+-- entries ("Buttons.extras.9 [WIIIUI_Extra9]") carry short ids, so the two
+-- never combine into something that needs a third line -- tester should
+-- still eyeball the widest titles in-game since exact font metrics aren't
+-- provable headlessly.
+local TITLE_ROWS = 2
+local TITLE_HEIGHT = FIELD_ROW_HEIGHT * TITLE_ROWS
+
 -- PosX/PosY/Width/Height/FrameLevel/Transparency/TexCoord* are numeric
 -- fields; every other field (Point/RelativePoint/ParentPosOf/ParentOf/
 -- Texture/FrameStrata) is a plain string; Hide is the one boolean field
@@ -719,17 +736,24 @@ local NUMERIC_FIELDS = {
   TexCoordLeft = true, TexCoordRight = true, TexCoordTop = true, TexCoordBottom = true,
 }
 
+-- ui-reviewer finding (Medium), slice 20 gate-fix: a second return value,
+-- `ok`, distinguishes "empty string -> intentionally clear" (ok = true,
+-- value = nil) from "non-empty text tonumber couldn't parse -> reject the
+-- edit" (ok = false) -- both previously collapsed to the same nil,
+-- indistinguishable to SetOverride, which reads nil as "clear this field".
+-- OnEnterPressed below never calls SetOverride when ok is false.
 local function parseFieldValue(field, text)
   if text == nil or text == "" then
-    return nil
+    return nil, true
   end
   if field == "Hide" then
-    return (text == "true") or nil
+    return (text == "true") or nil, true
   end
   if NUMERIC_FIELDS[field] then
-    return tonumber(text)
+    local n = tonumber(text)
+    return n, n ~= nil
   end
-  return text
+  return text, true
 end
 
 local function fieldValueToText(value)
@@ -753,10 +777,13 @@ local function ensureBlock(index)
 
   local editor = WIIIUI.Customizer.editor
   local container = CreateFrame("Frame", nil, editor)
-  container:SetSize(BLOCK_WIDTH, MAX_FIELDS_PER_BLOCK * FIELD_ROW_HEIGHT + FIELD_ROW_HEIGHT)
+  container:SetSize(BLOCK_WIDTH, MAX_FIELDS_PER_BLOCK * FIELD_ROW_HEIGHT + TITLE_HEIGHT)
 
   local title = container:CreateFontString(nil, "OVERLAY")
   title:SetFontObject(GameFontHighlightSmall)
+  title:SetWidth(BLOCK_WIDTH)
+  title:SetWordWrap(true)
+  title:SetJustifyH("LEFT")
   title:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
 
   local rows = {}
@@ -764,7 +791,7 @@ local function ensureBlock(index)
     local label = container:CreateFontString(nil, "OVERLAY")
     label:SetFontObject(GameFontHighlightSmall)
     label:SetWidth(FIELD_LABEL_WIDTH)
-    label:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -FIELD_ROW_HEIGHT * i)
+    label:SetPoint("TOPLEFT", container, "TOPLEFT", 0, -(TITLE_HEIGHT + FIELD_ROW_HEIGHT * (i - 1)))
 
     local box = CreateFrame("EditBox", nil, container, "InputBoxTemplate")
     box:SetAutoFocus(false)
@@ -777,9 +804,19 @@ local function ensureBlock(index)
       self:SetText(row.id and row.field and fieldValueToText(WIIIUI.Customizer.GetOverride(row.id, row.field)) or "")
       self:ClearFocus()
     end)
+    -- ui-reviewer finding (Medium), slice 20 gate-fix: an unparseable
+    -- numeric edit (ok = false) skips SetOverride entirely rather than
+    -- silently clearing the field, then re-syncs the box from the actual
+    -- saved state (like OnEscapePressed already does) so it never keeps
+    -- showing rejected/untrusted text -- also true on the accepted path,
+    -- since GetOverride's formatted echo can differ from raw typed text.
     box:SetScript("OnEnterPressed", function(self)
       if row.id and row.field then
-        WIIIUI.Customizer.SetOverride(row.id, row.field, parseFieldValue(row.field, self:GetText()))
+        local value, ok = parseFieldValue(row.field, self:GetText())
+        if ok then
+          WIIIUI.Customizer.SetOverride(row.id, row.field, value)
+        end
+        self:SetText(fieldValueToText(WIIIUI.Customizer.GetOverride(row.id, row.field)))
       end
       self:ClearFocus()
     end)
@@ -843,6 +880,15 @@ function WIIIUI.Customizer.RefreshEditor()
       block.container:Hide()
     end
   end
+
+  -- ui-reviewer finding (Low), slice 20 gate-fix: a page-count indicator,
+  -- same precedent this file's own header comment already cites
+  -- (e17c352 WIIIUI.lua ~1092-1112, WIIIUI_pagesFrame's "cur / max" text) but
+  -- hadn't built. One SetText call per refresh -- no OnUpdate, no new
+  -- performance concern.
+  if editor.pageIndicator then
+    editor.pageIndicator:SetText(editor.page .. " / " .. pageCount())
+  end
 end
 
 -- spec 0001 §Customizer "Editor": event-driven wheel paging, no OnUpdate.
@@ -867,6 +913,21 @@ function WIIIUI.Customizer.BuildEditor(panel)
       self.page = page
       WIIIUI.Customizer.RefreshEditor()
     end)
+
+    -- ui-reviewer finding (Low), slice 20 gate-fix: "N / max" page-count
+    -- indicator, bottom-center of the editor (vanilla's own WIIIUI_pagesFrame
+    -- placement, e17c352 WIIIUI.lua ~1101: SetPoint("BOTTOM", 0, -30)).
+    -- Whether a tall block's own field rows (a texture entry's own
+    -- MAX_FIELDS_PER_BLOCK count) can visually reach this far down is an
+    -- in-game check, not provable from the headless stub. RefreshEditor
+    -- keeps its text current; set once here too so it never renders empty
+    -- for a frame before the first refresh.
+    local pageIndicator = editor:CreateFontString(nil, "OVERLAY")
+    pageIndicator:SetFontObject(GameFontHighlightSmall)
+    pageIndicator:SetPoint("BOTTOM", editor, "BOTTOM", 0, 0)
+    pageIndicator:SetText(editor.page .. " / " .. pageCount())
+    editor.pageIndicator = pageIndicator
+
     WIIIUI.Customizer.editor = editor
   end
 
