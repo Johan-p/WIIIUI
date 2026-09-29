@@ -518,11 +518,14 @@ function WIIIUI.Console.BuildRight()
     -- 1x1 like left: an unsized root's rect is invalid (see BuildLeft).
     right:SetSize(1, 1)
     right:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, 0)
-    -- Vanilla WIIIUI_rightpart is framestrata="HIGH" (e17c352
-    -- WIIIUI.xml:3120) -- the inventory/lid/chat-area console draws above
-    -- the grid, which draws above the left console. API_Frame_
-    -- GetFrameStrata, warcraft.wiki.gg.
-    right:SetFrameStrata("HIGH")
+    -- Everything on this frame is art (textures), and it includes the opaque
+    -- chat-area background. Vanilla raised chat to DIALOG above a HIGH frame
+    -- (e17c352 WIIIUI.xml:3120); here chat is an Edit Mode system placed by
+    -- the layout string and stays at its own LOW strata (R4), so the art
+    -- goes below LOW and chat draws over all of it (feature 0001 fix3, D2).
+    -- Interactive pieces (extras, portrait, cogwheel) are not children of
+    -- this frame. API_Frame_SetFrameStrata, warcraft.wiki.gg.
+    right:SetFrameStrata("BACKGROUND")
     WIIIUI.Console.right = right
   end
 

@@ -175,13 +175,16 @@ local function buildIcons(parent, uiScale)
 end
 
 -- spec 0001 §Event -> widget wiring (Portrait row): UNIT_MODEL_CHANGED /
--- PLAYER_ENTERING_WORLD -> "PlayerModel:SetUnit("player"), camera". The
--- camera half is a client-only effect with no headless surface; SetUnit is
--- the part a headless test can observe.
+-- PLAYER_ENTERING_WORLD -> "PlayerModel:SetUnit("player"), camera". SetUnit
+-- resets the camera to the full-body default, so vanilla re-selected camera 0
+-- after every SetUnit (ModifyPlayerPortrait, e17c352 WIIIUI.lua:1767, 1787).
+-- Model:SetCamera(cameraIndex): SimpleModelAPIDocumentation.lua:413, forever
+-- and live branches of Gethe/wow-ui-source.
 local function updateModel()
   local model = WIIIUI.Portrait.model
   if model then
     model:SetUnit("player")
+    model:SetCamera(0)
   end
 end
 
@@ -468,10 +471,22 @@ function WIIIUI.Portrait.BuildPortrait()
     button:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", 0, 0)
   end
 
+  -- Vanilla's model is a window on the portrait art, placed off the minimap
+  -- texture (Theme.PortraitModelGeometry), not centred on the whole art.
+  -- Anchored to the texture's companion Frame like the button above.
   local model = buildModel(button)
-  model:SetSize(geometry.size, geometry.size)
+  local minimapAnchor = left and left.minimapTexture and WIIIUI.Console.AnchorFrame(left.minimapTexture)
+  local modelGeometry = WIIIUI.Theme.PortraitModelGeometry(
+    uiScale,
+    wc3UI_Options.portraitScale,
+    wc3UI_Options.PortraitAlignmentX,
+    wc3UI_Options.PortraitAlignmentY
+  )
+  model:SetSize(modelGeometry.size, modelGeometry.size)
   model:ClearAllPoints()
-  model:SetPoint("CENTER", button, "CENTER", 0, 0)
+  if minimapAnchor then
+    model:SetPoint("BOTTOMLEFT", minimapAnchor, "BOTTOMLEFT", modelGeometry.offsetX, modelGeometry.offsetY)
+  end
 
   buildHitText(button, uiScale)
   buildIcons(button, uiScale)

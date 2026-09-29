@@ -406,10 +406,11 @@ local TAB_BUTTON_WIDTH = 100
 local TAB_BUTTON_HEIGHT = 22
 local TAB_ROW_Y = -45
 
--- Vanilla WIIIUI_cogwheel_hover (e17c352 WIIIUI.xml:62-88): 30x30, anchored
+-- Vanilla WIIIUI_cogwheel_hover (e17c352 WIIIUI.xml:62-105): 30x30, anchored
 -- BOTTOMRIGHT of UIParent at (7,-6). Always shown -- it is the invisible hit
--- region that reveals the cogwheel on hover; only the cogwheel/panel below
--- start hidden.
+-- region that reveals the cogwheel on hover, and it owns every mouse handler:
+-- OnEnter/OnLeave and the click (panel toggle plus press feedback on the
+-- cogwheel). Only the cogwheel/panel below start hidden.
 local function ensureHover()
   local hover = WIIIUI.Config.hover
   if hover then
@@ -420,9 +421,25 @@ local function ensureHover()
   hover:SetSize(30, 30)
   hover:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 7, -6)
   hover:SetFrameStrata("HIGH")
+  hover:EnableMouse(true)
 
   hover:SetScript("OnEnter", function() WIIIUI.Config.cogwheel:Show() end)
   hover:SetScript("OnLeave", function() WIIIUI.Config.cogwheel:Hide() end)
+
+  -- The cogwheel must not carry these: on modern clients a mouse script
+  -- enables the frame's mouse, so the shown cogwheel would take focus from
+  -- this frame, whose OnLeave then hides it again (feature 0001 fix3, D1).
+  hover:SetScript("OnMouseDown", function()
+    WIIIUI.Config.cogwheel:SetBackdropColor(0.75, 0.75, 0.75, 1)
+    if WIIIUI.Config.panel:IsShown() then
+      WIIIUI.Config.panel:Hide()
+    else
+      WIIIUI.Config.panel:Show()
+    end
+  end)
+  hover:SetScript("OnMouseUp", function()
+    WIIIUI.Config.cogwheel:SetBackdropColor(1, 1, 1, 1)
+  end)
 
   WIIIUI.Config.hover = hover
   return hover
@@ -430,8 +447,8 @@ end
 
 -- Vanilla Wc3_UI_cogwheel (e17c352 WIIIUI.xml:91-105): same size/anchor as
 -- the hover region, BackdropTemplate + bgFile cogwheel art (CLAUDE.md
--- "Backdrops"). Click toggles the panel; mouse-down/up darkens/restores the
--- backdrop colour, matching vanilla's press feedback.
+-- "Backdrops"). Display-only: mouse-disabled, no mouse scripts, so the hover
+-- frame stays the one hit target (see ensureHover).
 local function ensureCogwheel()
   local cogwheel = WIIIUI.Config.cogwheel
   if cogwheel then
@@ -442,24 +459,13 @@ local function ensureCogwheel()
   cogwheel:SetSize(30, 30)
   cogwheel:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 7, -6)
   cogwheel:SetFrameStrata("DIALOG")
+  cogwheel:EnableMouse(false)
   cogwheel:SetBackdrop({
     bgFile = COGWHEEL_TEXTURE,
     insets = { left = 0, right = 0, top = 0, bottom = 0 },
   })
   cogwheel:SetBackdropColor(1, 1, 1, 1)
   cogwheel:Hide()
-
-  cogwheel:SetScript("OnMouseDown", function(self)
-    self:SetBackdropColor(0.75, 0.75, 0.75, 1)
-    if WIIIUI.Config.panel:IsShown() then
-      WIIIUI.Config.panel:Hide()
-    else
-      WIIIUI.Config.panel:Show()
-    end
-  end)
-  cogwheel:SetScript("OnMouseUp", function(self)
-    self:SetBackdropColor(1, 1, 1, 1)
-  end)
 
   WIIIUI.Config.cogwheel = cogwheel
   return cogwheel

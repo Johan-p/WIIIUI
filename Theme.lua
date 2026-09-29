@@ -58,6 +58,18 @@ function WIIIUI.Theme.PortraitGeometry(uiScale)
   }
 end
 
+-- Vanilla ModifyPlayerPortrait (e17c352 WIIIUI.lua:1799-1801): the 3D model
+-- is a small window, not the whole portrait art -- anchored BOTTOMLEFT to the
+-- minimap texture's BOTTOMLEFT at (uiScale*0.86 - (100 - alignX),
+-- uiScale*0.10 - (100 - alignY)), uiScale*0.27 + portraitScale square.
+function WIIIUI.Theme.PortraitModelGeometry(uiScale, portraitScale, alignX, alignY)
+  return {
+    size = uiScale * 0.27 + portraitScale,
+    offsetX = uiScale * 0.86 - (100 - alignX),
+    offsetY = uiScale * 0.10 - (100 - alignY),
+  }
+end
+
 -- Vanilla AlignActionBarUIGrid (e17c352 WIIIUI.lua ~2695-2739): the grid
 -- frame is uiScale*0.91851 square, anchored BOTTOMLEFT of extensionBackground.
 -- Slots 2-4 chain BOTTOMLEFT-to-BOTTOMRIGHT off the previous slot. Only the
@@ -260,9 +272,18 @@ function WIIIUI.Theme.ActionButtonGeometry(uiScale)
   return {
     size = size,
     spacing = uiScale * 0.159259,
+    row1OffsetY = 5,
     row2OffsetY = size + uiScale * 0.0667,
     row3OffsetY = size + uiScale * 0.0667 + size + uiScale * 0.04444,
   }
+end
+
+-- Vanilla zoomed every action-button icon by uiScale*0.01851 pixels on each
+-- side (e17c352 WIIIUI.lua:2585-2592, 1596-1602: zoomInPixels /
+-- actionButtonIcon:GetWidth() into SetTexCoord). The icon fills its button, so
+-- its width is the button size.
+function WIIIUI.Theme.IconZoom(uiScale, buttonSize)
+  return uiScale * 0.01851 / buttonSize
 end
 
 -- Vanilla AlignXPBar (e17c352 WIIIUI.lua:2094-2113, 2190-2192): the XP bar

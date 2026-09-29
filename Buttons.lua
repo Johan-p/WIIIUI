@@ -131,9 +131,74 @@ local function applyPageStates(buttons)
   end
 end
 
+-- ActionButtonTemplate gives its state textures and overlays a fixed 46x45
+-- anchored TOPLEFT (Gethe/wow-ui-source forever,
+-- Blizzard_ActionBar/Mainline/ActionButtonTemplate.xml), and LibActionButton
+-- re-applies 52x51 to the highlight/checked textures on every update
+-- (LibActionButton-1.0.lua:1848-1857, hideElements.border). At WIIIUI's
+-- ~27-unit cells that art overhangs down and right, so every region is pinned
+-- to the button rect (feature 0001 fix3, D3). Vanilla hid the frame art
+-- entirely (NormalTexture width -1, e17c352 WIIIUI.lua:2611-2612) and let the
+-- grid art show through empty slots, so those three are drawn at alpha 0.
+local FIT_KEYS = {
+  "NormalTexture", "PushedTexture", "HighlightTexture", "CheckedTexture", "Border", "Flash",
+  "NewActionTexture", "SpellHighlightTexture", "SlotBackground", "SlotArt", "icon", "IconMask",
+}
+local INVISIBLE_KEYS = { "NormalTexture", "SlotBackground", "SlotArt" }
+
+-- Set from anchorRow/anchorExtras, which know the button size and run on every
+-- Layout; read by fitButtonArt.
+local iconZoomByButton = {}
+
+local function fitButtonArt(button)
+  for _, key in ipairs(FIT_KEYS) do
+    local region = button[key]
+    if region then
+      region:SetAllPoints(button)
+    end
+  end
+
+  local icon = button.icon
+  local zoom = iconZoomByButton[button]
+  if icon and zoom then
+    icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
+  end
+end
+
+-- hideElements.border/borderIfEmpty make LibActionButton clear the
+-- NormalTexture and drop the icon mask itself instead of re-drawing the
+-- template frame art on each update (LibActionButton-1.0.lua:1850-1857,
+-- 1886-1887); a config table is the library's own supported route.
+local BUTTON_CONFIG = { hideElements = { border = true, borderIfEmpty = true } }
+
 local function getOrCreateButton(namePrefix, i)
   local name = namePrefix .. i
-  return _G[name] or LAB:CreateButton(i, name, header)
+  local existing = _G[name]
+  if existing then
+    return existing
+  end
+
+  local button = LAB:CreateButton(i, name, header, BUTTON_CONFIG)
+
+  for _, key in ipairs(INVISIBLE_KEYS) do
+    if button[key] then
+      button[key]:SetAlpha(0)
+    end
+  end
+
+  -- LibActionButton re-anchors these two after the fit above; a post-hook on
+  -- the region (our own button's texture, never a Blizzard function) re-pins
+  -- them straight after each of its SetPoint calls.
+  for _, key in ipairs({ "HighlightTexture", "CheckedTexture" }) do
+    if button[key] then
+      hooksecurefunc(button[key], "SetPoint", function()
+        button[key]:SetAllPoints(button)
+      end)
+    end
+  end
+
+  fitButtonArt(button)
+  return button
 end
 
 -- Vanilla AlignActionBars (e17c352 WIIIUI.lua:2639-2667): button 1 of each
@@ -150,6 +215,8 @@ local function anchorRow(buttons, originY, uiScale, geometry, grid)
     local button = buttons[i]
 
     button:SetSize(geometry.size, geometry.size)
+    iconZoomByButton[button] = WIIIUI.Theme.IconZoom(uiScale, geometry.size)
+    fitButtonArt(button)
     button:ClearAllPoints()
 
     if i == 1 then
@@ -205,6 +272,8 @@ local function anchorExtras(extras, uiScale, theme)
 
     if button and geometry and relativeTo then
       button:SetSize(geometry.size, geometry.size)
+      iconZoomByButton[button] = WIIIUI.Theme.IconZoom(uiScale, geometry.size)
+      fitButtonArt(button)
       button:ClearAllPoints()
       button:SetPoint(geometry.point, relativeTo, geometry.relativePoint, geometry.offsetX, geometry.offsetY)
     end
@@ -276,7 +345,7 @@ function WIIIUI.Buttons.BuildButtons()
   local uiScale = wc3UI_Options.uiScale
   local geometry = WIIIUI.Theme.ActionButtonGeometry(uiScale)
   local grid = WIIIUI.Console.grid
-  local rowOriginY = { 0, geometry.row2OffsetY, geometry.row3OffsetY }
+  local rowOriginY = { geometry.row1OffsetY, geometry.row2OffsetY, geometry.row3OffsetY }
 
   for rowIndex, row in ipairs(ROWS) do
     local buttons = WIIIUI.Buttons.rows[row.key]
