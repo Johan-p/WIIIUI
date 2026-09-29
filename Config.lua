@@ -207,6 +207,25 @@ end
 
 local LABEL_COLUMN_WIDTH = 220
 
+local ROW_X = 20
+local ROW_HEIGHT = 26
+local CONTENT_START_Y = -10
+local CONTENT_WIDTH = 600
+local CONTENT_BOTTOM_PADDING = 20
+local RELOAD_BUTTON_HEIGHT = 22
+
+-- ui-reviewer finding (slice 17 gate iteration 1): a note row's label plus
+-- editModeNoteSuffix()'s build-name suffix has no width/wrap guard, so the
+-- longest existing label ("Right Multi-Bar Orientation") plus the suffix
+-- risks exceeding the scroll content's clipped viewport and getting cut off
+-- by the ScrollFrame rather than just visually overflowing. NOTE_TEXT_WIDTH
+-- constrains the note FontString to content width minus its left inset and a
+-- right margin, matching the other rows' own right-hand boundary -- moved
+-- above buildNote (below) since it and every other row-layout constant this
+-- file already declares here are needed before that function's own
+-- definition, not after it.
+local NOTE_TEXT_WIDTH = CONTENT_WIDTH - ROW_X - 10
+
 local function buildCheckbox(panel, row, x, y)
   ensureLabel(panel, row, x, y)
 
@@ -320,7 +339,18 @@ local function buildTheme(panel, row, x, y)
   return lines * THEME_BUTTON_HEIGHT
 end
 
-local EDIT_MODE_NOTE_SUFFIX = " -- set in Edit Mode"
+-- spec 0001 §1.6: every "Set in Edit Mode" row (the fixed 6 plus any
+-- in-game-check failure) is, per the §1.6 per-piece table, a piece the
+-- shipped layout string places -- so the note now names the constant that
+-- backs it (WIIIUI.LAYOUT_BUILD, Blizzard.lua) instead of a bare "set in
+-- Edit Mode" with no pointer to where. Blizzard.lua isn't loaded by every
+-- test fixture that builds this control table (config_test.lua's own, same
+-- reasoning as the ZoneTextPos `available` field above), so this falls back
+-- to a plain string there -- only a real client (or a test that loads
+-- Blizzard.lua too) sees the build number.
+local function editModeNoteSuffix()
+  return " -- set in Edit Mode (WIIIUI's layout string, build " .. (WIIIUI.LAYOUT_BUILD or "not yet exported") .. ")"
+end
 
 local function buildNote(panel, row, x, y)
   local note = WIIIUI.Config.widgets[row.key]
@@ -332,20 +362,35 @@ local function buildNote(panel, row, x, y)
     -- relying on the suffix text alone (ui-reviewer finding, slice 06 gate
     -- iteration 1).
     note:SetFontObject(GameFontDisableSmall)
+    -- Width/wrap guard (ui-reviewer finding, slice 17 gate iteration 2): no
+    -- SetHeight call is ever made on this FontString, so its height stays
+    -- the auto-sized value the region computes from its content -- a
+    -- FontString's SetHeight/GetHeight/SetWidth/GetWidth "compute what
+    -- dimensions are needed in one direction, given the size in the other
+    -- direction" rather than working with a fixed painted area
+    -- (wowpedia/addonstudio.org mirror, WoW:UIOBJECT_FontString), so
+    -- GetHeight() below reports the true post-wrap height once width +
+    -- word-wrap are set. GetStringHeight() (the previous gate-fix's choice)
+    -- is documented to return the height "without wrapping" -- it only
+    -- accounts for manually-set "\n" breaks, never automatic word-wrap
+    -- (warcraft.wiki.gg API_FontString_GetStringHeight) -- so it can't be
+    -- used here.
+    note:SetWidth(NOTE_TEXT_WIDTH)
+    note:SetWordWrap(true)
+    note:SetJustifyH("LEFT")
     WIIIUI.Config.widgets[row.key] = note
   end
 
   note:ClearAllPoints()
   note:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
-  note:SetText(label(row.key) .. EDIT_MODE_NOTE_SUFFIX)
-end
+  note:SetText(label(row.key) .. editModeNoteSuffix())
 
-local ROW_X = 20
-local ROW_HEIGHT = 26
-local CONTENT_START_Y = -10
-local CONTENT_WIDTH = 600
-local CONTENT_BOTTOM_PADDING = 20
-local RELOAD_BUTTON_HEIGHT = 22
+  -- Row height: at least the fixed single-line ROW_HEIGHT every other row
+  -- uses (so short notes keep vanilla's exact row spacing), or the wrapped
+  -- text's real height plus a small bottom margin when it wraps past one
+  -- line.
+  return math.max(ROW_HEIGHT, note:GetHeight() + 6)
+end
 
 -- UIPanelScrollFrameTemplate anchors its scrollbar 6px right of the scroll
 -- frame's own right edge (Gethe/wow-ui-source forever branch,
@@ -481,6 +526,81 @@ local function ensureScrollFrame(panel)
   return content
 end
 
+local LAYOUT_STRING_BOX_WIDTH = 300
+local LAYOUT_STRING_BOX_HEIGHT = 20
+
+local function layoutStringValue()
+  -- Same player-facing wording as Blizzard.lua's own placeholder (ui-reviewer
+  -- finding, slice 17 gate iteration 1) -- this fallback only renders when
+  -- WIIIUI.LAYOUT_STRING is nil (never true once Blizzard.lua loads, but a
+  -- test fixture that builds this control table without loading Blizzard.lua
+  -- reaches it, per config_test.lua). No internal doc pointer, no
+  -- instruction to edit the read-only box it's displayed in.
+  return WIIIUI.LAYOUT_STRING or "Not available in this build -- check for an addon update."
+end
+
+-- spec 0001 §1.6 "Copy layout string": a read-only EditBox with the layout
+-- string pre-selected, so Ctrl+C copies the whole thing without a manual
+-- drag-select. Not part of WIIIUI.Config.CONTROLS -- it has no wc3UI_Options
+-- key to get/set, so it would fail the "editMode xor get/set" shape every
+-- other row follows (config_test.lua's own round-trip loop); built directly
+-- here instead, the same way ensureReloadButton is.
+--
+-- "Read-only" is enforced by snapping any user edit straight back to the
+-- constant rather than disabling the box (which would also block
+-- selecting/copying it) -- the same idiom Blizzard's own Edit Mode layout
+-- dialog uses to pre-select an EditBox's contents
+-- (EditModeLayoutDialogMixin:SetupControlsForMode, Blizzard_EditMode/Shared/
+-- EditModeDialogs.lua, forever branch, fetched 2026-09-28:
+-- "self:GetEditBox():SetText(...); self:GetEditBox():HighlightText()" --
+-- HighlightText() with no arguments selects the entire contents,
+-- warcraft.wiki.gg API_EditBox_HighlightText). OnTextChanged's userInput
+-- flag (warcraft.wiki.gg UIHANDLER_OnTextChanged: "true when changing as a
+-- result of user input, false when programmatically set") gates the reset so
+-- the SetText call below can't recurse: it re-fires OnTextChanged with
+-- userInput = false, which the `if userInput` guard ignores.
+local function ensureLayoutStringBox(panel, x, y)
+  local widget = WIIIUI.Config.widgets.layoutString
+  if not widget then
+    local title = panel:CreateFontString(nil, "OVERLAY")
+    title:SetFontObject(GameFontHighlightSmall)
+    title:SetText("Copy layout string")
+
+    local box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    box:SetAutoFocus(false)
+    box:SetSize(LAYOUT_STRING_BOX_WIDTH, LAYOUT_STRING_BOX_HEIGHT)
+    box:SetText(layoutStringValue())
+
+    box:SetScript("OnEditFocusGained", function(self)
+      self:HighlightText()
+    end)
+    box:SetScript("OnTextChanged", function(self, userInput)
+      if userInput and self:GetText() ~= layoutStringValue() then
+        self:SetText(layoutStringValue())
+        self:HighlightText()
+      end
+    end)
+    box:SetScript("OnEscapePressed", function(self)
+      self:ClearFocus()
+    end)
+
+    widget = { title = title, box = box }
+    WIIIUI.Config.widgets.layoutString = widget
+  end
+
+  widget.title:ClearAllPoints()
+  widget.title:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
+  widget.box:ClearAllPoints()
+  widget.box:SetPoint("TOPLEFT", panel, "TOPLEFT", x + LABEL_COLUMN_WIDTH, y)
+
+  -- Re-sync on every call, matching every other Build* row: once the
+  -- maintainer's real export replaces the Blizzard.lua placeholder, the box
+  -- must show it without needing a fresh widget.
+  if widget.box:GetText() ~= layoutStringValue() then
+    widget.box:SetText(layoutStringValue())
+  end
+end
+
 local function ensureReloadButton(panel, y)
   local reload = WIIIUI.Config.reloadButton
   if not reload then
@@ -514,8 +634,8 @@ function WIIIUI.Config.BuildConfig()
 
   for _, row in ipairs(WIIIUI.Config.CONTROLS) do
     if isNoteRow(row) then
-      buildNote(content, row, ROW_X, y)
-      y = y - ROW_HEIGHT
+      local height = buildNote(content, row, ROW_X, y)
+      y = y - height
     elseif row.kind == "checkbox" then
       buildCheckbox(content, row, ROW_X, y)
       y = y - ROW_HEIGHT
@@ -530,6 +650,10 @@ function WIIIUI.Config.BuildConfig()
       y = y - height - 6
     end
   end
+
+  local layoutStringY = y - 6
+  ensureLayoutStringBox(content, ROW_X, layoutStringY)
+  y = layoutStringY - ROW_HEIGHT
 
   local reloadY = y - 6
   ensureReloadButton(content, reloadY)
