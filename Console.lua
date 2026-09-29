@@ -372,8 +372,7 @@ local ULTRA_WIDE_CHAT_MIDDLE_OFFSET_X_NIGHTELF = -37
 -- Vanilla checks centerSlim first with an elseif, so centerSlimNoInv only
 -- applies when centerSlim is also false -- replicated here so centerSlim's
 -- per-piece hiding wins when both flags are set.
-local function applyLayoutModes(right, left, theme, uiScale)
-  local rightPartBackground = right.rightPartBackground
+local function applyLayoutModes(right, left, theme, uiScale, backgroundGeometry)
   local lid = right.lid
   local chatTop = right.chatTop
   local chatMiddle = right.chatMiddle
@@ -383,12 +382,12 @@ local function applyLayoutModes(right, left, theme, uiScale)
   local fillerTop3, fillerBottom3 = right.fillerTop3, right.fillerBottom3
 
   -- centerSlim (vanilla AlignUltraWide's centerSlim branch, e17c352
-  -- WIIIUI.lua:4640-4652) hides the background/lid/chat-area/filler pieces
+  -- WIIIUI.lua:4640-4652) hides the lid/chat-area/filler pieces
   -- while keeping rightPartMiddle/rightPartLeft (inventory art) visible.
   -- Vanilla's nightelf-only decorative left-frame texture in the same
   -- branch is a deferred cosmetic detail, out of this list's scope.
   local slimPieces = {
-    rightPartBackground, lid, chatTop, chatMiddle, chatBottom,
+    lid, chatTop, chatMiddle, chatBottom,
     fillerTop1, fillerBottom1, fillerTop2, fillerBottom2, fillerTop3, fillerBottom3,
   }
 
@@ -415,7 +414,7 @@ local function applyLayoutModes(right, left, theme, uiScale)
 
   -- ultraWide/centerSlim/centerSlimNoInv horizontal centering (vanilla
   -- AlignUltraWide's tail, e17c352 WIIIUI.lua:4666-4694, 4815). chatTop/
-  -- chatMiddle/chatBottom always reference rightPartBackground here (they
+  -- chatMiddle/chatBottom always reference rightPartLeft here (they
   -- already got their normal default anchor unconditionally in BuildRight,
   -- so the false branch below needs no extra code to revert them) -- only
   -- the *centering reference edge* selected just below varies per mode, and
@@ -428,16 +427,27 @@ local function applyLayoutModes(right, left, theme, uiScale)
     local topOffsetX = uiScale * (ULTRA_WIDE_CHAT_TOP_OFFSET_X_THEMES[theme] or ULTRA_WIDE_CHAT_TOP_OFFSET_X_DEFAULT)
     local topOffsetY = -uiScale * 0.03846153
 
+    -- Vanilla anchored these to the chat-area background's TOPRIGHT/
+    -- BOTTOMRIGHT (e17c352 WIIIUI.lua:4680-4691). The background texture is
+    -- gone (feature 0001 fix5: Blizzard's chat has its own background
+    -- option), so the same corners are reached from rightPartLeft's
+    -- BOTTOMRIGHT: the background sat at (offsetX, offsetY) from it with
+    -- (width, height).
+    local cornerX = backgroundGeometry.offsetX + backgroundGeometry.width
+    local cornerTopY = backgroundGeometry.offsetY + backgroundGeometry.height
+    local cornerBottomY = backgroundGeometry.offsetY
+    local rightPartLeft = right.rightPartLeft
+
     chatTop:ClearAllPoints()
-    chatTop:SetPoint("BOTTOMLEFT", rightPartBackground, "TOPRIGHT", topOffsetX, topOffsetY)
+    chatTop:SetPoint("BOTTOMLEFT", rightPartLeft, "BOTTOMRIGHT", cornerX + topOffsetX, cornerTopY + topOffsetY)
 
     chatBottom:ClearAllPoints()
-    chatBottom:SetPoint("BOTTOMLEFT", rightPartBackground, "BOTTOMRIGHT", -uiScale * 0.725833, 0)
+    chatBottom:SetPoint("BOTTOMLEFT", rightPartLeft, "BOTTOMRIGHT", cornerX - uiScale * 0.725833, cornerBottomY)
 
     local middleOffsetX = (theme == "nightelf") and ULTRA_WIDE_CHAT_MIDDLE_OFFSET_X_NIGHTELF or (-uiScale * 0.0625)
 
     chatMiddle:ClearAllPoints()
-    chatMiddle:SetPoint("BOTTOMLEFT", rightPartBackground, "BOTTOMRIGHT", middleOffsetX, 0)
+    chatMiddle:SetPoint("BOTTOMLEFT", rightPartLeft, "BOTTOMRIGHT", cornerX + middleOffsetX, cornerBottomY)
 
     -- vanilla minimapFrame:SetPoint (e17c352 WIIIUI.lua:4815) moves Wc3_UI_
     -- minimap directly; here the whole `left` console frame moves instead,
@@ -445,7 +455,7 @@ local function applyLayoutModes(right, left, theme, uiScale)
     -- all chain their anchors from `left` -- moving the parent frame
     -- carries the same visual result without re-anchoring each child.
     if left then
-      -- rightPartBackground/rightPartMiddle/rightPartLeft's resolved right
+      -- rightPartMiddle/rightPartLeft's resolved right
       -- edge chains all the way back through grid/extensionBackgroundTexture/
       -- portraitTexture/minimapTexture to `left` itself (BuildLeft/BuildGrid/
       -- BuildRight's own anchor graph). Measuring the reference edge against
@@ -461,8 +471,10 @@ local function applyLayoutModes(right, left, theme, uiScale)
 
       -- Reference edge per mode -- vanilla picks a different frame
       -- depending which piece is actually visible (e17c352 WIIIUI.lua:
-      -- 4666-4762): rightPartBackground when neither center mode is on (the
-      -- Wc3_UI_bottom_right_middle:IsVisible() branch, line 4667);
+      -- 4666-4762): the chat-area background's right edge when neither
+      -- center mode is on (the Wc3_UI_bottom_right_middle:IsVisible()
+      -- branch, line 4667) -- rightPartLeft's right edge plus the
+      -- background's offset and width, since the texture no longer exists;
       -- rightPartLeft when centerSlimNoInv (WIIIUI_rightpart:IsVisible()==
       -- nil, line 4703), +18 for nightelf (line 4711); rightPart_middle when
       -- centerSlim (WIIIUI_rightpartBackground:IsVisible()==nil, line 4815)
@@ -472,15 +484,21 @@ local function applyLayoutModes(right, left, theme, uiScale)
       -- under centerSlim (lines 4738-4762) stays deferred (real-action-
       -- button territory, slice D); this only selects which frame's edge is
       -- read, at its current (un-resized) width.
-      local referenceFrame = rightPartBackground
+      local referenceFrame = right.rightPartLeft
+      local referenceExtra = backgroundGeometry.offsetX + backgroundGeometry.width
 
       if wc3UI_Options.centerSlim then
         referenceFrame = right.rightPartMiddle
+        referenceExtra = 0
       elseif wc3UI_Options.centerSlimNoInv then
-        referenceFrame = right.rightPartLeft
+        referenceExtra = 0
       end
 
       local referenceEdge = referenceFrame and referenceFrame:GetRight()
+
+      if referenceEdge then
+        referenceEdge = referenceEdge + referenceExtra
+      end
 
       if referenceEdge and wc3UI_Options.centerSlimNoInv and not wc3UI_Options.centerSlim and theme == "nightelf" then
         referenceEdge = referenceEdge + 18
@@ -557,36 +575,19 @@ function WIIIUI.Console.BuildRight()
   rightPartLeft:ClearAllPoints()
   rightPartLeft:SetPoint("BOTTOMRIGHT", rightPartMiddle, "BOTTOMLEFT", geometry.leftOffsetX, geometry.leftOffsetY)
 
-  -- Vanilla WIIIUI_rightpartBackground (e17c352 WIIIUI.xml:3131, Layer
-  -- level="BACKGROUND", nested in WIIIUI_rightpart), a shared (not
-  -- per-theme) texture -- literal path, same convention as the left frame's
-  -- extension-background. AlignRightPart (e17c352 WIIIUI.lua:3495-3497)
-  -- overrides the XML's static CENTER anchor/0x0 size at runtime.
-  -- rightPartWidth defaults to uiScale*2.2 when unset (e17c352
-  -- WIIIUI.lua:4545-4546's backfill-only-when-nil semantics); read here
-  -- rather than via Config.lua, which doesn't exist yet (slice 04B).
-  -- rightPartWidth is deliberately excluded from DEFAULTS (Core.lua), so
-  -- MergeDefaults never resets a wrong-typed value from a hand-edited or
-  -- corrupted SavedVariables file -- guard the type here instead of letting
-  -- a non-number flow into rightPartBackground:SetSize below.
+  -- Vanilla WIIIUI_rightpartBackground (e17c352 WIIIUI.xml:3131) was an
+  -- opaque black texture behind the chat; it is not drawn any more (feature
+  -- 0001 fix5: Blizzard's chat frame has its own background option). Its
+  -- geometry survives as the reference the ultra-wide chat textures and the
+  -- centering measure from (applyLayoutModes). rightPartWidth defaults to
+  -- uiScale*2.2 when unset (e17c352 WIIIUI.lua:4545-4546) and is excluded
+  -- from DEFAULTS (Core.lua), so its type is guarded here.
   local rawRightPartWidth = wc3UI_Options.rightPartWidth
   local rightPartWidth = (type(rawRightPartWidth) == "number") and rawRightPartWidth or (uiScale * 2.2)
   local backgroundGeometry = WIIIUI.Theme.RightPartBackgroundGeometry(
     uiScale,
     rightPartWidth,
     wc3UI_Options.moveChatAreaUp
-  )
-  local rightPartBackground = getOrCreateTexture(right, "rightPartBackground", "BACKGROUND")
-
-  rightPartBackground:SetSize(backgroundGeometry.width, backgroundGeometry.height)
-  rightPartBackground:SetTexture("Interface\\Addons\\WIIIUI\\art\\other\\black_background")
-  rightPartBackground:ClearAllPoints()
-  rightPartBackground:SetPoint(
-    "BOTTOMLEFT",
-    rightPartLeft,
-    "BOTTOMRIGHT",
-    backgroundGeometry.offsetX,
-    backgroundGeometry.offsetY
   )
 
   -- Vanilla Wc3_UI_right_lid (e17c352 WIIIUI.xml:3164, Layer
@@ -697,7 +698,7 @@ function WIIIUI.Console.BuildRight()
   -- Layout modes (centerSlim/centerSlimNoInv/ultraWide): applyLayoutModes,
   -- defined above, re-derives visibility/anchors from wc3UI_Options every
   -- call -- see its own comments for the vanilla citations per mode.
-  applyLayoutModes(right, WIIIUI.Console.left, theme, uiScale)
+  applyLayoutModes(right, WIIIUI.Console.left, theme, uiScale, backgroundGeometry)
 
   WIIIUI.Console.SyncAnchors()
 end

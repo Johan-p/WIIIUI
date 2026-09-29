@@ -65,7 +65,7 @@ for i = 1, 4 do
 end
 
 local RIGHT_TEXTURES = {
-  "rightPartMiddle", "rightPartLeft", "rightPartBackground", "lid",
+  "rightPartMiddle", "rightPartLeft", "lid",
   "chatTop", "chatMiddle", "chatBottom",
 }
 for _, name in ipairs(RIGHT_TEXTURES) do
@@ -1013,8 +1013,8 @@ local FIELD_LABEL_WIDTH = 90
 -- BLOCK_WIDTH (190px) under GameFontHighlightSmall's rough ~5.5px/char --
 -- ~215px total, well inside the ~380px two-line capacity even with mid-word
 -- breaking's worse line-fill than word breaking. The next-longest ids
--- ("Portrait.button [WIIIUI_Portrait]", "Console.right.rightPartBackground",
--- both 33 chars) have even more margin, and named entries
+-- ("Portrait.button [WIIIUI_Portrait]", 33 chars, "Console.right.
+-- rightPartMiddle", 29) have even more margin, and named entries
 -- ("Buttons.extras.9 [WIIIUI_Extra9]") carry a space so word-wrap alone
 -- already handled them -- none of these combine into something that needs a
 -- third line -- tester should still eyeball the widest titles in-game since
