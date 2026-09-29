@@ -362,14 +362,19 @@ local function buildNote(panel, row, x, y)
     -- relying on the suffix text alone (ui-reviewer finding, slice 06 gate
     -- iteration 1).
     note:SetFontObject(GameFontDisableSmall)
-    -- Width/wrap guard (ui-reviewer finding, slice 17 gate iteration 1): no
-    -- SetHeight call, so the FontString auto-grows to its wrapped content
-    -- rather than truncating with "..." (warcraft.wiki.gg
-    -- API_FontString_GetStringHeight: truncation only happens when the
-    -- FontString's own height is explicitly constrained smaller than its
-    -- text needs) -- GetStringHeight() below then returns the true post-wrap
-    -- height, which BuildConfig uses to advance past a wrapped row instead
-    -- of clipping it against the ScrollFrame's viewport.
+    -- Width/wrap guard (ui-reviewer finding, slice 17 gate iteration 2): no
+    -- SetHeight call is ever made on this FontString, so its height stays
+    -- the auto-sized value the region computes from its content -- a
+    -- FontString's SetHeight/GetHeight/SetWidth/GetWidth "compute what
+    -- dimensions are needed in one direction, given the size in the other
+    -- direction" rather than working with a fixed painted area
+    -- (wowpedia/addonstudio.org mirror, WoW:UIOBJECT_FontString), so
+    -- GetHeight() below reports the true post-wrap height once width +
+    -- word-wrap are set. GetStringHeight() (the previous gate-fix's choice)
+    -- is documented to return the height "without wrapping" -- it only
+    -- accounts for manually-set "\n" breaks, never automatic word-wrap
+    -- (warcraft.wiki.gg API_FontString_GetStringHeight) -- so it can't be
+    -- used here.
     note:SetWidth(NOTE_TEXT_WIDTH)
     note:SetWordWrap(true)
     note:SetJustifyH("LEFT")
@@ -384,7 +389,7 @@ local function buildNote(panel, row, x, y)
   -- uses (so short notes keep vanilla's exact row spacing), or the wrapped
   -- text's real height plus a small bottom margin when it wraps past one
   -- line.
-  return math.max(ROW_HEIGHT, note:GetStringHeight() + 6)
+  return math.max(ROW_HEIGHT, note:GetHeight() + 6)
 end
 
 -- UIPanelScrollFrameTemplate anchors its scrollbar 6px right of the scroll
