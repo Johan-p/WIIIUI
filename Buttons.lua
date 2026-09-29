@@ -174,8 +174,9 @@ end
 -- BuildButtons() call (not just build-once, since size/position scale with
 -- uiScale/theme) -- same split as anchorRow's own "create once, anchor
 -- every call" convention above. Minimap slots (kind "minimap") anchor to
--- Console.left.minimapTexture; inventory slots (kind "inventory") anchor to
--- Console.right.rightPartMiddle -- never to the live Minimap widget itself
+-- Console.left.minimapTexture's companion Frame; inventory slots (kind
+-- "inventory") anchor to Console.right.rightPartMiddle's -- never to the
+-- live Minimap widget itself
 -- (spec 0001 slice 19b: an Edit Mode system's implicit-protection rule,
 -- warcraft.wiki.gg Patch_2.0.1/API_changes -- "the parent of a protected
 -- frame is implicitly protected also, as are any frames which it is
@@ -187,9 +188,14 @@ end
 local function anchorExtras(extras, uiScale, theme)
   local left = WIIIUI.Console.left
   local right = WIIIUI.Console.right
+  -- Companion Frames, not the textures: a protected frame cannot anchor to a
+  -- region ("Cannot anchor protected frames to regions"); see Console.lua's
+  -- anchor companions.
+  local minimapTexture = left and left.minimapTexture
+  local inventoryTexture = right and right.rightPartMiddle
   local relativeByKind = {
-    minimap = left and left.minimapTexture,
-    inventory = right and right.rightPartMiddle,
+    minimap = minimapTexture and WIIIUI.Console.AnchorFrame(minimapTexture),
+    inventory = inventoryTexture and WIIIUI.Console.AnchorFrame(inventoryTexture),
   }
 
   for i = 1, EXTRA_SLOT_COUNT do

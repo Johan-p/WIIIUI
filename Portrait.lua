@@ -450,11 +450,13 @@ end
 -- spec 0001 §Portrait: the button sits directly on WIIIUI.Console.left's
 -- portraitTexture (same size, zero offset) -- portraitTexture is already
 -- positioned relative to the minimap texture by Console.BuildLeft/
--- Theme.PortraitGeometry, so anchoring here to portraitTexture itself
--- avoids re-deriving that same minimap-relative math a second time.
+-- Theme.PortraitGeometry, so anchoring here to portraitTexture's rect
+-- avoids re-deriving that same minimap-relative math a second time. The
+-- button is protected and the client refuses to anchor a protected frame to a
+-- region, so it anchors to the texture's companion Frame (Console.lua).
 function WIIIUI.Portrait.BuildPortrait()
   local left = WIIIUI.Console.left
-  local anchor = left and left.portraitTexture
+  local anchor = left and left.portraitTexture and WIIIUI.Console.AnchorFrame(left.portraitTexture)
   local uiScale = wc3UI_Options.uiScale
   local geometry = WIIIUI.Theme.PortraitGeometry(uiScale)
 
