@@ -215,15 +215,43 @@ end
 -- (0, false, an unset "" texture path).
 local baseline = {}
 
+-- security-specialist finding (Medium), slice 20 gate-fix: reverting must
+-- undo mutations in the REVERSE of the order they were applied -- two
+-- mutual ParentPosOf overrides (each anchored to the other's post-apply
+-- object) revert safely only in that order; pairs(baseline) gives no
+-- ordering guarantee at all and can hit WoW's real "Cannot anchor to a
+-- region dependent on it" SetPoint error mid-Revert(). captureOrder records
+-- each id once, the first time capture() opens its baseline record for that
+-- id -- i.e. in first-applied order, so Revert() below can walk it
+-- last-to-first.
+local captureOrder = {}
+
 local function capture(id, key, value)
   local data = baseline[id]
   if not data then
     data = { captured = {} }
     baseline[id] = data
+    captureOrder[#captureOrder + 1] = id
   end
   if not data.captured[key] then
     data.captured[key] = true
     data[key] = value
+  end
+end
+
+-- revertEntry (Apply()'s per-entry pcall failure branch) is always called
+-- for the entry Apply() is CURRENTLY processing, and Apply() always calls
+-- Revert() (which empties captureOrder) before its loop starts, so in
+-- practice this id is always the last element. Removed by value anyway,
+-- not by assuming that position, since a future revertEntry call site (or a
+-- change to Apply()'s own Revert()-first guarantee) could make that
+-- assumption false.
+local function removeFromCaptureOrder(id)
+  for i, capturedId in ipairs(captureOrder) do
+    if capturedId == id then
+      table.remove(captureOrder, i)
+      return
+    end
   end
 end
 
@@ -293,6 +321,7 @@ local function revertEntry(id)
   end
   revertOne(id, data)
   baseline[id] = nil
+  removeFromCaptureOrder(id)
 end
 
 -- spec 0001 §Customizer "Apply", second round: "WIIIUI.Customizer.Revert()
@@ -301,12 +330,27 @@ end
 -- before Console.BuildLeft) and first in Apply() itself -- when Layout
 -- already reverted, the second call finds an empty baseline and does
 -- nothing.
+--
+-- security-specialist finding (Medium), slice 20 gate-fix: walks
+-- captureOrder LAST to FIRST -- the exact reverse of the order Apply()
+-- captured (== applied) each id -- so a set of mutual anchor overrides
+-- unwinds in the same order a real anchor graph mutation must: undo the
+-- most recent change first. Each revertOne is its own pcall so one bad
+-- entry (any cause, not only ordering) can never leave baseline/
+-- captureOrder non-empty -- Revert() is the unprotected first line of
+-- WIIIUI.Layout(), so a stuck entry there would otherwise fail identically
+-- on every later Layout() call until /reload.
 function WIIIUI.Customizer.Revert()
-  for id, data in pairs(baseline) do
-    revertOne(id, data)
+  for i = #captureOrder, 1, -1 do
+    local id = captureOrder[i]
+    local data = baseline[id]
+    if data then
+      pcall(revertOne, id, data)
+    end
   end
 
   baseline = {}
+  captureOrder = {}
 end
 
 -- spec 0001 §Customizer "Apply": "Each entry is wrapped in its own pcall, so
@@ -470,17 +514,20 @@ end
 -- ObjectSecurity on WIIIUI's own frames should never happen, but the check
 -- fails closed regardless), testing it in a boolean context throws the same
 -- way and the entry still rolls back -- no special-casing needed.
-local function checkCombatToggledProtection(overrides)
-  if overrides.ParentOf == nil and overrides.ParentPosOf == nil then
-    return
-  end
-
-  local fieldName = overrides.ParentOf ~= nil and "ParentOf" or "ParentPosOf"
-
-  for _, id in ipairs(combatToggledIds) do
-    local obj = WIIIUI.Customizer.Resolve(id)
+--
+-- security-specialist finding (Low), slice 20 gate-fix: takes the entry's
+-- own id (so the message names which entry's edit was rejected, not only
+-- the combat-toggled frame that would have locked) and a single fieldName
+-- rather than choosing between two -- applyEntry below calls this once right
+-- after applyParent (only when ParentOf is set) and once right after
+-- applyAnchor (only when ParentPosOf is set), so fieldName always names the
+-- field whose own step actually just ran, never a guess between two fields
+-- that happen to both be set.
+local function checkCombatToggledProtection(id, fieldName)
+  for _, ctId in ipairs(combatToggledIds) do
+    local obj = WIIIUI.Customizer.Resolve(ctId)
     if obj and obj:IsProtected() then
-      error("Customizer: " .. fieldName .. " would lock " .. id .. " in combat; entry skipped", 0)
+      error("Customizer: " .. fieldName .. " would lock " .. ctId .. " in combat; entry (" .. id .. ") skipped", 0)
     end
   end
 end
@@ -532,6 +579,11 @@ end
 -- spec 0001 §Customizer "Apply": "Order within one entry: parent (Hide,
 -- ParentOf), then anchor, then the protection check, then size, then
 -- texture, then strata, level, alpha, draw layer, tex coords and backdrop."
+-- security-specialist finding (Low), slice 20 gate-fix: the protection
+-- check now runs twice -- right after parent (ParentOf only) and right
+-- after anchor (ParentPosOf only) -- both still strictly before size, so
+-- checkCombatToggledProtection's fieldName always names the step that just
+-- ran instead of guessing between two fields that happen to both be set.
 local function applyEntry(entry, overrides)
   local id = entry.id
   local obj = WIIIUI.Customizer.Resolve(id)
@@ -541,11 +593,15 @@ local function applyEntry(entry, overrides)
 
   if not entry.secure then
     applyParent(id, obj, overrides)
+    if overrides.ParentOf ~= nil then
+      checkCombatToggledProtection(id, "ParentOf")
+    end
   end
 
   applyAnchor(id, obj, overrides)
-
-  checkCombatToggledProtection(overrides)
+  if overrides.ParentPosOf ~= nil then
+    checkCombatToggledProtection(id, "ParentPosOf")
+  end
 
   applySize(id, obj, overrides)
 
