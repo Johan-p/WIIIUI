@@ -771,14 +771,29 @@ local FIELD_LABEL_WIDTH = 90
 -- (blockIndex - 1) * BLOCK_WIDTH). SetWidth(BLOCK_WIDTH) + SetWordWrap(true)
 -- is the same pattern Config.lua's buildNote already uses for the same
 -- reason (Config.lua's own "Width/wrap guard" comment, slice 17 gate
--- iteration 2). Two rows are reserved unconditionally rather than measuring
--- and repositioning the field rows per refresh: the longest registry id
--- ("Console.left.extensionBackgroundTexture", 40 chars) wraps to 2 lines at
--- BLOCK_WIDTH under GameFontHighlightSmall's rough metrics, and named
--- entries ("Buttons.extras.9 [WIIIUI_Extra9]") carry short ids, so the two
--- never combine into something that needs a third line -- tester should
--- still eyeball the widest titles in-game since exact font metrics aren't
--- provable headlessly.
+-- iteration 2).
+--
+-- ui-reviewer finding (Medium), slice 20 gate iteration 2: SetWordWrap alone
+-- only breaks at whitespace. Every registry id is dot-separated with zero
+-- whitespace, so as one unbreakable "word" it never wrapped -- it silently
+-- truncated on line 1 instead, defeating the title reservation below.
+-- SetNonSpaceWrap(true) (warcraft.wiki.gg API_FontString_SetNonSpaceWrap:
+-- "sets whether long strings without spaces are wrapped or truncated",
+-- default off) is the separate toggle that makes a spaceless string actually
+-- wrap; both calls are needed together.
+--
+-- Two rows are reserved unconditionally rather than measuring and
+-- repositioning the field rows per refresh: the longest registry id
+-- ("Console.left.extensionBackgroundTexture", 39 chars) wraps to 2 lines at
+-- BLOCK_WIDTH (190px) under GameFontHighlightSmall's rough ~5.5px/char --
+-- ~215px total, well inside the ~380px two-line capacity even with mid-word
+-- breaking's worse line-fill than word breaking. The next-longest ids
+-- ("Portrait.button [WIIIUI_Portrait]", "Console.right.rightPartBackground",
+-- both 33 chars) have even more margin, and named entries
+-- ("Buttons.extras.9 [WIIIUI_Extra9]") carry a space so word-wrap alone
+-- already handled them -- none of these combine into something that needs a
+-- third line -- tester should still eyeball the widest titles in-game since
+-- exact font metrics aren't provable headlessly.
 local TITLE_ROWS = 2
 local TITLE_HEIGHT = FIELD_ROW_HEIGHT * TITLE_ROWS
 
@@ -839,6 +854,7 @@ local function ensureBlock(index)
   title:SetFontObject(GameFontHighlightSmall)
   title:SetWidth(BLOCK_WIDTH)
   title:SetWordWrap(true)
+  title:SetNonSpaceWrap(true)
   title:SetJustifyH("LEFT")
   title:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
 
