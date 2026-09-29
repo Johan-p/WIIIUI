@@ -123,6 +123,18 @@ local ONSTATE_PAGE_SNIPPET = [[
 -- fallback each resolve to one of these).
 local PAGE_COUNT = 14
 
+-- Fixed buttons (rows 2-3, the 9 extras) are children of the same header, so
+-- the driver's ChildUpdate("state", page) reaches them too, and LAB shows a
+-- button empty for any state it has no entry for (LibActionButton-1.0.lua
+-- :311-321). They get the one action under state 0 and under every page the
+-- driver can emit (feature 0001 fix4, F2).
+local function applyFixedState(button, action)
+  button:SetState(0, "action", action)
+  for p = 1, PAGE_COUNT do
+    button:SetState(p, "action", action)
+  end
+end
+
 local function applyPageStates(buttons)
   for p = 1, PAGE_COUNT do
     for i = 1, 12 do
@@ -207,9 +219,10 @@ end
 -- approximating vanilla's own two-step chain (parentFrame's uiScale*0.037037,
 -- -1 offset off actionSlotGridMain, plus actionButton1's own -6 offset off
 -- MainMenuBarArtFrame), since MainMenuBarArtFrame no longer exists once
--- MainActionBar is retired (R2). Buttons 2-12 chain BOTTOMLEFT off the
--- previous button's BOTTOMLEFT at `spacing`. Exact on-screen placement is a
--- tester visual check (CLAUDE.md "the look is the specification").
+-- MainActionBar is retired (R2). Every button anchors to the grid at its own
+-- art-derived column offset (Theme.ActionButtonGeometry), not chained off its
+-- neighbour, so a pitch error cannot accumulate (fix4). Exact on-screen
+-- placement is a tester visual check (CLAUDE.md "the look is the specification").
 local function anchorRow(buttons, originY, uiScale, geometry, grid)
   for i = 1, 12 do
     local button = buttons[i]
@@ -219,14 +232,10 @@ local function anchorRow(buttons, originY, uiScale, geometry, grid)
     fitButtonArt(button)
     button:ClearAllPoints()
 
-    if i == 1 then
-      button:SetPoint(
-        "BOTTOMLEFT", grid, "BOTTOMLEFT",
-        uiScale * 0.037037 - 6, originY - 1
-      )
-    else
-      button:SetPoint("BOTTOMLEFT", buttons[i - 1], "BOTTOMLEFT", geometry.spacing, 0)
-    end
+    button:SetPoint(
+      "BOTTOMLEFT", grid, "BOTTOMLEFT",
+      uiScale * 0.037037 - 6 + geometry.columnOffsetX[i], originY - 1
+    )
   end
 end
 
@@ -318,7 +327,7 @@ local function buildExtras(uiScale, theme)
 
     for i = 1, EXTRA_SLOT_COUNT do
       local button = getOrCreateButton("WIIIUI_Extra", i)
-      button:SetState(0, "action", WIIIUI.EXTRA_SLOT_BASE - 1 + i)
+      applyFixedState(button, WIIIUI.EXTRA_SLOT_BASE - 1 + i)
       extras[i] = button
     end
 
@@ -355,7 +364,11 @@ function WIIIUI.Buttons.BuildButtons()
 
       for i = 1, 12 do
         local button = getOrCreateButton(row.namePrefix, i)
-        button:SetState(0, "action", row.baseAction + i)
+        if row.key == "GridB" then
+          button:SetState(0, "action", row.baseAction + i)
+        else
+          applyFixedState(button, row.baseAction + i)
+        end
         buttons[i] = button
       end
 
