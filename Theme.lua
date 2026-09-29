@@ -15,6 +15,62 @@ local KNOWN_THEMES = {
 -- The fork dropped upstream's custom1-custom8 slots (docs/decisions.md,
 -- 2026-09-30); a save that still holds one resolves to the default theme.
 
+-- The one owner of draw order (spec 0006 slice 05). `relative` levels are
+-- offsets from Console.left's own frame level: the console art shares its
+-- strata with the bars and portrait, so they must clear it explicitly. A slot
+-- with no strata leaves the frame's own (inherited) strata alone.
+WIIIUI.Layers = {
+  SLOTS = {
+    ["console.right"] = { strata = "BACKGROUND" },
+    ["console.left"] = { strata = "LOW" },
+    ["console.grid"] = { strata = "MEDIUM" },
+    ["config.hover"] = { strata = "HIGH" },
+    ["config.cogwheel"] = { strata = "DIALOG" },
+    ["config.panel"] = { strata = "DIALOG" },
+    ["portrait.overlay"] = { strata = "LOW", relative = 1 },
+    ["portrait.model"] = { strata = "LOW", relative = 2 },
+    ["portrait.button"] = { strata = "LOW", relative = 3 },
+    bars = { strata = "LOW", relative = 4 },
+    ["xp.rested"] = { strata = "LOW", relative = 4 },
+    ["xp.fill"] = { strata = "LOW", relative = 5 },
+    minimap = { strata = "LOW", level = 1 },
+    ["infoicon.border"] = { level = 10 },
+  },
+}
+
+-- Strata first, then level. A parent is applied before its children because
+-- SetFrameLevel on a parent shifts the levels of its children.
+function WIIIUI.Layers.Apply(frame, slot)
+  local entry = WIIIUI.Layers.SLOTS[slot]
+  assert(entry, "unknown Layers slot: " .. tostring(slot))
+
+  if entry.strata then
+    frame:SetFrameStrata(entry.strata)
+  end
+
+  if entry.relative then
+    local left = WIIIUI.Console and WIIIUI.Console.left
+    frame:SetFrameLevel((left and left:GetFrameLevel() or 1) + entry.relative)
+  elseif entry.level then
+    frame:SetFrameLevel(entry.level)
+  end
+end
+
+WIIIUI.Theme.FONT_PATH = "Interface\\Addons\\WIIIUI\\art\\other\\fonts\\blq55.TTF"
+
+-- CLAUDE.md "Tech stack quirks": SetFont returns success on Forever, so the
+-- font object goes first as the safety net and is re-applied when SetFont
+-- fails or GetFont confirms nothing (FontInstance:SetFontObject/GetFont,
+-- warcraft.wiki.gg).
+function WIIIUI.Theme.ApplyFont(fontString, size, fallbackObject)
+  fontString:SetFontObject(fallbackObject)
+  local applied = fontString:SetFont(WIIIUI.Theme.FONT_PATH, size, "")
+
+  if not applied or not fontString:GetFont() then
+    fontString:SetFontObject(fallbackObject)
+  end
+end
+
 function WIIIUI.Theme.ResolveThemeName(theme)
   if KNOWN_THEMES[theme] then
     return theme

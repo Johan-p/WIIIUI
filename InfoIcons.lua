@@ -62,15 +62,13 @@ local HEALING_ICON = "Interface\\Icons\\Spell_Holy_Heal"
 local SPELLPOWER_ICON = "Interface\\Icons\\INV_Staff_07"
 
 -- Vanilla Wc3_UI_weaponIcon_frame_N's own Backdrop (e17c352 WIIIUI.xml:2437),
--- the ornate border drawn over the icon (weaponIconFrame:SetFrameLevel(10)
--- keeps it above the icon backdrop, e17c352 WIIIUI.lua:2282).
+-- the ornate border drawn over the icon (the infoicon.border Layers slot keeps
+-- it above the icon backdrop, e17c352 WIIIUI.lua:2282).
 local BORDER_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\golden_frame"
 
 -- Vanilla WIIIUI_weaponDamage_N/WIIIUI_weaponNumbers_N (e17c352 WIIIUI.xml:
 -- 2375-2402): both FontHeight 10, the same theme font as the rest of the
--- console (Bars.lua's own FONT_PATH constant, duplicated per-file per this
--- codebase's existing per-file-constant convention).
-local FONT_PATH = "Interface\\Addons\\WIIIUI\\art\\other\\fonts\\blq55.TTF"
+-- console (Theme.ApplyFont).
 local LABEL_FONT_SIZE, VALUE_FONT_SIZE = 10, 10
 
 -- GetSpellBonusDamage(school) school indices (warcraft.wiki.gg
@@ -437,7 +435,7 @@ local STATIC_LABELS = {
 -- frame_N (e17c352 WIIIUI.xml:2363-2542): one outer frame, an icon backdrop
 -- (bgFile swapped per-option, same "backdrop as image" convention Console.lua
 -- and Config.lua already use), and a border backdrop (golden_frame, drawn
--- above the icon via SetFrameLevel) plus the two FontStrings. Backdrops need
+-- above the icon via the Layers slot) plus the two FontStrings. Backdrops need
 -- BackdropTemplate (CLAUDE.md "Backdrops").
 local function ensureIconWidgets(slotIndex)
   local existing = WIIIUI.InfoIcons[slotIndex]
@@ -451,9 +449,8 @@ local function ensureIconWidgets(slotIndex)
 
   local border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
   border:SetBackdrop({ bgFile = BORDER_TEXTURE })
-  -- Vanilla weaponIconFrame:SetFrameLevel(10) (e17c352 WIIIUI.lua:2282):
-  -- the border draws above the icon backdrop, both siblings of frame.
-  border:SetFrameLevel(10)
+  -- The border draws above the icon backdrop, both siblings of frame.
+  WIIIUI.Layers.Apply(border, "infoicon.border")
 
   -- ui-reviewer Finding 3 (slice 18 gate-fix): width comes from
   -- WeaponIconGeometry's labelWidth (uiScale-dependent, applied per-call in
@@ -461,21 +458,13 @@ local function ensureIconWidgets(slotIndex)
   -- (weaponDamageText/weaponNumbersText, e17c352 WIIIUI.lua:2293-2296,
   -- 2367-2370) and don't depend on uiScale, so they're set once here.
   local label = frame:CreateFontString(nil, "OVERLAY")
-  label:SetFontObject(GameFontHighlightSmall)
-  local labelFontApplied = label:SetFont(FONT_PATH, LABEL_FONT_SIZE, "")
-  if not labelFontApplied or not label:GetFont() then
-    label:SetFontObject(GameFontHighlightSmall)
-  end
+  WIIIUI.Theme.ApplyFont(label, LABEL_FONT_SIZE, GameFontHighlightSmall)
   label:SetHeight(15)
   label:SetJustifyH("LEFT")
   label:SetJustifyV("TOP")
 
   local value = frame:CreateFontString(nil, "OVERLAY")
-  value:SetFontObject(GameFontHighlightSmall)
-  local valueFontApplied = value:SetFont(FONT_PATH, VALUE_FONT_SIZE, "")
-  if not valueFontApplied or not value:GetFont() then
-    value:SetFontObject(GameFontHighlightSmall)
-  end
+  WIIIUI.Theme.ApplyFont(value, VALUE_FONT_SIZE, GameFontHighlightSmall)
   value:SetHeight(30)
   value:SetJustifyH("LEFT")
   value:SetJustifyV("TOP")

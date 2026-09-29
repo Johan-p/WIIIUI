@@ -15,10 +15,7 @@ WIIIUI.Portrait = WIIIUI.Portrait or {}
 -- wc3UI_Options.uiScale*0.022222222)" -- PlayerHitIndicator is Blizzard's
 -- own combat-feedback FontString (PlayerFrame.lua:51); this file's
 -- WIIIUI_PortraitHitText replaces it entirely (PlayerFrame is retired, R2),
--- same offset. The shared font path/fallback pattern (Bars.lua) is
--- duplicated locally rather than exposed cross-file, matching this file's
--- own ICON_DEFS convention of file-local constants for its own widgets.
-local FONT_PATH = "Interface\\Addons\\WIIIUI\\art\\other\\fonts\\blq55.TTF"
+-- same offset.
 local HIT_TEXT_OFFSET_Y = 0.0222222
 
 -- Blizzard_UnitFrame/Mainline/PlayerFrame.xml:112 (CombatFeedback_Initialize
@@ -61,12 +58,6 @@ local function buildButton(parent)
   button:SetAttribute("type1", "target")
   button:SetAttribute("type2", "togglemenu")
   button:RegisterForClicks("AnyUp")
-  -- Every sibling console frame declares its strata explicitly at creation
-  -- (Console.lua: left->"LOW", grid->"MEDIUM", right->"HIGH"). The portrait
-  -- button sits directly over left.portraitTexture (spec 0001 §Portrait), so
-  -- it takes left's own "LOW" strata rather than relying on the client's
-  -- unset-strata default. API_Frame_GetFrameStrata, warcraft.wiki.gg.
-  button:SetFrameStrata("LOW")
 
   WIIIUI.Portrait.button = button
   return button
@@ -434,12 +425,7 @@ local function buildHitText(parent, uiScale)
   -- style Blizzard's own PlayerFrame HitText uses (PlayerFrame.xml:115,
   -- CombatFeedback_Initialize's 30pt base), unlike GameFontHighlightSmall's
   -- body-text sizing.
-  hitText:SetFontObject(NumberFontNormalHuge)
-  local fontApplied = hitText:SetFont(FONT_PATH, BASE_HIT_TEXT_HEIGHT, "")
-
-  if not fontApplied or not hitText:GetFont() then
-    hitText:SetFontObject(NumberFontNormalHuge)
-  end
+  WIIIUI.Theme.ApplyFont(hitText, BASE_HIT_TEXT_HEIGHT, NumberFontNormalHuge)
 
   local animGroup = hitText:CreateAnimationGroup()
 
@@ -586,12 +572,11 @@ local LOW_HP_PULSE_DURATION = 1
 -- Building the animation is plain non-secret widget setup (no unit value
 -- involved), so unlike the curve/SetAlpha calls below it isn't wrapped in
 -- WIIIUI.Safe.
-local function buildLowHpOverlay(model, level)
+local function buildLowHpOverlay(model)
   local overlay = WIIIUI.Portrait.lowHpOverlay
 
   if not overlay then
     overlay = CreateFrame("Frame", nil, UIParent)
-    overlay:SetFrameStrata("LOW")
 
     local texture = overlay:CreateTexture(nil, "BACKGROUND")
     texture:SetAllPoints(overlay)
@@ -617,7 +602,7 @@ local function buildLowHpOverlay(model, level)
 
   overlay:ClearAllPoints()
   overlay:SetAllPoints(model)
-  overlay:SetFrameLevel(level)
+  WIIIUI.Layers.Apply(overlay, "portrait.overlay")
 end
 
 -- spec 0001 §1.2: "A Step curve with points (0,1), (hpWarning/100,1),
@@ -765,13 +750,12 @@ function WIIIUI.Portrait.BuildPortrait()
   -- The role icon clears the model window by about 2 px at the default
   -- PortraitAlignmentX/portraitScale; larger values let the model sit behind
   -- it, which is cosmetic because the icons draw above the model.
-  local artLevel = left and left:GetFrameLevel() or 1
   -- The button is the top of the portrait stack so the status icons and hit
-  -- text (its regions) draw over the model; it is set first because
+  -- text (its regions) draw over the model; it is applied first because
   -- SetFrameLevel on a parent also shifts its children.
-  button:SetFrameLevel(artLevel + 3)
-  model:SetFrameLevel(artLevel + 2)
-  buildLowHpOverlay(model, artLevel + 1)
+  WIIIUI.Layers.Apply(button, "portrait.button")
+  WIIIUI.Layers.Apply(model, "portrait.model")
+  buildLowHpOverlay(model)
   -- Settle the fresh overlay (shown, alpha 1, BOUNCE running) before any
   -- other step can throw, so an error later in the build can't leave a
   -- stuck full-alpha pulse at full health.

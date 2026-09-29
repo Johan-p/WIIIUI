@@ -304,7 +304,7 @@ local function revertOne(id, data)
     obj:SetAlpha(data.transparency)
   end
   if c.drawLayer then
-    obj:SetDrawLayer(data.drawLayer)
+    obj:SetDrawLayer(data.drawLayer[1], data.drawLayer[2])
   end
   if c.texCoord then
     local tc = data.texCoord
@@ -784,8 +784,10 @@ local function applyEntry(entry, overrides)
   end
 
   if entry.kind == "texture" and overrides.SetDrawLayer ~= nil then
-    local layer = obj.GetDrawLayer and obj:GetDrawLayer()
-    capture(id, "drawLayer", layer)
+    -- Both returns: a bare layer would reset the sublayer to 0 on revert.
+    if obj.GetDrawLayer then
+      capture(id, "drawLayer", { obj:GetDrawLayer() })
+    end
     obj:SetDrawLayer(overrides.SetDrawLayer)
   end
 

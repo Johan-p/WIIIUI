@@ -50,7 +50,6 @@ local HEALTH_BAR_DEFAULT_COLOR_R, HEALTH_BAR_DEFAULT_COLOR_G, HEALTH_BAR_DEFAULT
 -- Vanilla AlignHealthMana (e17c352 WIIIUI.lua:1999, 2018): health text at
 -- font size 10, power text at 9, same theme font as the rest of the console
 -- (CLAUDE.md "the look is the specification").
-local FONT_PATH = "Interface\\Addons\\WIIIUI\\art\\other\\fonts\\blq55.TTF"
 local FONT_SIZES = { health = 10, power = 9 }
 
 -- spec 0004 §Phase-boundary "0002 druid resource bar": "(1) Bars.lua builds
@@ -238,16 +237,7 @@ local function buildXPBar(anchor, uiScale)
     bar.levelText = bar:CreateFontString(nil, "OVERLAY")
     bar.levelText:SetPoint("CENTER", bar, "CENTER", 0, 0)
 
-    -- Same font-fallback pattern as the health/power bars' text above
-    -- (CLAUDE.md "Tech stack quirks"): GameFontHighlightSmall first, then
-    -- the theme font, re-applying the fallback if SetFont/GetFont didn't
-    -- take.
-    bar.levelText:SetFontObject(GameFontHighlightSmall)
-    local fontApplied = bar.levelText:SetFont(FONT_PATH, LEVEL_TEXT_FONT_SIZE, "")
-
-    if not fontApplied or not bar.levelText:GetFont() then
-      bar.levelText:SetFontObject(GameFontHighlightSmall)
-    end
+    WIIIUI.Theme.ApplyFont(bar.levelText, LEVEL_TEXT_FONT_SIZE, GameFontHighlightSmall)
 
     WIIIUI.Bars.xp = bar
   end
@@ -273,25 +263,18 @@ local function buildXPBar(anchor, uiScale)
   end
   rested:SetStatusBarColor(restColor[1], restColor[2], restColor[3], restColor[4])
 
-  -- Finding 1 (ui-reviewer, gate-fix): both bars share UIParent and neither
-  -- overrides frame level, so per warcraft.wiki.gg's UI_rendering_process
-  -- ("there is no defined render order" for identical strata+level) the
-  -- rested overlay could draw on top of the current-XP fill. Explicit
-  -- levels (API_Frame_SetFrameLevel/GetFrameLevel, warcraft.wiki.gg) make
-  -- bar draw strictly above rested, deterministically.
+  -- Both bars share UIParent, and warcraft.wiki.gg's UI_rendering_process
+  -- defines no render order for identical strata+level, so the Layers slots
+  -- give the fill a level strictly above the rested overlay.
+  WIIIUI.Layers.Apply(rested, "xp.rested")
+  WIIIUI.Layers.Apply(bar, "xp.fill")
   for _, xpBar in ipairs({ rested, bar }) do
-    xpBar:SetFrameStrata("LOW")
     xpBar:SetSize(geometry.width, geometry.height)
     xpBar:ClearAllPoints()
     if anchor then
       xpBar:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", geometry.anchorOffsetX, geometry.anchorOffsetY)
     end
   end
-  -- Same strata as the left art, so the levels are relative to it (fix6 B5);
-  -- +4 matches the health/power bars.
-  local left = WIIIUI.Console.left
-  rested:SetFrameLevel((left and left:GetFrameLevel() or 1) + 4)
-  bar:SetFrameLevel(rested:GetFrameLevel() + 1)
 end
 
 -- spec 0001 §Event -> widget wiring: "PLAYER_XP_UPDATE, UPDATE_EXHAUSTION,
@@ -371,29 +354,15 @@ function WIIIUI.Bars.BuildBars()
       bar.text = bar:CreateFontString(nil, "OVERLAY")
       bar.text:SetPoint("CENTER", bar, "CENTER", 0, 0)
 
-      -- CLAUDE.md "Tech stack quirks": "FontString:SetFont returns success
-      -- on Forever; the pattern stays: set the font object, then SetFont,
-      -- then confirm with GetFont(), fall back to a Blizzard font object."
-      -- GameFontHighlightSmall (FrameXML/Fonts.xml) is the safety net set
-      -- first and re-applied if the custom theme font doesn't take;
-      -- FontInstance:SetFontObject/GetFont, warcraft.wiki.gg.
-      bar.text:SetFontObject(GameFontHighlightSmall)
-      local fontApplied = bar.text:SetFont(FONT_PATH, FONT_SIZES[key], "")
-
-      if not fontApplied or not bar.text:GetFont() then
-        bar.text:SetFontObject(GameFontHighlightSmall)
-      end
+      WIIIUI.Theme.ApplyFont(bar.text, FONT_SIZES[key], GameFontHighlightSmall)
 
       WIIIUI.Bars[key] = bar
     end
 
     local geometry = WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
 
-    bar:SetFrameStrata("LOW")
-    -- Same strata as the left console art, so without an explicit level the
-    -- art can draw over the bars (fix6 B5); +4 clears the art, the low-HP
-    -- overlay and the portrait button/model levels set in Portrait.lua.
-    bar:SetFrameLevel((left and left:GetFrameLevel() or 1) + 4)
+    -- Same strata as the left console art, so the level must clear it (fix6 B5).
+    WIIIUI.Layers.Apply(bar, "bars")
     bar:SetSize(geometry.width, geometry.height)
     bar:ClearAllPoints()
     bar:SetPoint("BOTTOMLEFT", minimapTexture, "BOTTOMRIGHT", geometry.offsetX, geometry.offsetY)

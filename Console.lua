@@ -182,11 +182,7 @@ function WIIIUI.Console.BuildLeft()
     -- (API_ScriptRegion_IsRectValid, warcraft.wiki.gg).
     left:SetSize(1, 1)
     anchorLeft(left, wc3UI_Options.uiScale)
-    -- Vanilla WIIIUI_leftpart is framestrata="LOW" (e17c352 WIIIUI.xml:5,
-    -- the virtual WIIIUI_Frame template's default) -- below the grid and
-    -- right consoles in the stack. API_Frame_GetFrameStrata,
-    -- warcraft.wiki.gg.
-    left:SetFrameStrata("LOW")
+    WIIIUI.Layers.Apply(left, "console.left")
     WIIIUI.Console.left = left
   end
 
@@ -267,10 +263,7 @@ function WIIIUI.Console.BuildGrid()
 
   if not grid then
     grid = CreateFrame("Frame", nil, UIParent)
-    -- Vanilla WIIIUI_actionslotGrid is framestrata="MEDIUM" (e17c352
-    -- WIIIUI.xml:3045) -- above the left console, below the right console.
-    -- API_Frame_GetFrameStrata, warcraft.wiki.gg.
-    grid:SetFrameStrata("MEDIUM")
+    WIIIUI.Layers.Apply(grid, "console.grid")
     WIIIUI.Console.grid = grid
   end
 
@@ -555,8 +548,8 @@ function WIIIUI.Console.BuildRight()
     -- the layout string and stays at its own LOW strata (R4), so the art
     -- goes below LOW and chat draws over all of it (feature 0001 fix3, D2).
     -- Interactive pieces (extras, portrait, cogwheel) are not children of
-    -- this frame. API_Frame_SetFrameStrata, warcraft.wiki.gg.
-    right:SetFrameStrata("BACKGROUND")
+    -- this frame.
+    WIIIUI.Layers.Apply(right, "console.right")
     WIIIUI.Console.right = right
   end
 

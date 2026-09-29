@@ -17,7 +17,7 @@ WIIIUI.Config.widgets = WIIIUI.Config.widgets or {}
 WIIIUI.Config.labels = WIIIUI.Config.labels or {}
 
 -- Vanilla Wc3_UI_cogwheel (e17c352 WIIIUI.xml:99): shared art, not a
--- per-theme path, so this is a literal like Bars.lua's FONT_PATH rather than
+-- per-theme path, so this is a literal rather than
 -- a WIIIUI.Theme.TexturePath call (that resolver is per-theme, this texture
 -- is not).
 local COGWHEEL_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\cogwheel"
@@ -465,7 +465,7 @@ local function ensureHover()
   hover = CreateFrame("Frame", nil, UIParent)
   hover:SetSize(30, 30)
   hover:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 7, -6)
-  hover:SetFrameStrata("HIGH")
+  WIIIUI.Layers.Apply(hover, "config.hover")
   hover:EnableMouse(true)
 
   hover:SetScript("OnEnter", function() WIIIUI.Config.cogwheel:Show() end)
@@ -503,7 +503,7 @@ local function ensureCogwheel()
   cogwheel = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
   cogwheel:SetSize(30, 30)
   cogwheel:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 7, -6)
-  cogwheel:SetFrameStrata("DIALOG")
+  WIIIUI.Layers.Apply(cogwheel, "config.cogwheel")
   cogwheel:EnableMouse(false)
   cogwheel:SetBackdrop({
     bgFile = COGWHEEL_TEXTURE,
@@ -531,7 +531,7 @@ local function ensurePanel()
   panel = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
   panel:SetSize(650, 600)
   panel:SetPoint("LEFT", UIParent, "LEFT", 200, 0)
-  panel:SetFrameStrata("DIALOG")
+  WIIIUI.Layers.Apply(panel, "config.panel")
   panel:SetBackdrop({
     bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
     edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
