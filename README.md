@@ -57,6 +57,14 @@ Requires **World of Warcraft: Forever** or **retail**. Vanilla 1.12 and unoffici
 5. Start the game, or restart it if it was running. A new addon needs a full restart, not just `/reload`.
 6. Make sure **WIIIUI** is ticked in the AddOns list on the character select screen.
 
+**Alternative: install with git** (no renaming needed, and updating is just `git pull`). Open a terminal in your AddOns folder and run:
+
+```
+git clone https://github.com/Johan-p/WIIIUI-Forever-Fork.git WIIIUI
+```
+
+The trailing `WIIIUI` sets the folder name. To update later, run `git pull` inside the `WIIIUI` folder and restart the game.
+
 Settings are saved per character. Blizzard's own bottom bars are replaced by WIIIUI, so no Bartender or similar addon is needed.
 
 ### Don't forgot to open the config menu for configuration options, accessible in the lower right corner!
@@ -123,6 +131,8 @@ A video demonstrating the different menu options available.
 https://youtu.be/agffQHWyWh8
 
 ## Custom Themes
+
+> **Note for the Forever/retail version:** custom themes (the `custom1`-`custom8` art folders and the player-made themes below) have not been tested on World of Warcraft: Forever or retail and are not officially supported. They may work, but you will have to test them yourself. Customizations saved with the old vanilla version do not carry over. If proper custom theme support is a popular request, open an [issue](https://github.com/Johan-p/WIIIUI-Forever-Fork/issues) and it may be considered for a future version.
 
 The customization feature takes current settings of current theme and saves it as a base setting.
 Since it takes current settings and uses that as a base, some frames are set as hidden as base and needs to be unchecked to become visible (for example custom action slots).
