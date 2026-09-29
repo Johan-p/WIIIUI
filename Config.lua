@@ -207,6 +207,25 @@ end
 
 local LABEL_COLUMN_WIDTH = 220
 
+local ROW_X = 20
+local ROW_HEIGHT = 26
+local CONTENT_START_Y = -10
+local CONTENT_WIDTH = 600
+local CONTENT_BOTTOM_PADDING = 20
+local RELOAD_BUTTON_HEIGHT = 22
+
+-- ui-reviewer finding (slice 17 gate iteration 1): a note row's label plus
+-- editModeNoteSuffix()'s build-name suffix has no width/wrap guard, so the
+-- longest existing label ("Right Multi-Bar Orientation") plus the suffix
+-- risks exceeding the scroll content's clipped viewport and getting cut off
+-- by the ScrollFrame rather than just visually overflowing. NOTE_TEXT_WIDTH
+-- constrains the note FontString to content width minus its left inset and a
+-- right margin, matching the other rows' own right-hand boundary -- moved
+-- above buildNote (below) since it and every other row-layout constant this
+-- file already declares here are needed before that function's own
+-- definition, not after it.
+local NOTE_TEXT_WIDTH = CONTENT_WIDTH - ROW_X - 10
+
 local function buildCheckbox(panel, row, x, y)
   ensureLabel(panel, row, x, y)
 
@@ -343,20 +362,30 @@ local function buildNote(panel, row, x, y)
     -- relying on the suffix text alone (ui-reviewer finding, slice 06 gate
     -- iteration 1).
     note:SetFontObject(GameFontDisableSmall)
+    -- Width/wrap guard (ui-reviewer finding, slice 17 gate iteration 1): no
+    -- SetHeight call, so the FontString auto-grows to its wrapped content
+    -- rather than truncating with "..." (warcraft.wiki.gg
+    -- API_FontString_GetStringHeight: truncation only happens when the
+    -- FontString's own height is explicitly constrained smaller than its
+    -- text needs) -- GetStringHeight() below then returns the true post-wrap
+    -- height, which BuildConfig uses to advance past a wrapped row instead
+    -- of clipping it against the ScrollFrame's viewport.
+    note:SetWidth(NOTE_TEXT_WIDTH)
+    note:SetWordWrap(true)
+    note:SetJustifyH("LEFT")
     WIIIUI.Config.widgets[row.key] = note
   end
 
   note:ClearAllPoints()
   note:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
   note:SetText(label(row.key) .. editModeNoteSuffix())
-end
 
-local ROW_X = 20
-local ROW_HEIGHT = 26
-local CONTENT_START_Y = -10
-local CONTENT_WIDTH = 600
-local CONTENT_BOTTOM_PADDING = 20
-local RELOAD_BUTTON_HEIGHT = 22
+  -- Row height: at least the fixed single-line ROW_HEIGHT every other row
+  -- uses (so short notes keep vanilla's exact row spacing), or the wrapped
+  -- text's real height plus a small bottom margin when it wraps past one
+  -- line.
+  return math.max(ROW_HEIGHT, note:GetStringHeight() + 6)
+end
 
 -- UIPanelScrollFrameTemplate anchors its scrollbar 6px right of the scroll
 -- frame's own right edge (Gethe/wow-ui-source forever branch,
@@ -496,7 +525,13 @@ local LAYOUT_STRING_BOX_WIDTH = 300
 local LAYOUT_STRING_BOX_HEIGHT = 20
 
 local function layoutStringValue()
-  return WIIIUI.LAYOUT_STRING or "Not exported yet -- see WIIIUI.LAYOUT_STRING (Blizzard.lua)"
+  -- Same player-facing wording as Blizzard.lua's own placeholder (ui-reviewer
+  -- finding, slice 17 gate iteration 1) -- this fallback only renders when
+  -- WIIIUI.LAYOUT_STRING is nil (never true once Blizzard.lua loads, but a
+  -- test fixture that builds this control table without loading Blizzard.lua
+  -- reaches it, per config_test.lua). No internal doc pointer, no
+  -- instruction to edit the read-only box it's displayed in.
+  return WIIIUI.LAYOUT_STRING or "Not available in this build -- check for an addon update."
 end
 
 -- spec 0001 §1.6 "Copy layout string": a read-only EditBox with the layout
@@ -508,10 +543,10 @@ end
 --
 -- "Read-only" is enforced by snapping any user edit straight back to the
 -- constant rather than disabling the box (which would also block
--- selecting/copying it) -- the same idiom Blizzard's own Edit Mode
--- rename/import dialog uses to pre-select an EditBox's contents
--- (EditModeBaseDialogMixin:SetupDialog, Blizzard_EditMode/Shared/
--- EditModeDialogs.lua:239-240, forever branch, fetched 2026-09-28:
+-- selecting/copying it) -- the same idiom Blizzard's own Edit Mode layout
+-- dialog uses to pre-select an EditBox's contents
+-- (EditModeLayoutDialogMixin:SetupControlsForMode, Blizzard_EditMode/Shared/
+-- EditModeDialogs.lua, forever branch, fetched 2026-09-28:
 -- "self:GetEditBox():SetText(...); self:GetEditBox():HighlightText()" --
 -- HighlightText() with no arguments selects the entire contents,
 -- warcraft.wiki.gg API_EditBox_HighlightText). OnTextChanged's userInput
@@ -594,8 +629,8 @@ function WIIIUI.Config.BuildConfig()
 
   for _, row in ipairs(WIIIUI.Config.CONTROLS) do
     if isNoteRow(row) then
-      buildNote(content, row, ROW_X, y)
-      y = y - ROW_HEIGHT
+      local height = buildNote(content, row, ROW_X, y)
+      y = y - height
     elseif row.kind == "checkbox" then
       buildCheckbox(content, row, ROW_X, y)
       y = y - ROW_HEIGHT

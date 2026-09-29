@@ -220,8 +220,20 @@ end
 -- layout-string export is a maintainer deliverable done in-game after this
 -- slice's code lands." Fabricating plausible-looking export bytes here would
 -- look like a working import string and silently corrupt whatever the
--- maintainer later imports it into; WIIIUI.LAYOUT_STRING instead holds this
--- literal marker until the maintainer overwrites both constants with the
--- real export (feature-boundary pass, not this slice).
-WIIIUI.LAYOUT_STRING = "PLACEHOLDER -- not yet exported. In Edit Mode, use Layout -> Share -> Export, then paste the result here and update LAYOUT_BUILD below (spec 0001 §1.6/E3)."
+-- maintainer later imports it into; WIIIUI.LAYOUT_STRING instead holds a
+-- placeholder until the maintainer overwrites both constants with the real
+-- export (feature-boundary pass, not this slice).
+--
+-- Maintainer how-to: in Edit Mode, Layout -> Share -> Export, then paste the
+-- exported string over WIIIUI.LAYOUT_STRING below and set LAYOUT_BUILD to a
+-- short identifier for that export.
+--
+-- The placeholder text itself is player-facing (shown read-only in
+-- Config.lua's "Copy layout string" EditBox, and Config.lua's own fallback
+-- falls back to it too) -- it must stay passive and end-user-neutral: never
+-- instruct the reader to type or paste into that box (it's read-only and
+-- silently discards any edit or paste, ensureLayoutStringBox's
+-- OnTextChanged), and never leak an internal doc pointer like "spec 0001
+-- §..." into UI copy (ui-reviewer finding, slice 17 gate iteration 1).
+WIIIUI.LAYOUT_STRING = "Not available in this build -- check for an addon update."
 WIIIUI.LAYOUT_BUILD = "not yet exported"
