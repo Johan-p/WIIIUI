@@ -849,23 +849,19 @@ function WIIIUI.Customizer.ResetTheme()
   WIIIUI.Customizer.RefreshEditor()
 end
 
--- Confirmation for the editor's Reset button. Adding a key to the global
--- StaticPopupDialogs table is Blizzard's documented addon pattern
--- (warcraft.wiki.gg API_StaticPopup_Show; the table is declared empty in
--- Blizzard_StaticPopup/StaticPopup.lua on both the forever and live
--- branches of Gethe/wow-ui-source), not an overwrite of a Blizzard function
--- or frame. Registered lazily on first click, not at file scope.
+-- Confirmation for the editor's Reset button, through Blizzard's own generic
+-- confirm so no key is written onto a Blizzard table (CLAUDE.md R1).
+-- Gethe/wow-ui-source Blizzard_StaticPopup/StaticPopup.lua,
+-- StaticPopup_ShowCustomGenericConfirmation(customData): forever :241, live
+-- :232 (customData keys .text, .text_arg1, .callback documented just above
+-- it); GENERIC_CONFIRMATION in SharedDialogDefs.lua supplies YES/NO,
+-- timeout 0, whileDead, hideOnEscape and calls data.callback() on accept.
 function WIIIUI.Customizer.ConfirmReset()
-  StaticPopupDialogs["WIIIUI_RESET_THEME"] = {
+  StaticPopup_ShowCustomGenericConfirmation({
     text = "Reset all Customize overrides for the %s theme?",
-    button1 = YES,
-    button2 = NO,
-    OnAccept = function() WIIIUI.Customizer.ResetTheme() end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-  }
-  StaticPopup_Show("WIIIUI_RESET_THEME", wc3UI_Options.theme)
+    text_arg1 = wc3UI_Options.theme,
+    callback = function() WIIIUI.Customizer.ResetTheme() end,
+  })
 end
 
 --------------------------------------------------------------------------
