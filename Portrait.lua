@@ -128,7 +128,7 @@ local ICON_DEFS = {
     -- spec 0001 §Event -> widget wiring / §1.9 "Master looter": Forever's
     -- PlayerFrame has no master-looter icon, so WIIIUI supplies its own
     -- texture -- a literal shared (non-themed) path, same convention as
-    -- Console.lua's extensionBackgroundTexture/rightPartBackground; the file
+    -- Console.lua's extensionBackgroundTexture; the file
     -- doesn't exist yet (art to follow), path to verify.
     key = "lootIcon", offsetX = 0.0784313, offsetY = 0.3137254, sizeFraction = ICON_SIZE_DEFAULT,
     texture = "Interface\\Addons\\WIIIUI\\art\\other\\master_loot",
@@ -140,11 +140,14 @@ local ICON_DEFS = {
     atlas = "roleicon-tiny-dps",
   },
   {
-    -- PlayerFrame.xml:402-412 RestTexture. Blizzard drives this atlas
-    -- through a 7x6 FlipBook AnimationGroup; a static SetAtlas here shows
-    -- only the sheet's first frame, not animated -- confirm in-game.
+    -- PlayerFrame.xml:402-414 (forever) RestTexture: the atlas is a 6-column
+    -- x 7-row, 42-frame sprite sheet that Blizzard animates with a FlipBook
+    -- (duration 1.5, frame width/height 0, group looping REPEAT). Drawn
+    -- statically it shows all 42 frames at once, so updateResting plays the
+    -- same animation while resting (feature 0001 fix5).
     key = "restIcon", offsetX = -0.188235, offsetY = 0.32941, sizeFraction = ICON_SIZE_REST,
     atlas = "UI-HUD-UnitFrame-Player-Rest-Flipbook",
+    flipBook = { rows = 7, columns = 6, frames = 42, duration = 1.5 },
   },
   {
     -- PlayerFrame.xml:344 AttackIcon.
@@ -170,6 +173,26 @@ local function buildIcons(parent, uiScale)
       icon:SetAtlas(def.atlas, false)
     elseif def.texture then
       icon:SetTexture(def.texture)
+    end
+
+    if def.flipBook and not WIIIUI.Portrait.restAnimGroup then
+      -- Animation:SetTarget is left at its default, the group's own region
+      -- (the texture the group is created on). FlipBook setters:
+      -- Blizzard_APIDocumentationGenerated/SimpleAnimFlipBookAPIDocumentation.lua
+      -- (forever); CreateAnimation/SetLooping: SimpleAnimGroupAPIDocumentation.lua.
+      local group = icon:CreateAnimationGroup()
+      local flip = group:CreateAnimation("FlipBook")
+
+      flip:SetFlipBookRows(def.flipBook.rows)
+      flip:SetFlipBookColumns(def.flipBook.columns)
+      flip:SetFlipBookFrames(def.flipBook.frames)
+      flip:SetFlipBookFrameWidth(0)
+      flip:SetFlipBookFrameHeight(0)
+      flip:SetDuration(def.flipBook.duration)
+      flip:SetOrder(1)
+      group:SetLooping("REPEAT")
+
+      WIIIUI.Portrait.restAnimGroup = group
     end
   end
 end
@@ -265,10 +288,18 @@ local function updateResting()
     return
   end
 
+  local group = WIIIUI.Portrait.restAnimGroup
+
   if IsResting() then
     icon:Show()
+    if group then
+      group:Play()
+    end
   else
     icon:Hide()
+    if group then
+      group:Stop()
+    end
   end
 end
 
