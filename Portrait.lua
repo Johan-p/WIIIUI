@@ -72,16 +72,19 @@ local function buildButton(parent)
   return button
 end
 
+local applyModelView -- defined with updateModel below
+
 -- spec 0001 §Portrait: "The PlayerModel is a non-mouse child." Created once,
--- parented to the secure button; StopAnimation (SetPaused/SetAnimation vs.
--- FreezeAnimation) is deferred -- CLAUDE.md marks both **verify**, and the
--- `StopAnimation` option itself is out of scope for spec 0001 §Portrait.
+-- parented to the secure button.
 local function buildModel(parent)
   local model = WIIIUI.Portrait.model
 
   if not model then
     model = CreateFrame("PlayerModel", nil, parent)
     WIIIUI.Portrait.model = model
+    model:SetScript("OnModelLoaded", function()
+      applyModelView()
+    end)
   end
 
   return model
@@ -223,11 +226,42 @@ local ROLE_ATLASES = {
 -- after every SetUnit (ModifyPlayerPortrait, e17c352 WIIIUI.lua:1767, 1787).
 -- Model:SetCamera(cameraIndex): SimpleModelAPIDocumentation.lua:413, forever
 -- and live branches of Gethe/wow-ui-source.
+--
+-- StopAnimation (vanilla ModifyPlayerPortrait, e17c352 WIIIUI.lua:1771-1783
+-- pinned sequence 3 from an OnUpdate): Model:SetSequenceTime(sequence,
+-- timeOffset) and Model:SetPaused(paused) are both in
+-- SimpleModelAPIDocumentation.lua (forever :625/:677, live :625/:677). The
+-- pose is set and the model paused instead of ticking an OnUpdate. SetUnit
+-- replaces the model, so this runs after every SetUnit, in both directions:
+-- an unchecked option must un-pause a model that a previous SetUnit kept paused.
+--
+-- SetUnit loads the model asynchronously, so the camera and freeze sent right
+-- after it can be dropped when the load completes. The OnModelLoaded script
+-- (a Model script handler: TalkingHeadUI.xml:130 and UI.xsd:424/1224 on the
+-- forever branch of Gethe/wow-ui-source) re-applies them. applyModelView is
+-- idempotent and never calls SetUnit, so it cannot loop.
+local FROZEN_SEQUENCE = 3
+
+function applyModelView()
+  local model = WIIIUI.Portrait.model
+  if not model then
+    return
+  end
+
+  model:SetCamera(0)
+  if wc3UI_Options.StopAnimation then
+    model:SetSequenceTime(FROZEN_SEQUENCE, 0)
+    model:SetPaused(true)
+  else
+    model:SetPaused(false)
+  end
+end
+
 local function updateModel()
   local model = WIIIUI.Portrait.model
   if model then
     model:SetUnit("player")
-    model:SetCamera(0)
+    applyModelView()
   end
 end
 

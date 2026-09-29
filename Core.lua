@@ -24,7 +24,10 @@ WIIIUI.DEFAULTS = {
   PowerPercent = false,
   MultiBarRightHorizontal = false,
   MultiBarLeftHorizontal = false,
+  -- Legacy keys: no control and no reader, kept so old saves stay valid
+  -- (decisions.md 2026-09-30, config cleanup).
   chatInputAbove = false,
+  -- "Gride" is upstream's typo, kept for save compatibility.
   hideGride = false,
   HideChatArrows = false,
   StopAnimation = false,
@@ -109,6 +112,13 @@ function WIIIUI.MergeDefaults(saved)
     elseif current == nil or type(current) ~= type(value) then
       merged[key] = deepCopy(value)
     end
+  end
+
+  -- Custom-theme slots were dropped; any theme name Theme doesn't know
+  -- (customN, hand-edited) becomes the default. Theme.lua loads after this
+  -- file but MergeDefaults only runs at ADDON_LOADED.
+  if WIIIUI.Theme and WIIIUI.Theme.ResolveThemeName then
+    merged.theme = WIIIUI.Theme.ResolveThemeName(merged.theme)
   end
 
   for key, range in pairs(CLAMPS) do

@@ -10,15 +10,10 @@ local KNOWN_THEMES = {
   orc = true,
   undead = true,
   nightelf = true,
-  custom1 = true,
-  custom2 = true,
-  custom3 = true,
-  custom4 = true,
-  custom5 = true,
-  custom6 = true,
-  custom7 = true,
-  custom8 = true,
 }
+
+-- The fork dropped upstream's custom1-custom8 slots (docs/decisions.md,
+-- 2026-09-30); a save that still holds one resolves to the default theme.
 
 function WIIIUI.Theme.ResolveThemeName(theme)
   if KNOWN_THEMES[theme] then
@@ -73,9 +68,8 @@ end
 -- Vanilla AlignActionBarUIGrid (e17c352 WIIIUI.lua ~2695-2739): the grid
 -- frame is uiScale*0.91851 square, anchored BOTTOMLEFT of extensionBackground.
 -- Slots 2-4 chain BOTTOMLEFT-to-BOTTOMRIGHT off the previous slot. Only the
--- unconditional numbers are ported here; the hideGride/nightelf
--- parent-swapping in that function is frame visibility/parenting, out of
--- scope until the grid frames themselves are built.
+-- unconditional numbers are ported here; hideGride (Console.BuildGrid) is
+-- frame visibility, not geometry.
 function WIIIUI.Theme.GridGeometry(uiScale)
   return {
     size = uiScale * 0.91851,
@@ -437,9 +431,8 @@ end
 
 -- Vanilla Minimap_ActionButtons's per-theme resize (e17c352 WIIIUI.lua:
 -- 1547-1568): only the orc/human/undead/nightelf branches set a delta; any
--- other theme name (custom1-8, or a bogus name ResolveThemeName already
--- folds to orc before this table is consulted) falls through with all three
--- deltas at 0, matching vanilla's own if/elseif chain having no `else`.
+-- other theme name (ResolveThemeName folds unknown names to orc before this
+-- table is consulted) falls through with all three deltas at 0.
 local MINIMAP_SLOT_NUDGES = {
   orc = { resize = 3, width = 2, height = 1 },
   human = { resize = 4, width = 2, height = 2 },

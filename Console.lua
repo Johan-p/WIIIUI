@@ -324,6 +324,19 @@ function WIIIUI.Console.BuildGrid()
   tile4:ClearAllPoints()
   tile4:SetPoint("BOTTOMLEFT", tile3, "BOTTOMRIGHT", geometry.slot4OffsetX, 0)
 
+  -- hideGride (vanilla AlignActionBarUIGrid, e17c352 WIIIUI.lua:2724-2738)
+  -- hid actionSlotGridMain, the frame carrying only the four tile textures.
+  -- The action buttons are children of Buttons.lua's header, not of the grid,
+  -- so they stay. Vanilla's nightelf branch re-parented the ext1-3 overlays
+  -- off the grid so the hide would not take them along; those overlays are
+  -- not ported, so there is nothing to re-parent. The key keeps upstream's
+  -- typo for save compatibility. Runs inside Layout, i.e. out of combat.
+  if wc3UI_Options.hideGride then
+    grid:Hide()
+  else
+    grid:Show()
+  end
+
   WIIIUI.Console.SyncAnchors()
 end
 
@@ -346,7 +359,7 @@ end
 -- Per-theme x-offset fraction for the ultraWide/centerSlim/centerSlimNoInv
 -- chat-top re-anchor in applyLayoutModes below (vanilla AlignUltraWide,
 -- e17c352 WIIIUI.lua:4674-4679): nightelf and undead override the default
--- fraction; every other theme name (including unknown/custom ones) falls
+-- fraction; every other theme name (including unknown ones) falls
 -- through to the default, matching vanilla's own if/elseif/else chain.
 -- Table lookup follows Theme.lua's RIGHT_LID_SHIFT_WIDTH_THEMES-style
 -- per-theme table convention.

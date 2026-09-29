@@ -22,13 +22,11 @@ WIIIUI.Config.labels = WIIIUI.Config.labels or {}
 -- is not).
 local COGWHEEL_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\cogwheel"
 
--- Same 12 names as Theme.lua's KNOWN_THEMES; duplicated locally rather than
+-- Same 4 names as Theme.lua's KNOWN_THEMES; duplicated locally rather than
 -- exporting a list from Theme.lua for this one caller (no other file needs
 -- an enumerable theme list yet).
 local THEME_LIST = {
   "human", "orc", "undead", "nightelf",
-  "custom1", "custom2", "custom3", "custom4",
-  "custom5", "custom6", "custom7", "custom8",
 }
 
 local ZONE_TEXT_POS_LABELS = { [1] = "Top", [2] = "Bottom", [3] = "Hidden" }
@@ -60,9 +58,7 @@ local LABELS = {
   hpWarning = "Low HP Warning %",
   HealthPercent = "Show Health As %",
   PowerPercent = "Show Power As %",
-  chatInputAbove = "Chat Input Above",
   hideGride = "Hide Action Grid",
-  HideChatArrows = "Hide Chat Arrows",
   StopAnimation = "Stop Portrait Animation",
   hideMicroButtons = "Hide Micro Menu",
   EnableCustomize = "Enable Customizer",
@@ -178,9 +174,7 @@ WIIIUI.Config.CONTROLS = {
   makeRangeControl("hpWarning", 1, 99),
   makeBoolControl("HealthPercent"),
   makeBoolControl("PowerPercent"),
-  makeBoolControl("chatInputAbove"),
   makeBoolControl("hideGride"),
-  makeBoolControl("HideChatArrows"),
   makeBoolControl("StopAnimation"),
   makeBoolControl("hideMicroButtons"),
   makeBoolControl("EnableCustomize"),
