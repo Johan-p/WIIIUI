@@ -474,6 +474,25 @@ function WIIIUI.InfoIcons.RefreshSlot(slotIndex)
     return
   end
 
+  -- security-specialist Finding (slice 19 gate-fix): computeStats' own
+  -- MAINHAND_SLOT branch resolves activeShapeshiftIcon() only after
+  -- UnitDamage/UnitAttackSpeed's SecretWhenUnitStatsRestricted arithmetic
+  -- (formatRange -- this file's header comment). If that arithmetic throws,
+  -- computeStats aborts before returning anything, including the icon, so a
+  -- druid who shifts form while stats are restricted kept showing the
+  -- previous icon (or an empty backdrop on the very first build). Resolved
+  -- here, outside the stats-only Safe call below, so the icon always tracks
+  -- the current form/equipped item even when the label/value degrade.
+  -- activeShapeshiftIcon/GetInventoryItemTexture read no secret value (this
+  -- file's own header comment), so the Safe wrap here is defense-in-depth,
+  -- not a required guard.
+  if option == MAINHAND_SLOT then
+    local iconOk, icon = WIIIUI.Safe(function()
+      return activeShapeshiftIcon() or GetInventoryItemTexture("player", MAINHAND_SLOT) or FIST_ICON
+    end)
+    widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or FIST_ICON })
+  end
+
   local ok, result = WIIIUI.Safe(computeStats, option)
 
   if ok and result then
@@ -507,6 +526,19 @@ function WIIIUI.InfoIcons.RefreshArmor()
   if not widgets then
     return
   end
+
+  -- security-specialist Finding (slice 19 gate-fix): mirrors RefreshSlot's
+  -- MAINHAND_SLOT fix above -- computeArmorStats resolves
+  -- activeShapeshiftIcon() only after UnitArmor/C_PaperDollInfo.
+  -- GetArmorEffectiveness (SecretWhenUnitStatsRestricted), so a throw there
+  -- aborted the whole function before the icon was ever returned, leaving a
+  -- druid's form icon stale (or an empty backdrop on the first build).
+  -- Resolved separately here so the icon always tracks the current form/
+  -- chest-slot item even when the armor text below degrades to blank.
+  local iconOk, icon = WIIIUI.Safe(function()
+    return activeShapeshiftIcon() or GetInventoryItemTexture("player", CHEST_SLOT) or ARMOR_ICON_FALLBACK
+  end)
+  widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or ARMOR_ICON_FALLBACK })
 
   local ok, result = WIIIUI.Safe(computeArmorStats)
 
