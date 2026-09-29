@@ -436,12 +436,41 @@ end
 -- catcher and stores "UIParent" instead; this Apply-time path only matters
 -- for a bad value that reached the saved table another way (a hand edit),
 -- where Apply must still never write the saved table. lastWarnings is
--- recorded the way lastErrors is (never saved, reset every Apply), so
+-- recorded the way lastErrors is (never saved, reset every Apply, keyed
+-- id.."."..field so ParentOf and ParentPosOf on one id don't collide), so
 -- SetOverride can surface each new one once.
 WIIIUI.Customizer.lastWarnings = {}
 
-local function invalidTargetMessage(field, value)
-  return field .. " '" .. tostring(value) .. "' is not a customizer id or UIParent; using UIParent"
+-- Registry membership + kind only, deliberately not Resolve(): a valid id
+-- whose object does not exist yet is Apply's fallback to handle, never a
+-- reason to overwrite what the user typed. Returns nil (fine), "unknown" or
+-- "texture" (a valid id, wrong kind for ParentOf).
+local function targetProblem(field, value)
+  if field ~= "ParentOf" and field ~= "ParentPosOf" then
+    return nil
+  end
+  if value == "UIParent" then
+    return nil
+  end
+  local entry = registryById[value]
+  if not entry then
+    return "unknown"
+  end
+  if field == "ParentOf" and entry.kind ~= "frame" and entry.kind ~= "button" then
+    return "texture"
+  end
+  return nil
+end
+
+local function invalidTargetMessage(id, field, value)
+  local reason
+  if registryById[value] then
+    reason = "'" .. tostring(value) .. "' is a texture; " .. field .. " needs a frame or button; using UIParent"
+  else
+    reason = field .. " '" .. tostring(value)
+      .. "' is not one of the customizer IDs shown as block titles (Blizzard frames are not allowed); using UIParent"
+  end
+  return id .. ": " .. reason
 end
 
 -- spec 0001 §Customizer "Apply": "Hide = true reparents the object to
@@ -461,7 +490,7 @@ local function applyParent(id, obj, overrides)
     else
       local target = resolveParentOfTarget(parentOf)
       if not target then
-        WIIIUI.Customizer.lastWarnings[id] = invalidTargetMessage("ParentOf", parentOf)
+        WIIIUI.Customizer.lastWarnings[id .. ".ParentOf"] = invalidTargetMessage(id, "ParentOf", parentOf)
         target = UIParent
       end
       obj:SetParent(target)
@@ -520,7 +549,7 @@ local function applyAnchor(id, obj, overrides)
   if overrides.ParentPosOf ~= nil then
     newRelativeTo = resolveAnchorTarget(overrides.ParentPosOf)
     if not newRelativeTo then
-      WIIIUI.Customizer.lastWarnings[id] = invalidTargetMessage("ParentPosOf", overrides.ParentPosOf)
+      WIIIUI.Customizer.lastWarnings[id .. ".ParentPosOf"] = invalidTargetMessage(id, "ParentPosOf", overrides.ParentPosOf)
       newRelativeTo = UIParent
     end
   end
@@ -750,9 +779,9 @@ local function applyAndReport()
       say("revert failed for " .. errId .. ": " .. tostring(message))
     end
   end
-  for warnId, message in pairs(afterWarn) do
-    if not beforeWarn[warnId] then
-      say(warnId .. ": " .. message)
+  for warnKey, message in pairs(afterWarn) do
+    if not beforeWarn[warnKey] then
+      say(message)
     end
   end
 end
@@ -781,10 +810,8 @@ end
 -- Revert() first, so a revert failure surfaced by this same edit is no more
 -- silent than an apply failure already was.
 function WIIIUI.Customizer.SetOverride(id, field, value)
-  local invalidParent = field == "ParentOf" and value ~= nil and not resolveParentOfTarget(value)
-  local invalidAnchor = field == "ParentPosOf" and value ~= nil and not resolveAnchorTarget(value)
-  if invalidParent or invalidAnchor then
-    say(id .. ": " .. invalidTargetMessage(field, value))
+  if value ~= nil and targetProblem(field, value) then
+    say(invalidTargetMessage(id, field, value))
     value = "UIParent"
   end
 
@@ -820,6 +847,25 @@ function WIIIUI.Customizer.ResetTheme()
 
   WIIIUI.ApplyOrQueue("custom:reset", applyAndReport)
   WIIIUI.Customizer.RefreshEditor()
+end
+
+-- Confirmation for the editor's Reset button. Adding a key to the global
+-- StaticPopupDialogs table is Blizzard's documented addon pattern
+-- (warcraft.wiki.gg API_StaticPopup_Show; the table is declared empty in
+-- Blizzard_StaticPopup/StaticPopup.lua on both the forever and live
+-- branches of Gethe/wow-ui-source), not an overwrite of a Blizzard function
+-- or frame. Registered lazily on first click, not at file scope.
+function WIIIUI.Customizer.ConfirmReset()
+  StaticPopupDialogs["WIIIUI_RESET_THEME"] = {
+    text = "Reset all Customize overrides for the %s theme?",
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function() WIIIUI.Customizer.ResetTheme() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+  }
+  StaticPopup_Show("WIIIUI_RESET_THEME", wc3UI_Options.theme)
 end
 
 --------------------------------------------------------------------------
@@ -1097,9 +1143,9 @@ function WIIIUI.Customizer.BuildEditor(panel)
     -- metrics.
     local resetButton = CreateFrame("Button", nil, editor, "UIPanelButtonTemplate")
     resetButton:SetSize(120, 22)
-    resetButton:SetText("Reset theme")
+    resetButton:SetText("Reset overrides")
     resetButton:SetPoint("BOTTOMRIGHT", editor, "BOTTOMRIGHT", 0, 0)
-    resetButton:SetScript("OnClick", function() WIIIUI.Customizer.ResetTheme() end)
+    resetButton:SetScript("OnClick", function() WIIIUI.Customizer.ConfirmReset() end)
     editor.resetButton = resetButton
 
     WIIIUI.Customizer.editor = editor
