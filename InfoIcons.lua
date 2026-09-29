@@ -674,7 +674,11 @@ function WIIIUI.InfoIcons.BuildArmorIcon()
   widgets.label:ClearAllPoints()
   widgets.label:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.labelOffsetX, geometry.labelOffsetY)
 
+  -- ensureIconWidgets' 30-high value box suits the weapon rows; the armor
+  -- value is 15 high in vanilla (armorValue:SetHeight(15), e17c352
+  -- WIIIUI.lua:2445), so its top-justified text does not start over the label.
   widgets.value:SetWidth(100)
+  widgets.value:SetHeight(15)
   widgets.value:ClearAllPoints()
   widgets.value:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.valueOffsetX, geometry.valueOffsetY)
 
