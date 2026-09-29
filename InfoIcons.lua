@@ -148,6 +148,52 @@ local function formatRange(low, high)
   return math.floor(low) .. " - " .. math.ceil(high)
 end
 
+-- security-specialist Finding (slice 19 gate-fix, generalized beyond the
+-- mainhand-only special case): every option previously resolved its icon
+-- texture inside computeStats, entirely inside the one WIIIUI.Safe call that
+-- also does the SecretWhenUnitStatsRestricted arithmetic below -- a throw
+-- there aborted before the icon was ever returned, leaving the icon stale
+-- (or empty on the first build) for offhand/ranged/healing/spellpower too,
+-- not just mainhand. resolveIcon is now the one place that resolves an
+-- option's icon texture; RefreshSlot calls it in its own WIIIUI.Safe, before
+-- Safe(computeStats, option), so the icon always tracks the current form/
+-- equipped item even when the label/value degrade. None of
+-- GetInventoryItemTexture/C_PaperDollInfo.GetInventorySlotInfo/
+-- activeShapeshiftIcon read a secret value (this file's header comment) --
+-- the Safe wrap at the call site is defense-in-depth, not a required guard.
+-- Ammo caveat: the hide-when-no-ammo-slot/hide-when-relic-slot decision
+-- stays inside computeStats (unchanged below) -- when the icon should be
+-- hidden, the value resolveIcon returns here is never shown, so it doesn't
+-- need to encode that hide logic itself.
+local function resolveIcon(option)
+  if option == MAINHAND_SLOT then
+    return activeShapeshiftIcon() or GetInventoryItemTexture("player", MAINHAND_SLOT) or FIST_ICON
+  end
+
+  if option == OFFHAND_SLOT then
+    return GetInventoryItemTexture("player", OFFHAND_SLOT) or FIST_ICON
+  end
+
+  if option == RANGED_SLOT then
+    return GetInventoryItemTexture("player", RANGED_SLOT) or FIST_ICON
+  end
+
+  if option == AMMO_OPTION then
+    local ammoSlot = C_PaperDollInfo.GetInventorySlotInfo(AMMO_SLOT_NAME)
+    return (ammoSlot and GetInventoryItemTexture("player", ammoSlot)) or FIST_ICON
+  end
+
+  if option == HEALING_OPTION then
+    return HEALING_ICON
+  end
+
+  if option == SPELLPOWER_OPTION then
+    return SPELLPOWER_ICON
+  end
+
+  return FIST_ICON
+end
+
 -- Every stat read below (UnitDamage/UnitAttackSpeed/UnitRangedDamage/
 -- GetShieldBlock/GetBlockChance/GetSpellBonusDamage/GetSpellBonusHealing) is
 -- flagged SecretWhenUnitStatsRestricted on Forever (spec 0001 §1.7: "Stats
@@ -157,7 +203,9 @@ end
 -- formatting unguarded; its one caller, WIIIUI.InfoIcons.RefreshSlot, wraps
 -- the whole call in WIIIUI.Safe (Bars.lua's own updateHealth/updatePower
 -- convention), so any error here degrades to a shown label with a blank
--- value rather than aborting WIIIUI.Layout().
+-- value rather than aborting WIIIUI.Layout(). The icon itself is no longer
+-- part of this return value -- resolveIcon above is the single source of
+-- truth for it (RefreshSlot resolves it separately, before this call).
 -- GetInventoryItemID/GetInventoryItemTexture/GetInventoryItemCount/
 -- C_Item.GetItemInfoInstant/C_PaperDollInfo.GetInventorySlotInfo/
 -- UnitHasRelicSlot are not flagged secret (identity/count/equip-loc data,
@@ -178,17 +226,15 @@ local function computeStats(option)
     return {
       label = "Damage:",
       text = formatRange(lowDmg, highDmg),
-      icon = activeShapeshiftIcon() or GetInventoryItemTexture("player", MAINHAND_SLOT) or FIST_ICON,
       tooltip = tooltip,
     }
   end
 
   if option == OFFHAND_SLOT then
     local itemID = GetInventoryItemID("player", OFFHAND_SLOT)
-    local icon = GetInventoryItemTexture("player", OFFHAND_SLOT) or FIST_ICON
 
     if not itemID then
-      return { label = "Damage:", text = "N/A", icon = icon, tooltip = { "No offhand equipped" } }
+      return { label = "Damage:", text = "N/A", tooltip = { "No offhand equipped" } }
     end
 
     local equipLoc = select(4, C_Item.GetItemInfoInstant(itemID))
@@ -199,7 +245,6 @@ local function computeStats(option)
       return {
         label = "Block:",
         text = string.format("%.1f%%\n(%d)", blockChance, blockValue),
-        icon = icon,
         tooltip = {
           "|cffffd100Block Chance:|r " .. string.format("%.1f%%", blockChance),
           "|cffffd100Block Value:|r " .. tostring(blockValue),
@@ -218,16 +263,15 @@ local function computeStats(option)
     return {
       label = "Damage:",
       text = formatRange(offLowDmg, offHiDmg),
-      icon = icon,
       tooltip = tooltip,
     }
   end
 
   if option == RANGED_SLOT then
-    local icon = GetInventoryItemTexture("player", RANGED_SLOT)
+    local equipped = GetInventoryItemTexture("player", RANGED_SLOT)
 
-    if not icon then
-      return { label = "Damage:", text = "N/A", icon = FIST_ICON, tooltip = { "No ranged weapon equipped" } }
+    if not equipped then
+      return { label = "Damage:", text = "N/A", tooltip = { "No ranged weapon equipped" } }
     end
 
     local speed, lowDmg, highDmg = UnitRangedDamage("player")
@@ -240,7 +284,6 @@ local function computeStats(option)
     return {
       label = "Damage:",
       text = formatRange(lowDmg, highDmg),
-      icon = icon,
       tooltip = tooltip,
     }
   end
@@ -269,7 +312,7 @@ local function computeStats(option)
     local texture = GetInventoryItemTexture("player", ammoSlot)
 
     if not texture then
-      return { label = "Ammo:", text = "|cffff0000No ammo|r", icon = FIST_ICON, tooltip = { "No ammo equipped" } }
+      return { label = "Ammo:", text = "|cffff0000No ammo|r", tooltip = { "No ammo equipped" } }
     end
 
     local count = GetInventoryItemCount("player", ammoSlot)
@@ -284,7 +327,6 @@ local function computeStats(option)
     return {
       label = "Ammo:",
       text = colorPrefix .. tostring(count) .. (colorPrefix ~= "" and "|r" or ""),
-      icon = texture,
       tooltip = { "|cffffd100Ammo:|r " .. tostring(count) },
     }
   end
@@ -294,7 +336,6 @@ local function computeStats(option)
     return {
       label = "Healing:",
       text = tostring(healing),
-      icon = HEALING_ICON,
       tooltip = { "|cffffd100Healing Power:|r " .. tostring(healing) },
     }
   end
@@ -314,7 +355,6 @@ local function computeStats(option)
     return {
       label = "Spell:",
       text = tostring(best),
-      icon = SPELLPOWER_ICON,
       tooltip = tooltip,
     }
   end
@@ -337,10 +377,17 @@ end
 -- SecretWhenUnitStatsRestricted (this file's header comment); called
 -- unguarded here, same as computeStats above -- RefreshArmor's own
 -- WIIIUI.Safe wrap (this function's one caller) covers it.
+-- Mirrors resolveIcon above for the armor slot -- the single source of
+-- truth for the armor icon's texture, resolved separately (RefreshArmor's
+-- own WIIIUI.Safe) from computeArmorStats' SecretWhenUnitStatsRestricted
+-- reads so a throw there doesn't stall the icon on a stale form/item.
+local function resolveArmorIcon()
+  return activeShapeshiftIcon() or GetInventoryItemTexture("player", CHEST_SLOT) or ARMOR_ICON_FALLBACK
+end
+
 local function computeArmorStats()
   local _, effective = UnitArmor("player")
   local reduction = C_PaperDollInfo.GetArmorEffectiveness(effective, UnitLevel("player"))
-  local icon = activeShapeshiftIcon() or GetInventoryItemTexture("player", CHEST_SLOT) or ARMOR_ICON_FALLBACK
 
   local tooltip = {
     "|cffffd100Dodge:|r " .. string.format("%.1f%%", GetDodgeChance()),
@@ -369,7 +416,6 @@ local function computeArmorStats()
   return {
     label = "Armor:",
     text = string.format("%.1f%%", reduction * 100),
-    icon = icon,
     tooltip = tooltip,
   }
 end
@@ -474,31 +520,19 @@ function WIIIUI.InfoIcons.RefreshSlot(slotIndex)
     return
   end
 
-  -- security-specialist Finding (slice 19 gate-fix): computeStats' own
-  -- MAINHAND_SLOT branch resolves activeShapeshiftIcon() only after
-  -- UnitDamage/UnitAttackSpeed's SecretWhenUnitStatsRestricted arithmetic
-  -- (formatRange -- this file's header comment). If that arithmetic throws,
-  -- computeStats aborts before returning anything, including the icon, so a
-  -- druid who shifts form while stats are restricted kept showing the
-  -- previous icon (or an empty backdrop on the very first build). Resolved
-  -- here, outside the stats-only Safe call below, so the icon always tracks
-  -- the current form/equipped item even when the label/value degrade.
-  -- activeShapeshiftIcon/GetInventoryItemTexture read no secret value (this
-  -- file's own header comment), so the Safe wrap here is defense-in-depth,
-  -- not a required guard.
-  if option == MAINHAND_SLOT then
-    local iconOk, icon = WIIIUI.Safe(function()
-      return activeShapeshiftIcon() or GetInventoryItemTexture("player", MAINHAND_SLOT) or FIST_ICON
-    end)
-    widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or FIST_ICON })
-  end
+  -- security-specialist Finding (slice 19 gate-fix, generalized to every
+  -- option -- resolveIcon's own header comment): resolved here, outside the
+  -- stats-only Safe call below, so the icon always tracks the current form/
+  -- equipped item even when the label/value degrade for any option, not
+  -- just mainhand.
+  local iconOk, icon = WIIIUI.Safe(resolveIcon, option)
+  widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or FIST_ICON })
 
   local ok, result = WIIIUI.Safe(computeStats, option)
 
   if ok and result then
     widgets.label:SetText(result.label)
     widgets.value:SetText(result.text)
-    widgets.icon:SetBackdrop({ bgFile = result.icon })
     widgets.tooltip = result.tooltip
     widgets.frame:Show()
   elseif ok then
@@ -528,16 +562,15 @@ function WIIIUI.InfoIcons.RefreshArmor()
   end
 
   -- security-specialist Finding (slice 19 gate-fix): mirrors RefreshSlot's
-  -- MAINHAND_SLOT fix above -- computeArmorStats resolves
+  -- resolveIcon fix above -- computeArmorStats resolves
   -- activeShapeshiftIcon() only after UnitArmor/C_PaperDollInfo.
   -- GetArmorEffectiveness (SecretWhenUnitStatsRestricted), so a throw there
   -- aborted the whole function before the icon was ever returned, leaving a
   -- druid's form icon stale (or an empty backdrop on the first build).
-  -- Resolved separately here so the icon always tracks the current form/
-  -- chest-slot item even when the armor text below degrades to blank.
-  local iconOk, icon = WIIIUI.Safe(function()
-    return activeShapeshiftIcon() or GetInventoryItemTexture("player", CHEST_SLOT) or ARMOR_ICON_FALLBACK
-  end)
+  -- Resolved separately here (resolveArmorIcon, above) so the icon always
+  -- tracks the current form/chest-slot item even when the armor text below
+  -- degrades to blank.
+  local iconOk, icon = WIIIUI.Safe(resolveArmorIcon)
   widgets.icon:SetBackdrop({ bgFile = (iconOk and icon) or ARMOR_ICON_FALLBACK })
 
   local ok, result = WIIIUI.Safe(computeArmorStats)
@@ -545,7 +578,6 @@ function WIIIUI.InfoIcons.RefreshArmor()
   if ok and result then
     widgets.label:SetText(result.label)
     widgets.value:SetText(result.text)
-    widgets.icon:SetBackdrop({ bgFile = result.icon })
     widgets.tooltip = result.tooltip
     widgets.frame:Show()
   else
