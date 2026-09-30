@@ -98,8 +98,10 @@ end
 
 -- spec 0005: the only place the console size limits live. Layout rules are
 -- tuned up to TUNED_MAX; above it the console grows by the same rules and text
--- by Theme.ExtraScale. MAX is provisional until the in-game spike fixes it.
-WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_TUNED_MAX, WIIIUI.UI_SCALE_MAX = 240, 270, 340
+-- by Theme.ExtraScale. MAX is the smallest multiple of 10 that spans 1920x1080
+-- edge to edge in ultra-wide: the headless fit touches at ~297, and the in-game
+-- walk (2026-09-30) saw 290 clean and within ~20 px of both edges.
+WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_TUNED_MAX, WIIIUI.UI_SCALE_MAX = 240, 270, 300
 
 WIIIUI.SETTINGS = {
   { key = "theme", default = "orc", values = themeNames, label = "Theme", control = { kind = "theme" } },

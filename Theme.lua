@@ -69,7 +69,8 @@ function WIIIUI.Theme.ApplyFont(fontString, size, fallbackObject)
 end
 
 -- spec 0005 §Shape: option A lays out in the saved units with no root scale.
--- Returns (layoutUnits, rootScale); an option-B branch would cap the units.
+-- Returns (layoutUnits, rootScale). Option B (a root scale) was not needed:
+-- measured in-game 2026-09-30, so this stays the identity.
 function WIIIUI.Theme.SizeSplit(uiScale)
   return uiScale, 1
 end
@@ -401,7 +402,7 @@ function WIIIUI.Theme.ActionButtonGeometry(uiScale)
     size = size,
     columnOffsetX = columnOffsetX,
     -- A fixed 5 units drifts off its art cell as the art grows past the tuned
-    -- size (spec 0005 spike, buttons_test at 340), so it scales with ExtraScale.
+    -- size (spec 0005 spike), so it scales with ExtraScale.
     row1OffsetY = 5 * WIIIUI.Theme.ExtraScale(uiScale),
     row2OffsetY = size + uiScale * 0.0667,
     row3OffsetY = size + uiScale * 0.0667 + size + uiScale * 0.04444,
