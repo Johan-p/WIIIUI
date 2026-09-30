@@ -131,6 +131,8 @@ WIIIUI.SETTINGS = {
   { key = "xpRestedXpColor", default = { 0, 0, 1, 0.5 }, type = "table", validate = xpColorIsValid },
   { key = "chatInputAbove", default = false, type = "boolean" },
   { key = "HideChatArrows", default = false, type = "boolean" },
+  -- spec 0002 §2: no control until the Config row lands.
+  { key = "druidResourceBar", default = true, type = "boolean" },
   { key = "edit_theme_settings", default = {}, type = "table" },
   -- Legacy: no default, no control; the merge keeps them as unknown keys
   -- (CLAUDE.md Domain model).
