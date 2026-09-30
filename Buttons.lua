@@ -324,8 +324,8 @@ end
 -- right:Hide() under centerSlimNoInv never cascades to them -- unlike
 -- vanilla, where the equivalent ActionButton_CustomInventory_N buttons were
 -- parented to rightFrame and hid along with it. Mirrors applyLayoutModes'
--- own precedence (Console.lua: "centerSlimNoInv ... not centerSlim") so
--- centerSlim's per-piece hiding still wins when both flags are set. The 3
+-- own precedence (Console.LayoutMode) so centerSlim's per-piece hiding still
+-- wins when both flags are set. The 3
 -- minimap extras (i=1..3) are untouched -- centerSlimNoInv only ever hid the
 -- right/inventory side in vanilla. Runs from buildExtras alongside
 -- anchorExtras, so it's on the same "create once, refresh every
@@ -333,7 +333,7 @@ end
 -- ApplyOrQueue("layout", ...) (Core.lua), so this Show/Hide is already
 -- combat-gated with no new queue path.
 local function applyInventoryExtraVisibility(extras)
-  local hideInventory = wc3UI_Options.centerSlimNoInv and not wc3UI_Options.centerSlim
+  local hideInventory = WIIIUI.Console.LayoutMode() == "centerSlimNoInv"
 
   for i = 4, EXTRA_SLOT_COUNT do
     local button = extras[i]

@@ -9,20 +9,145 @@ local _, WIIIUI = ...
 
 WIIIUI.Console = WIIIUI.Console or {}
 
--- Shared create-if-missing-and-cache-on-parent step for the per-region art
--- textures below; callers still own SetSize/SetTexture/ClearAllPoints/
--- SetPoint since those differ per texture. isNew tells a caller that only
--- sets its anchor once (tile1, minimapTexture) when to do so.
-local function getOrCreateTexture(parent, cacheKey, layer)
-  local texture = parent[cacheKey]
-  local isNew = not texture
+-- Declared art (spec 0006 slice 10). Each region's art is an ordered piece
+-- table; BuildArt below creates, sizes, textures and anchors every piece on
+-- every Layout call. Field conventions:
+--   key    parent[key] holds the texture (the Customizer's Console.<region>.<key>)
+--   layer  draw layer passed to CreateTexture
+--   geo    name of the region's geometry result in `geos` (Theme.*Geometry)
+--   w, h   number, or a field name of geos[geo]
+--   tex    {folder, file} (Theme.TexturePath) | literal path | fn(theme)
+--   point, rel  anchor points on the piece and on its target
+--   to     "$parent" | "UIParent" | sibling key on the same parent | fn() -> region
+--   x, y   offset: number, or a field name of geos[geo]; nil is 0
+-- Order is creation order and the Customizer's registry order.
+local LEFT_PIECES = {
+  { key = "minimapTexture", layer = "ARTWORK", geo = "minimap", w = "frameSize", h = "frameSize",
+    tex = { "minimap_portrait", "minimap" }, point = "BOTTOM", to = "$parent", rel = "BOTTOM" },
+  { key = "portraitTexture", layer = "BORDER", geo = "portrait", w = "size", h = "size",
+    tex = { "minimap_portrait", "portrait" }, point = "BOTTOMLEFT", to = "minimapTexture", rel = "BOTTOMRIGHT",
+    x = "anchorOffsetX", y = "anchorOffsetY" },
+  { key = "extensionBackgroundTexture", layer = "BACKGROUND", geo = "extensionBackground", w = "width", h = "height",
+    tex = "Interface\\Addons\\WIIIUI\\art\\other\\black_background", point = "BOTTOMLEFT", to = "portraitTexture",
+    rel = "BOTTOMRIGHT", x = "offsetX", y = "offsetY" },
+}
 
-  if isNew then
-    texture = parent:CreateTexture(nil, layer)
-    parent[cacheKey] = texture
+local function gridTile(key, layer, to, offsetField)
+  return { key = key, layer = layer, geo = "grid", w = "size", h = "size", tex = { "actionbar", "actionslots_grid" },
+    point = to and "BOTTOMLEFT" or "BOTTOM", to = to or "$parent", rel = to and "BOTTOMRIGHT" or "BOTTOM", x = offsetField }
+end
+
+local GRID_PIECES = {
+  gridTile("tile1", "BACKGROUND"),
+  gridTile("tile2", "BORDER", "tile1", "slot2OffsetX"),
+  gridTile("tile3", "ARTWORK", "tile2", "slot3OffsetX"),
+  gridTile("tile4", "OVERLAY", "tile3", "slot4OffsetX"),
+}
+
+local function gridTile4()
+  local grid = WIIIUI.Console.grid
+
+  return grid and grid.tile4
+end
+
+local RIGHT_PIECES = {
+  { key = "rightPartMiddle", layer = "OVERLAY", geo = "rightPart", w = "middleWidth", h = "middleHeight",
+    tex = { "inventory", "inventory" }, point = "BOTTOMLEFT", to = gridTile4, rel = "BOTTOMRIGHT",
+    x = "middleOffsetX", y = "middleOffsetY" },
+  { key = "rightPartLeft", layer = "ARTWORK", geo = "rightPart", w = "leftWidth", h = "leftHeight",
+    tex = { "inventory", "no_inventory" }, point = "BOTTOMRIGHT", to = "rightPartMiddle", rel = "BOTTOMLEFT",
+    x = "leftOffsetX", y = "leftOffsetY" },
+  { key = "lid", layer = "BORDER", geo = "lid", w = "size", h = "size",
+    tex = { "bottom right", "right_part_lid" }, point = "BOTTOMLEFT", to = "rightPartMiddle", rel = "BOTTOMLEFT",
+    x = "offsetX", y = "offsetY" },
+  { key = "chatTop", layer = "BORDER", geo = "chat", w = "topWidth", h = "topHeight",
+    tex = { "bottom right", "BottomRight_Top" }, point = "BOTTOMLEFT", to = "UIParent", rel = "BOTTOMRIGHT",
+    x = "topOffsetX", y = "topOffsetY" },
+  { key = "chatMiddle", layer = "BORDER", geo = "chat", w = "middleWidth", h = "middleHeight",
+    tex = { "bottom right", "BottomRight_Middle" }, point = "BOTTOMLEFT", to = "UIParent", rel = "BOTTOMRIGHT",
+    x = "middleOffsetX", y = "middleOffsetY" },
+  { key = "chatBottom", layer = "BORDER", geo = "chat", w = "bottomWidth", h = "bottomHeight",
+    tex = { "bottom right", "BottomRight_Bottom" }, point = "BOTTOMLEFT", to = "UIParent", rel = "BOTTOMRIGHT",
+    x = "bottomOffsetX", y = "bottomOffsetY" },
+}
+
+-- The 3 filler pairs: pair 1 hangs off rightPartMiddle's right edge, pairs 2
+-- and 3 off the previous pair's bottom piece.
+for i = 1, 3 do
+  local layer = (i == 1) and "BORDER" or "ARTWORK"
+  local to, rel = "rightPartMiddle", "BOTTOMRIGHT"
+
+  if i > 1 then
+    to, rel = "fillerBottom" .. (i - 1), "BOTTOMLEFT"
   end
 
-  return texture, isNew
+  RIGHT_PIECES[#RIGHT_PIECES + 1] = { key = "fillerTop" .. i, layer = layer, geo = "filler", w = "topWidth", h = "topHeight",
+    tex = { "bottom right", "BottomRightFillerTop" }, point = "BOTTOMLEFT", to = to, rel = rel,
+    x = "top" .. i .. "OffsetX", y = "top" .. i .. "OffsetY" }
+  RIGHT_PIECES[#RIGHT_PIECES + 1] = { key = "fillerBottom" .. i, layer = layer, geo = "filler", w = "bottomWidth", h = "bottomHeight",
+    tex = { "bottom right", "BottomRightFillerBottom" }, point = "BOTTOMLEFT", to = to, rel = rel,
+    x = "bottom" .. i .. "OffsetX", y = "bottom" .. i .. "OffsetY" }
+end
+
+WIIIUI.Console.ART = { left = LEFT_PIECES, grid = GRID_PIECES, right = RIGHT_PIECES }
+
+local function pieceValue(field, geometry)
+  if type(field) == "string" then
+    return geometry[field]
+  end
+
+  return field or 0
+end
+
+local function pieceTarget(piece, parent)
+  local to = piece.to
+
+  if to == "$parent" then
+    return parent
+  elseif to == "UIParent" then
+    return UIParent
+  elseif type(to) == "function" then
+    return to()
+  end
+
+  return parent[to]
+end
+
+local function pieceTexture(piece, theme)
+  local tex = piece.tex
+
+  if type(tex) == "table" then
+    return WIIIUI.Theme.TexturePath(theme, tex[1], tex[2])
+  elseif type(tex) == "function" then
+    return tex(theme)
+  end
+
+  return tex
+end
+
+-- Get-or-create, size, texture, and anchor every piece, on every call: a piece
+-- moved since the last build (a customizer revert, a stale anchor) returns to
+-- its declared point.
+local function BuildArt(parent, pieces, geos, theme)
+  for _, piece in ipairs(pieces) do
+    local geometry = geos[piece.geo]
+    local texture = parent[piece.key]
+
+    if not texture then
+      texture = parent:CreateTexture(nil, piece.layer)
+      parent[piece.key] = texture
+    end
+
+    texture:SetSize(pieceValue(piece.w, geometry), pieceValue(piece.h, geometry))
+    texture:SetTexture(pieceTexture(piece, theme))
+    local target = pieceTarget(piece, parent)
+
+    -- A nil target would silently anchor to the parent; an ordering mistake
+    -- in a piece table must fail loudly inside Layout's xpcall instead.
+    assert(target, "Console art: no anchor target for " .. piece.key)
+    texture:ClearAllPoints()
+    texture:SetPoint(piece.point, target, piece.rel, pieceValue(piece.x, geometry), pieceValue(piece.y, geometry))
+  end
 end
 
 -- Anchor companions: the client refuses to anchor a protected frame (the
@@ -186,62 +311,16 @@ function WIIIUI.Console.BuildLeft()
     WIIIUI.Console.left = left
   end
 
-  local theme = wc3UI_Options.theme
   local uiScale = wc3UI_Options.uiScale
-  local geometry = WIIIUI.Theme.MinimapGeometry(uiScale)
 
-  -- Vanilla Wc3_UI_minimap (e17c352 WIIIUI.xml:2114-2126, Layer
-  -- level="ARTWORK"): anchored BOTTOM to its parent's BOTTOM at offset 0,0.
-  -- Sized square by AlignMinimap's minimapFrame:SetWidth/SetHeight(uiScale)
-  -- (e17c352 WIIIUI.lua:1810-1811) -- Theme.lua's MinimapGeometry.frameSize.
-  local minimapTexture, minimapIsNew = getOrCreateTexture(left, "minimapTexture", "ARTWORK")
-
-  if minimapIsNew then
-    minimapTexture:SetPoint("BOTTOM", left, "BOTTOM", 0, 0)
-  end
-
-  minimapTexture:SetSize(geometry.frameSize, geometry.frameSize)
-  minimapTexture:SetTexture(WIIIUI.Theme.TexturePath(theme, "minimap_portrait", "minimap"))
-
-  -- Vanilla Wc3_UI_portrait (e17c352 WIIIUI.xml:2132, Layer level="BORDER"),
-  -- same WIIIUI_leftpart frame as the minimap texture. AlignPortrait
-  -- (e17c352 WIIIUI.lua:1939-1943) overrides the XML's static anchor at
-  -- runtime with portraitFrame:SetPoint("BOTTOMLEFT", minimapFrame,
-  -- "BOTTOMRIGHT", 0, 0) -- minimapFrame there is Wc3_UI_minimap itself
-  -- (InitiateFrameNames, e17c352 WIIIUI.lua:4564), i.e. minimapTexture here.
-  local portraitGeometry = WIIIUI.Theme.PortraitGeometry(uiScale)
-  local portraitTexture = getOrCreateTexture(left, "portraitTexture", "BORDER")
-
-  portraitTexture:SetSize(portraitGeometry.size, portraitGeometry.size)
-  portraitTexture:SetTexture(WIIIUI.Theme.TexturePath(theme, "minimap_portrait", "portrait"))
-  portraitTexture:ClearAllPoints()
-  portraitTexture:SetPoint(
-    "BOTTOMLEFT",
-    minimapTexture,
-    "BOTTOMRIGHT",
-    portraitGeometry.anchorOffsetX,
-    portraitGeometry.anchorOffsetY
-  )
-
-  -- Vanilla Wc3_UI_extensionBackground (e17c352 WIIIUI.xml:2035, Layer
-  -- level="BACKGROUND"): shared (not per-theme) texture, literal path from
-  -- the same XML line, unlike Theme.TexturePath's per-theme paths.
-  -- AlignMiddleExtension's tail (e17c352 WIIIUI.lua:2801-2804) overrides the
-  -- XML's static anchor at runtime with extensionBackground:SetPoint(
-  -- "BOTTOMLEFT", "Wc3_UI_portrait", "BOTTOMRIGHT", uiScale*-0.18, 0).
-  local extensionBackgroundGeometry = WIIIUI.Theme.ExtensionBackgroundGeometry(uiScale)
-  local extensionBackgroundTexture = getOrCreateTexture(left, "extensionBackgroundTexture", "BACKGROUND")
-
-  extensionBackgroundTexture:SetSize(extensionBackgroundGeometry.width, extensionBackgroundGeometry.height)
-  extensionBackgroundTexture:SetTexture("Interface\\Addons\\WIIIUI\\art\\other\\black_background")
-  extensionBackgroundTexture:ClearAllPoints()
-  extensionBackgroundTexture:SetPoint(
-    "BOTTOMLEFT",
-    portraitTexture,
-    "BOTTOMRIGHT",
-    extensionBackgroundGeometry.offsetX,
-    extensionBackgroundGeometry.offsetY
-  )
+  -- Vanilla anchors these chain minimap -> portrait -> extension background
+  -- (e17c352 WIIIUI.lua:1810, 1939, 2801); the extension background is the
+  -- shared black_background texture, not a per-theme one.
+  BuildArt(left, LEFT_PIECES, {
+    minimap = WIIIUI.Theme.MinimapGeometry(uiScale),
+    portrait = WIIIUI.Theme.PortraitGeometry(uiScale),
+    extensionBackground = WIIIUI.Theme.ExtensionBackgroundGeometry(uiScale),
+  }, wc3UI_Options.theme)
 
   WIIIUI.Console.SyncAnchors()
 end
@@ -285,37 +364,7 @@ function WIIIUI.Console.BuildGrid()
     geometry.originOffsetY
   )
 
-  local tilePath = WIIIUI.Theme.TexturePath(theme, "actionbar", "actionslots_grid")
-
-  local tile1, tile1IsNew = getOrCreateTexture(grid, "tile1", "BACKGROUND")
-
-  if tile1IsNew then
-    tile1:SetPoint("BOTTOM", grid, "BOTTOM", 0, 0)
-  end
-
-  tile1:SetSize(geometry.size, geometry.size)
-  tile1:SetTexture(tilePath)
-
-  local tile2 = getOrCreateTexture(grid, "tile2", "BORDER")
-
-  tile2:SetSize(geometry.size, geometry.size)
-  tile2:SetTexture(tilePath)
-  tile2:ClearAllPoints()
-  tile2:SetPoint("BOTTOMLEFT", tile1, "BOTTOMRIGHT", geometry.slot2OffsetX, 0)
-
-  local tile3 = getOrCreateTexture(grid, "tile3", "ARTWORK")
-
-  tile3:SetSize(geometry.size, geometry.size)
-  tile3:SetTexture(tilePath)
-  tile3:ClearAllPoints()
-  tile3:SetPoint("BOTTOMLEFT", tile2, "BOTTOMRIGHT", geometry.slot3OffsetX, 0)
-
-  local tile4 = getOrCreateTexture(grid, "tile4", "OVERLAY")
-
-  tile4:SetSize(geometry.size, geometry.size)
-  tile4:SetTexture(tilePath)
-  tile4:ClearAllPoints()
-  tile4:SetPoint("BOTTOMLEFT", tile3, "BOTTOMRIGHT", geometry.slot4OffsetX, 0)
+  BuildArt(grid, GRID_PIECES, { grid = geometry }, theme)
 
   -- hideGride (vanilla AlignActionBarUIGrid, e17c352 WIIIUI.lua:2724-2738)
   -- hid actionSlotGridMain, the frame carrying only the four tile textures.
@@ -367,10 +416,25 @@ local ULTRA_WIDE_CHAT_TOP_OFFSET_X_DEFAULT = -0.725833
 -- other theme uses the uiScale-scaled default (-uiScale*0.0625).
 local ULTRA_WIDE_CHAT_MIDDLE_OFFSET_X_NIGHTELF = -37
 
+-- The one place the three layout flags are read (spec 0006 slice 10).
+-- Vanilla AlignUltraWide checks centerSlim first with an elseif, so
+-- centerSlim wins over centerSlimNoInv, which wins over ultraWide.
+function WIIIUI.Console.LayoutMode()
+  if wc3UI_Options.centerSlim then
+    return "centerSlim"
+  elseif wc3UI_Options.centerSlimNoInv then
+    return "centerSlimNoInv"
+  elseif wc3UI_Options.ultraWide then
+    return "ultraWide"
+  end
+
+  return "normal"
+end
+
 -- Layout modes: centerSlim/centerSlimNoInv/ultraWide (vanilla
 -- AlignUltraWide, e17c352 WIIIUI.lua:4640-4694, 4815). Reads the pieces
--- BuildRight already cached on `right` (getOrCreateTexture's
--- parent[cacheKey] convention) and re-derives their visibility/anchor from
+-- BuildRight already built on `right` (BuildArt's
+-- parent[key] convention) and re-derives their visibility/anchor from
 -- wc3UI_Options every call, since WIIIUI.Layout() has no done-flag -- the
 -- false/default path of every branch below has to explicitly restore the
 -- non-mode state, not just apply the mode.
@@ -378,7 +442,9 @@ local ULTRA_WIDE_CHAT_MIDDLE_OFFSET_X_NIGHTELF = -37
 -- Vanilla checks centerSlim first with an elseif, so centerSlimNoInv only
 -- applies when centerSlim is also false -- replicated here so centerSlim's
 -- per-piece hiding wins when both flags are set.
-local function applyLayoutModes(right, left, theme, uiScale, backgroundGeometry)
+local function applyLayoutModes(right, left, rawTheme, uiScale, backgroundGeometry)
+  local theme = WIIIUI.Theme.ResolveThemeName(rawTheme)
+  local mode = WIIIUI.Console.LayoutMode()
   local lid = right.lid
   local chatTop = right.chatTop
   local chatMiddle = right.chatMiddle
@@ -397,7 +463,7 @@ local function applyLayoutModes(right, left, theme, uiScale, backgroundGeometry)
     fillerTop1, fillerBottom1, fillerTop2, fillerBottom2, fillerTop3, fillerBottom3,
   }
 
-  if wc3UI_Options.centerSlim then
+  if mode == "centerSlim" then
     for i = 1, #slimPieces do
       slimPieces[i]:Hide()
     end
@@ -412,7 +478,7 @@ local function applyLayoutModes(right, left, theme, uiScale, backgroundGeometry)
   -- cascades to rightPartMiddle/rightPartLeft and everything else anchored
   -- under it -- unlike centerSlim above, which hides only the individual
   -- pieces and keeps the inventory art shown.
-  if wc3UI_Options.centerSlimNoInv and not wc3UI_Options.centerSlim then
+  if mode == "centerSlimNoInv" then
     right:Hide()
   else
     right:Show()
@@ -424,12 +490,13 @@ local function applyLayoutModes(right, left, theme, uiScale, backgroundGeometry)
   -- already got their normal default anchor unconditionally in BuildRight,
   -- so the false branch below needs no extra code to revert them) -- only
   -- the *centering reference edge* selected just below varies per mode, and
-  -- only `left`'s anchor (set once by BuildLeft at creation) needs an
-  -- explicit revert in the false branch. The action-slot-button
+  -- only the `left` frame's own anchor (reset by anchorLeft, not by BuildArt,
+  -- which re-anchors the textures on every Layout) needs an explicit revert
+  -- in the false branch. The action-slot-button
   -- repositioning/resize inside vanilla's other two elseif branches
   -- (e17c352 WIIIUI.lua:4697-4762) still doesn't exist until slice D and
   -- stays deferred.
-  if wc3UI_Options.ultraWide or wc3UI_Options.centerSlim or wc3UI_Options.centerSlimNoInv then
+  if mode ~= "normal" then
     local topOffsetX = uiScale * (ULTRA_WIDE_CHAT_TOP_OFFSET_X_THEMES[theme] or ULTRA_WIDE_CHAT_TOP_OFFSET_X_DEFAULT)
     local topOffsetY = -uiScale * 0.03846153
 
@@ -493,10 +560,10 @@ local function applyLayoutModes(right, left, theme, uiScale, backgroundGeometry)
       local referenceFrame = right.rightPartLeft
       local referenceExtra = backgroundGeometry.offsetX + backgroundGeometry.width
 
-      if wc3UI_Options.centerSlim then
+      if mode == "centerSlim" then
         referenceFrame = right.rightPartMiddle
         referenceExtra = 0
-      elseif wc3UI_Options.centerSlimNoInv then
+      elseif mode == "centerSlimNoInv" then
         referenceExtra = 0
       end
 
@@ -506,7 +573,7 @@ local function applyLayoutModes(right, left, theme, uiScale, backgroundGeometry)
         referenceEdge = referenceEdge + referenceExtra
       end
 
-      if referenceEdge and wc3UI_Options.centerSlimNoInv and not wc3UI_Options.centerSlim and theme == "nightelf" then
+      if referenceEdge and mode == "centerSlimNoInv" and theme == "nightelf" then
         referenceEdge = referenceEdge + 18
       end
 
@@ -556,31 +623,6 @@ function WIIIUI.Console.BuildRight()
   local theme = wc3UI_Options.theme
   local uiScale = wc3UI_Options.uiScale
   local geometry = WIIIUI.Theme.RightPartGeometry(uiScale, theme)
-  local grid = WIIIUI.Console.grid
-  local tile4 = grid and grid.tile4
-
-  -- Vanilla Wc3_UI_right_middle (e17c352 WIIIUI.xml:3147, Layer
-  -- level="OVERLAY"). AlignRightPart (e17c352 WIIIUI.lua:3438-3455) overrides
-  -- the XML's static BOTTOM anchor at runtime, anchoring BOTTOMLEFT to
-  -- actionSlotGrid_4's (this module's grid.tile4) BOTTOMRIGHT.
-  local rightPartMiddle = getOrCreateTexture(right, "rightPartMiddle", "OVERLAY")
-
-  rightPartMiddle:SetSize(geometry.middleWidth, geometry.middleHeight)
-  rightPartMiddle:SetTexture(WIIIUI.Theme.TexturePath(theme, "inventory", "inventory"))
-  rightPartMiddle:ClearAllPoints()
-  rightPartMiddle:SetPoint("BOTTOMLEFT", tile4, "BOTTOMRIGHT", geometry.middleOffsetX, geometry.middleOffsetY)
-
-  -- Vanilla Wc3_UI_right_left (e17c352 WIIIUI.xml:2195, Layer
-  -- level="ARTWORK"). AlignRightPart (e17c352 WIIIUI.lua:3442-3455) overrides
-  -- the XML's static BOTTOM anchor at runtime, anchoring BOTTOMRIGHT to
-  -- rightPart_middle's BOTTOMLEFT.
-  local rightPartLeft = getOrCreateTexture(right, "rightPartLeft", "ARTWORK")
-
-  rightPartLeft:SetSize(geometry.leftWidth, geometry.leftHeight)
-  rightPartLeft:SetTexture(WIIIUI.Theme.TexturePath(theme, "inventory", "no_inventory"))
-  rightPartLeft:ClearAllPoints()
-  rightPartLeft:SetPoint("BOTTOMRIGHT", rightPartMiddle, "BOTTOMLEFT", geometry.leftOffsetX, geometry.leftOffsetY)
-
   -- Vanilla WIIIUI_rightpartBackground (e17c352 WIIIUI.xml:3131) was an
   -- opaque black texture behind the chat; it is not drawn any more (feature
   -- 0001 fix5: Blizzard's chat frame has its own background option). Its
@@ -596,110 +638,12 @@ function WIIIUI.Console.BuildRight()
     wc3UI_Options.moveChatAreaUp
   )
 
-  -- Vanilla Wc3_UI_right_lid (e17c352 WIIIUI.xml:3164, Layer
-  -- level="BORDER"). AlignRightPart (e17c352 WIIIUI.lua:3490-3493) overrides
-  -- the XML's static BOTTOM anchor at runtime, anchoring BOTTOMLEFT to
-  -- rightPartMiddle's BOTTOMLEFT. Cached as right.lid so slice 05 can
-  -- Hide()/Show() it.
-  local lidGeometry = WIIIUI.Theme.RightLidGeometry(uiScale, theme, wc3UI_Options.moveChatAreaUp)
-  local lid = getOrCreateTexture(right, "lid", "BORDER")
-
-  lid:SetSize(lidGeometry.size, lidGeometry.size)
-  lid:SetTexture(WIIIUI.Theme.TexturePath(theme, "bottom right", "right_part_lid"))
-  lid:ClearAllPoints()
-  lid:SetPoint("BOTTOMLEFT", rightPartMiddle, "BOTTOMLEFT", lidGeometry.offsetX, lidGeometry.offsetY)
-
-  -- Vanilla Wc3_UI_bottom_right_top/middle/bottom (e17c352 WIIIUI.xml:3179/
-  -- 3193/3207, Layer level="BORDER"). AlignRightPart's "Increase the size
-  -- of the lower right area (chat area)" block (e17c352 WIIIUI.lua:3457-
-  -- 3483) overrides the XML's static BOTTOM anchors at runtime, anchoring
-  -- all three BOTTOMLEFT to UIParent's own BOTTOMRIGHT corner, not a WIIIUI
-  -- frame. Cached as right.chatTop/chatMiddle/chatBottom so slice 05 can
-  -- Hide()/Show() them.
-  local chatAreaGeometry = WIIIUI.Theme.ChatAreaGeometry(uiScale, theme, wc3UI_Options.moveChatAreaUp)
-
-  local chatTop = getOrCreateTexture(right, "chatTop", "BORDER")
-
-  chatTop:SetSize(chatAreaGeometry.topWidth, chatAreaGeometry.topHeight)
-  chatTop:SetTexture(WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRight_Top"))
-  chatTop:ClearAllPoints()
-  chatTop:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMRIGHT", chatAreaGeometry.topOffsetX, chatAreaGeometry.topOffsetY)
-
-  local chatMiddle = getOrCreateTexture(right, "chatMiddle", "BORDER")
-
-  chatMiddle:SetSize(chatAreaGeometry.middleWidth, chatAreaGeometry.middleHeight)
-  chatMiddle:SetTexture(WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRight_Middle"))
-  chatMiddle:ClearAllPoints()
-  chatMiddle:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMRIGHT", chatAreaGeometry.middleOffsetX, chatAreaGeometry.middleOffsetY)
-
-  local chatBottom = getOrCreateTexture(right, "chatBottom", "BORDER")
-
-  chatBottom:SetSize(chatAreaGeometry.bottomWidth, chatAreaGeometry.bottomHeight)
-  chatBottom:SetTexture(WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRight_Bottom"))
-  chatBottom:ClearAllPoints()
-  chatBottom:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMRIGHT", chatAreaGeometry.bottomOffsetX, chatAreaGeometry.bottomOffsetY)
-
-  -- Vanilla Wc3_UI_right_right_extendedFillerTop_1/Bottom_1 (e17c352
-  -- WIIIUI.xml:3220-3243, Layer level="BORDER"). AlignRightPart (e17c352
-  -- WIIIUI.lua:3507-3514) overrides the XML's static BOTTOM anchor at
-  -- runtime, anchoring both BOTTOMLEFT to rightPartMiddle's BOTTOMRIGHT.
-  -- Cached as right.fillerTop1/fillerBottom1 so slice 05 can Hide()/Show()
-  -- them; the uiScale-threshold Show/Hide quirks and the undead-only
-  -- re-aligner (e17c352 WIIIUI.lua:3515-3560, 3562+) are this slice's
-  -- documented deferral, not built here.
-  local fillerGeometry = WIIIUI.Theme.RightFillerGeometry(uiScale, wc3UI_Options.moveChatAreaUp)
-  local fillerTopPath = WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRightFillerTop")
-  local fillerBottomPath = WIIIUI.Theme.TexturePath(theme, "bottom right", "BottomRightFillerBottom")
-
-  local fillerTop1 = getOrCreateTexture(right, "fillerTop1", "BORDER")
-
-  fillerTop1:SetSize(fillerGeometry.topWidth, fillerGeometry.topHeight)
-  fillerTop1:SetTexture(fillerTopPath)
-  fillerTop1:ClearAllPoints()
-  fillerTop1:SetPoint("BOTTOMLEFT", rightPartMiddle, "BOTTOMRIGHT", fillerGeometry.top1OffsetX, fillerGeometry.top1OffsetY)
-
-  local fillerBottom1 = getOrCreateTexture(right, "fillerBottom1", "BORDER")
-
-  fillerBottom1:SetSize(fillerGeometry.bottomWidth, fillerGeometry.bottomHeight)
-  fillerBottom1:SetTexture(fillerBottomPath)
-  fillerBottom1:ClearAllPoints()
-  fillerBottom1:SetPoint("BOTTOMLEFT", rightPartMiddle, "BOTTOMRIGHT", fillerGeometry.bottom1OffsetX, fillerGeometry.bottom1OffsetY)
-
-  -- Vanilla Wc3_UI_right_right_extendedFillerTop_2/Bottom_2 (e17c352
-  -- WIIIUI.xml:3251-3273, Layer level="ARTWORK"). AlignRightPart (e17c352
-  -- WIIIUI.lua:3526-3534) overrides the XML's static BOTTOM anchor at
-  -- runtime, anchoring both BOTTOMLEFT to fillerBottom1's own BOTTOMLEFT.
-  local fillerTop2 = getOrCreateTexture(right, "fillerTop2", "ARTWORK")
-
-  fillerTop2:SetSize(fillerGeometry.topWidth, fillerGeometry.topHeight)
-  fillerTop2:SetTexture(fillerTopPath)
-  fillerTop2:ClearAllPoints()
-  fillerTop2:SetPoint("BOTTOMLEFT", fillerBottom1, "BOTTOMLEFT", fillerGeometry.top2OffsetX, fillerGeometry.top2OffsetY)
-
-  local fillerBottom2 = getOrCreateTexture(right, "fillerBottom2", "ARTWORK")
-
-  fillerBottom2:SetSize(fillerGeometry.bottomWidth, fillerGeometry.bottomHeight)
-  fillerBottom2:SetTexture(fillerBottomPath)
-  fillerBottom2:ClearAllPoints()
-  fillerBottom2:SetPoint("BOTTOMLEFT", fillerBottom1, "BOTTOMLEFT", fillerGeometry.bottom2OffsetX, fillerGeometry.bottom2OffsetY)
-
-  -- Vanilla Wc3_UI_right_right_extendedFillerTop_3/Bottom_3 (e17c352
-  -- WIIIUI.xml:3280-3302, Layer level="ARTWORK"). AlignRightPart (e17c352
-  -- WIIIUI.lua:3543-3550) overrides the XML's static BOTTOM anchor at
-  -- runtime, anchoring both BOTTOMLEFT to fillerBottom2's own BOTTOMLEFT.
-  local fillerTop3 = getOrCreateTexture(right, "fillerTop3", "ARTWORK")
-
-  fillerTop3:SetSize(fillerGeometry.topWidth, fillerGeometry.topHeight)
-  fillerTop3:SetTexture(fillerTopPath)
-  fillerTop3:ClearAllPoints()
-  fillerTop3:SetPoint("BOTTOMLEFT", fillerBottom2, "BOTTOMLEFT", fillerGeometry.top3OffsetX, fillerGeometry.top3OffsetY)
-
-  local fillerBottom3 = getOrCreateTexture(right, "fillerBottom3", "ARTWORK")
-
-  fillerBottom3:SetSize(fillerGeometry.bottomWidth, fillerGeometry.bottomHeight)
-  fillerBottom3:SetTexture(fillerBottomPath)
-  fillerBottom3:ClearAllPoints()
-  fillerBottom3:SetPoint("BOTTOMLEFT", fillerBottom2, "BOTTOMLEFT", fillerGeometry.bottom3OffsetX, fillerGeometry.bottom3OffsetY)
+  BuildArt(right, RIGHT_PIECES, {
+    rightPart = geometry,
+    lid = WIIIUI.Theme.RightLidGeometry(uiScale, theme, wc3UI_Options.moveChatAreaUp),
+    chat = WIIIUI.Theme.ChatAreaGeometry(uiScale, theme, wc3UI_Options.moveChatAreaUp),
+    filler = WIIIUI.Theme.RightFillerGeometry(uiScale, wc3UI_Options.moveChatAreaUp),
+  }, theme)
 
   -- Layout modes (centerSlim/centerSlimNoInv/ultraWide): applyLayoutModes,
   -- defined above, re-derives visibility/anchors from wc3UI_Options every
