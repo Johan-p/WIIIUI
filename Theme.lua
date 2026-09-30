@@ -343,10 +343,11 @@ function WIIIUI.Theme.BarGeometry(uiScale, slotIndex, slotCount, lift)
   }
 end
 
--- PROVISIONAL art px of 512 by which the druid left art raises the bars'
--- stack; slice 02 replaces these and they must match the committed
--- *_druid art (spec 0002 §3).
-WIIIUI.Theme.DRUID_LIFT_PX = { orc = 26, human = 31, undead = 30, nightelf = 29 }
+-- Art px of 512 by which the druid left art raises the bars' stack, measured
+-- from the committed *_druid art by dev/scripts/make_druid_art.py (b1 - b0 per
+-- theme). A hand touch-up that changes a theme's pitch must update its value;
+-- the in-game check is the link (spec 0002 §3).
+WIIIUI.Theme.DRUID_LIFT_PX = { human = 30, orc = 26, undead = 29, nightelf = 28 }
 
 function WIIIUI.Theme.DruidLift(uiScale, theme)
   -- A theme missing a lift entry degrades to no lift rather than erroring.
