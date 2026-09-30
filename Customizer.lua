@@ -95,6 +95,11 @@ end
 -- and the events only recolour, so it isn't combatToggled.
 addEntry("MinimapPieces.mail", "frame")
 addEntry("MinimapPieces.tracking", "frame")
+addEntry("MinimapPieces.zone", "frame")
+addEntry("MinimapPieces.zone.text", "fontstring")
+addEntry("MinimapPieces.clock", "frame")
+addEntry("MinimapPieces.clock.text", "fontstring")
+addEntry("MinimapPieces.calendar", "frame")
 
 WIIIUI.registry = registry
 WIIIUI.Customizer.byId = registryById

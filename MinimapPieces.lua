@@ -32,6 +32,9 @@ local function available(piece)
   if piece == "tracking" then
     return _G.C_Minimap ~= nil and not gameRuleActive("IngameTrackingDisabled")
   end
+  if piece == "calendar" then
+    return _G.C_DateAndTime ~= nil and not gameRuleActive("IngameCalendarDisabled")
+  end
   return false
 end
 
@@ -107,7 +110,7 @@ local function refreshTracking()
   end
 
   icon:SetTexture(nil)
-  if _G.C_Texture and _G.C_Texture.GetAtlasInfo(TRACKING_ATLAS) then
+  if _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo(TRACKING_ATLAS) then
     icon:SetAtlas(TRACKING_ATLAS)
   end
 end
@@ -248,12 +251,314 @@ local function ensureTracking(parent)
   return tracking
 end
 
--- Square pieces only (uses g.size for both axes): zone and clock are width
--- entries and must not go through this; they size themselves in slice 03.
+-- Square pieces only (uses g.size for both axes); the width entries (zone,
+-- clock) go through placeWide.
 local function place(frame, anchor, g)
   frame:ClearAllPoints()
   frame:SetPoint(g.point, anchor, g.relativePoint, g.offsetX, g.offsetY)
   frame:SetSize(g.size, g.size)
+end
+
+-- Font base sizes at uiScale 240, grown through Theme.ScaledSize like the other
+-- console text (spec 0007 §3.5; the maintainer confirms them in-game).
+local ZONE_FONT_SIZE = 10
+local CLOCK_FONT_SIZE = 10
+
+local function applyPieceFont(fontString, base)
+  local Theme = WIIIUI.Theme
+  local size = Theme.ScaledSize(base, WIIIUI.LayoutUnits())
+  Theme.ApplyFont(fontString, size, _G.GameFontNormalSmall)
+  return size
+end
+
+-- Blizzard's zone colours (Minimap.lua:162-176, forever 966519c). A "combat"
+-- zone is red only in the tooltip (Minimap.lua:206-208); its name keeps the
+-- default colour, as there.
+local ZONE_COLORS = {
+  sanctuary = { 0.41, 0.8, 0.94 },
+  arena = { 1.0, 0.1, 0.1 },
+  friendly = { 0.1, 1.0, 0.1 },
+  hostile = { 1.0, 0.1, 0.1 },
+  contested = { 1.0, 0.7, 0.0 },
+}
+local COMBAT_ZONE_COLOR = { 1.0, 0.1, 0.1 }
+
+local function defaultColor()
+  local normal = _G.NORMAL_FONT_COLOR
+  if normal then
+    return { normal.r, normal.g, normal.b }
+  end
+  return { 1.0, 0.82, 0.0 }
+end
+
+function P.zoneColor(pvpType)
+  return ZONE_COLORS[pvpType] or defaultColor()
+end
+
+-- Territory line per zone type (Minimap.lua:180-216). Friendly and hostile
+-- zones name their faction and show nothing more without one.
+local function territoryLine(pvpType, factionName)
+  if pvpType == "sanctuary" then
+    return _G.SANCTUARY_TERRITORY
+  elseif pvpType == "arena" then
+    return _G.FREE_FOR_ALL_TERRITORY
+  elseif pvpType == "friendly" or pvpType == "hostile" then
+    if factionName and factionName ~= "" and _G.FACTION_CONTROLLED_TERRITORY then
+      return string.format(_G.FACTION_CONTROLLED_TERRITORY, factionName)
+    end
+  elseif pvpType == "contested" then
+    return _G.CONTESTED_TERRITORY
+  elseif pvpType == "combat" then
+    return _G.COMBAT_ZONE
+  end
+  return nil
+end
+
+-- Pure: { { text, r, g, b }, ... } for the zone tooltip. A subzone equal to its
+-- zone is dropped, and so is an empty line.
+function P.zoneTooltipLines(pvpType, factionName, zone, subzone)
+  local lines = { { zone, 1, 1, 1 } }
+  if (pvpType == "friendly" or pvpType == "hostile") and not (factionName and factionName ~= "") then
+    return lines
+  end
+
+  local color = pvpType == "combat" and COMBAT_ZONE_COLOR or P.zoneColor(pvpType)
+  if subzone and subzone ~= "" and subzone ~= zone then
+    lines[#lines + 1] = { subzone, color[1], color[2], color[3] }
+  end
+  local territory = territoryLine(pvpType, factionName)
+  if territory and territory ~= "" then
+    lines[#lines + 1] = { territory, color[1], color[2], color[3] }
+  end
+  return lines
+end
+
+-- C_PvP.GetZonePVPInfo isn't flagged secret, but the value is a table key, so
+-- it goes through the one secret seam: absent, erroring or secret all read as
+-- "no zone type" (spec 0007 §3.3).
+local function readZoneType()
+  local pvp = _G.C_PvP
+  if not (pvp and pvp.GetZonePVPInfo) then
+    return nil, nil
+  end
+  local pvpType, _, factionName = WIIIUI.Secret.Read(pvp.GetZonePVPInfo)
+  return pvpType, factionName
+end
+
+local function refreshZone()
+  local zone = P.zone
+  if not zone then
+    return
+  end
+  zone.text:SetText(_G.GetMinimapZoneText and _G.GetMinimapZoneText() or "")
+  local color = P.zoneColor((readZoneType()))
+  zone.text:SetTextColor(color[1], color[2], color[3])
+end
+
+local function showZoneTooltip(self)
+  local pvpType, factionName = readZoneType()
+  local lines = P.zoneTooltipLines(
+    pvpType,
+    factionName,
+    _G.GetZoneText and _G.GetZoneText() or "",
+    _G.GetSubZoneText and _G.GetSubZoneText() or ""
+  )
+  GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+  for _, line in ipairs(lines) do
+    GameTooltip:AddLine(line[1], line[2], line[3], line[4])
+  end
+  GameTooltip:Show()
+end
+
+local function ensureZone(parent)
+  if P.zone then
+    return P.zone
+  end
+
+  local zone = CreateFrame("Frame", nil, parent)
+  zone.text = zone:CreateFontString(nil, "OVERLAY")
+  zone.text:SetAllPoints(zone)
+  zone.text:SetWordWrap(false)
+  if zone.text.SetMaxLines then
+    zone.text:SetMaxLines(1)
+  end
+  zone.text:SetShadowOffset(1, -1)
+  zone:EnableMouse(true)
+  zone:SetScript("OnEnter", showZoneTooltip)
+  zone:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+  end)
+  P.zone = zone
+  return zone
+end
+
+-- Width entries (zone, clock): the height follows the text, so only the width
+-- comes from the geometry.
+local function placeWide(frame, anchor, g, height)
+  frame:ClearAllPoints()
+  frame:SetPoint(g.point, anchor, g.relativePoint, g.offsetX, g.offsetY)
+  frame:SetSize(g.width, height)
+end
+
+-- Blizzard's own day icon: one atlas per day of the month, in three states
+-- (GameTime.lua:119-127, forever 966519c).
+local CALENDAR_ATLAS = "ui-hud-calendar-%d-%s"
+
+local function currentMonthDay()
+  local dates = _G.C_DateAndTime
+  local now = dates and dates.GetCurrentCalendarTime and dates.GetCurrentCalendarTime()
+  return now and now.monthDay
+end
+
+-- Without the atlas (a client that lacks it) the day is drawn as a number, so
+-- the piece still says something.
+local function refreshCalendar()
+  local calendar = P.calendar
+  local day = currentMonthDay()
+  if not (calendar and day) then
+    return
+  end
+
+  local up = string.format(CALENDAR_ATLAS, day, "up")
+  if _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo(up) then
+    calendar:SetNormalTexture(up)
+    calendar:SetPushedTexture(string.format(CALENDAR_ATLAS, day, "down"))
+    calendar:SetHighlightTexture(string.format(CALENDAR_ATLAS, day, "mouseover"))
+    if calendar.dayText then
+      calendar.dayText:Hide()
+    end
+    return
+  end
+
+  if not calendar.dayText then
+    calendar.dayText = calendar:CreateFontString(nil, "OVERLAY")
+    calendar.dayText:SetAllPoints(calendar)
+    calendar.dayText:SetShadowOffset(1, -1)
+    applyPieceFont(calendar.dayText, CLOCK_FONT_SIZE)
+  end
+  calendar.dayText:SetText(tostring(day))
+  calendar.dayText:Show()
+end
+
+local function showCalendarTooltip(self)
+  GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+  GameTooltip:AddLine(_G.GAMETIME_TOOLTIP_TOGGLE_CALENDAR or "")
+  GameTooltip:Show()
+end
+
+-- ToggleCalendar load-on-demands Blizzard_Calendar from this call stack; the
+-- taint question is an in-game check (spec 0007 §Risks).
+local function calendarClicked()
+  if _G.ToggleCalendar then
+    _G.ToggleCalendar()
+  end
+end
+
+local function ensureCalendar(parent)
+  if P.calendar then
+    return P.calendar
+  end
+
+  local calendar = CreateFrame("Button", nil, parent)
+  calendar:RegisterForClicks("AnyUp")
+  calendar:SetScript("OnClick", calendarClicked)
+  calendar:SetScript("OnEnter", showCalendarTooltip)
+  calendar:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+  end)
+  P.calendar = calendar
+  return calendar
+end
+
+-- GameTime_GetTime honours the player's local/realm and 24-hour settings
+-- (GameTimeUtil.lua:87); GetGameTime is the plain realm-time fallback.
+local function formattedTime()
+  if _G.GameTime_GetTime then
+    return _G.GameTime_GetTime(false)
+  end
+  if _G.GetGameTime then
+    return string.format("%d:%02d", _G.GetGameTime())
+  end
+  return ""
+end
+
+-- The Button hugs the text so its hit rect doesn't swallow minimap pings along
+-- the bottom strip; the FontString stays centred on the BOTTOM anchor.
+local function sizeClock(clock)
+  local height = clock:GetHeight()
+  clock:SetSize(clock.text:GetStringWidth() + (P.clockPad or 0), height)
+end
+
+-- Returns whether the string changed.
+local function refreshClock()
+  local clock = P.clock
+  if not clock then
+    return false
+  end
+  local time = formattedTime()
+  if time == clock.text:GetText() then
+    return false
+  end
+  clock.text:SetText(time)
+  sizeClock(clock)
+  return true
+end
+
+-- Blizzard's TimeManagerClockButton_OnClick (Blizzard_TimeManager.lua:378-389).
+-- Any missing function leaves the clock display-only.
+local function clockClicked()
+  if _G.TimeManager_IsAlarmFiring and _G.TimeManager_IsAlarmFiring() then
+    if _G.TimeManager_TurnOffAlarm then
+      _G.TimeManager_TurnOffAlarm()
+    end
+  elseif _G.ToggleTimeManager then
+    _G.ToggleTimeManager()
+  end
+end
+
+-- Blizzard's TimeManagerClockButton_OnEnter (Blizzard_TimeManager.lua:493-505).
+local function showClockTooltip(self)
+  GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+  if _G.GameTime_UpdateTooltip then
+    _G.GameTime_UpdateTooltip()
+  end
+  GameTooltip:AddLine(_G.GAMETIME_TOOLTIP_TOGGLE_CLOCK or "")
+  GameTooltip:Show()
+end
+
+-- The one OnUpdate-style exception (spec 0007 §3.4): no event carries the
+-- time, and Blizzard's own clock ticks at 1 s for the same reason
+-- (Blizzard_TimeManager.lua:352-361). Idle while the clock is hidden.
+local function tick()
+  local clock = P.clock
+  if not (clock and clock:IsVisible()) then
+    return
+  end
+  if refreshClock() then
+    refreshCalendar()
+  end
+end
+
+local function ensureClock(parent)
+  if P.clock then
+    return P.clock
+  end
+
+  local clock = CreateFrame("Button", nil, parent)
+  clock:RegisterForClicks("AnyUp")
+  clock.text = clock:CreateFontString(nil, "OVERLAY")
+  clock.text:SetAllPoints(clock)
+  clock.text:SetShadowOffset(1, -1)
+  clock:SetScript("OnClick", clockClicked)
+  clock:SetScript("OnEnter", showClockTooltip)
+  clock:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+  end)
+  P.clock = clock
+  if _G.C_Timer then
+    P.ticker = _G.C_Timer.NewTicker(1, tick)
+  end
+  return clock
 end
 
 function P.Build()
@@ -282,6 +587,32 @@ function P.Build()
   place(tracking, minimapTexture, geometry.tracking)
   tracking:SetShown(available("tracking"))
   refreshTracking()
+
+  local zone = ensureZone(left)
+  zone:SetParent(left)
+  WIIIUI.Layers.Apply(zone, "minimap.piece")
+  placeWide(zone, minimapTexture, geometry.zone, applyPieceFont(zone.text, ZONE_FONT_SIZE) + 2)
+  zone:Show()
+  refreshZone()
+
+  local clock = ensureClock(left)
+  clock:SetParent(left)
+  WIIIUI.Layers.Apply(clock, "minimap.piece")
+  placeWide(clock, minimapTexture, geometry.clock, applyPieceFont(clock.text, CLOCK_FONT_SIZE) + 2)
+  clock:Show()
+  P.clockPad = 0.02 * units
+  refreshClock()
+  sizeClock(clock)
+
+  local calendar = ensureCalendar(left)
+  calendar:SetParent(left)
+  WIIIUI.Layers.Apply(calendar, "minimap.piece")
+  place(calendar, minimapTexture, geometry.calendar)
+  calendar:SetShown(available("calendar"))
+  if calendar.dayText then
+    applyPieceFont(calendar.dayText, CLOCK_FONT_SIZE)
+  end
+  refreshCalendar()
 end
 
 -- Not unit events, so plain registration. Nothing polls: the mail state only
@@ -313,5 +644,13 @@ WIIIUI.On("MINIMAP_UPDATE_TRACKING", onTrackingChanged)
 for _, event in ipairs({ "SPELLS_CHANGED", "PLAYER_ENTERING_WORLD" }) do
   WIIIUI.On(event, resetTracking)
 end
+
+-- The zone name only changes on these; nothing polls (spec 0007 §3.3).
+for _, event in ipairs({ "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA", "PLAYER_ENTERING_WORLD" }) do
+  WIIIUI.On(event, refreshZone)
+end
+
+-- The day also rolls over from the clock tick, at midnight (spec 0007 §3.4).
+WIIIUI.On("PLAYER_ENTERING_WORLD", refreshCalendar)
 
 WIIIUI.RegisterBuild("MinimapPieces.Build", P.Build, { after = { "Console.BuildLeft", "Blizzard.BuildMinimap" } })
