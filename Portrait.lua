@@ -396,6 +396,12 @@ local function updateCombat()
   end
 end
 
+-- spec 0005: grows with the console above the tuned size; the per-hit height
+-- in updateCombatText scales from the same base.
+local function hitTextHeight(uiScale, heightScale)
+  return WIIIUI.Theme.ScaledSize(BASE_HIT_TEXT_HEIGHT * heightScale, uiScale)
+end
+
 -- spec 0001 §1.5: "our own WIIIUI_PortraitHitText FontString over the
 -- portrait ... RegisterUnitEvent('UNIT_COMBAT', 'player')." Built once,
 -- centred on the button (same anchor as buildIcons) with the vanilla Y
@@ -408,6 +414,8 @@ local function buildHitText(parent, uiScale)
   if hitText then
     hitText:ClearAllPoints()
     hitText:SetPoint("CENTER", parent, "CENTER", 0, uiScale * HIT_TEXT_OFFSET_Y)
+    WIIIUI.Theme.ApplyFont(hitText, hitTextHeight(uiScale, 1), NumberFontNormalHuge)
+    WIIIUI.Portrait.hitTextUnits = uiScale
     return hitText
   end
 
@@ -421,7 +429,7 @@ local function buildHitText(parent, uiScale)
   -- style Blizzard's own PlayerFrame HitText uses (PlayerFrame.xml:115,
   -- CombatFeedback_Initialize's 30pt base), unlike GameFontHighlightSmall's
   -- body-text sizing.
-  WIIIUI.Theme.ApplyFont(hitText, BASE_HIT_TEXT_HEIGHT, NumberFontNormalHuge)
+  WIIIUI.Theme.ApplyFont(hitText, hitTextHeight(uiScale, 1), NumberFontNormalHuge)
 
   local animGroup = hitText:CreateAnimationGroup()
 
@@ -448,6 +456,7 @@ local function buildHitText(parent, uiScale)
   end)
 
   WIIIUI.Portrait.hitText = hitText
+  WIIIUI.Portrait.hitTextUnits = uiScale
   WIIIUI.Portrait.hitTextAnim = animGroup
 
   return hitText
@@ -541,7 +550,7 @@ local function updateCombatText(_, feedbackEvent, flags, amount, schoolMask)
 
     hitText:SetText(text)
     hitText:SetTextColor(r, g, b)
-    hitText:SetTextHeight(BASE_HIT_TEXT_HEIGHT * heightScale)
+    hitText:SetTextHeight(hitTextHeight(WIIIUI.Portrait.hitTextUnits, heightScale))
     hitText:Show()
     animGroup:Stop()
     animGroup:Play()
@@ -671,7 +680,7 @@ end
 function WIIIUI.Portrait.BuildPortrait()
   local left = WIIIUI.Console.left
   local anchor = left and left.portraitTexture and WIIIUI.Console.AnchorFrame(left.portraitTexture)
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
   local geometry = WIIIUI.Theme.PortraitGeometry(uiScale)
 
   local button = buildButton(UIParent)

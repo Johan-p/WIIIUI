@@ -68,6 +68,28 @@ function WIIIUI.Theme.ApplyFont(fontString, size, fallbackObject)
   end
 end
 
+-- spec 0005 §Shape: option A lays out in the saved units with no root scale.
+-- Returns (layoutUnits, rootScale); an option-B branch would cap the units.
+function WIIIUI.Theme.SizeSplit(uiScale)
+  return uiScale, 1
+end
+
+-- Text and the fixed-size text boxes grow past the size the layout was tuned
+-- at; 1 up to WIIIUI.UI_SCALE_TUNED_MAX, so saves at 240-270 look unchanged.
+function WIIIUI.Theme.ExtraScale(units)
+  return math.max(1, units / WIIIUI.UI_SCALE_TUNED_MAX)
+end
+
+-- Font sizes are whole points (fractional sizes render soft); at or below the
+-- tuned size the base is returned untouched so saved 240-270 layouts don't move.
+function WIIIUI.Theme.ScaledSize(base, units)
+  local extra = WIIIUI.Theme.ExtraScale(units)
+  if extra == 1 then
+    return base
+  end
+  return math.floor(base * extra + 0.5)
+end
+
 function WIIIUI.Theme.ResolveThemeName(theme)
   for _, name in ipairs(WIIIUI.Theme.NAMES) do
     if name == theme then
@@ -346,7 +368,9 @@ function WIIIUI.Theme.ActionButtonGeometry(uiScale)
   return {
     size = size,
     columnOffsetX = columnOffsetX,
-    row1OffsetY = 5,
+    -- A fixed 5 units drifts off its art cell as the art grows past the tuned
+    -- size (spec 0005 spike, buttons_test at 340), so it scales with ExtraScale.
+    row1OffsetY = 5 * WIIIUI.Theme.ExtraScale(uiScale),
     row2OffsetY = size + uiScale * 0.0667,
     row3OffsetY = size + uiScale * 0.0667 + size + uiScale * 0.04444,
   }

@@ -475,20 +475,14 @@ local function ensureIconWidgets(slotIndex)
   -- The border draws above the icon backdrop, both siblings of frame.
   WIIIUI.Layers.Apply(border, "infoicon.border")
 
-  -- ui-reviewer Finding 3 (slice 18 gate-fix): width comes from
-  -- WeaponIconGeometry's labelWidth (uiScale-dependent, applied per-call in
-  -- BuildWeaponIcons below); height/justify are vanilla's own flat constants
-  -- (weaponDamageText/weaponNumbersText, e17c352 WIIIUI.lua:2293-2296,
-  -- 2367-2370) and don't depend on uiScale, so they're set once here.
+  -- Justify is vanilla's own (weaponDamageText/weaponNumbersText, e17c352
+  -- WIIIUI.lua:2293-2296, 2367-2370). Fonts, heights and widths are applied
+  -- by placeIcon on every build, since they grow with the console (spec 0005).
   local label = frame:CreateFontString(nil, "OVERLAY")
-  WIIIUI.Theme.ApplyFont(label, LABEL_FONT_SIZE, GameFontHighlightSmall)
-  label:SetHeight(15)
   label:SetJustifyH("LEFT")
   label:SetJustifyV("TOP")
 
   local value = frame:CreateFontString(nil, "OVERLAY")
-  WIIIUI.Theme.ApplyFont(value, VALUE_FONT_SIZE, GameFontHighlightSmall)
-  value:SetHeight(30)
   value:SetJustifyH("LEFT")
   value:SetJustifyV("TOP")
 
@@ -591,8 +585,11 @@ end
 -- (both builds declare after = Bars.BuildBars), so the XP bar exists by the
 -- time this runs. Shared by the weapon slots and the armor icon: labelWidth
 -- sizes both text boxes; valueHeight, when given, overrides the 30-high value
--- box ensureIconWidgets makes for the weapon rows.
+-- box of the weapon rows. Fonts and the fixed box heights grow with the
+-- console above the tuned size (spec 0005), so they are set here, every build.
 local function placeIcon(widgets, geometry, labelWidth, valueHeight)
+  local units = WIIIUI.LayoutUnits()
+  local extra = WIIIUI.Theme.ExtraScale(units)
   local xpBar = WIIIUI.Bars and WIIIUI.Bars.xp
 
   widgets.frame:SetSize(geometry.size, geometry.size)
@@ -609,20 +606,21 @@ local function placeIcon(widgets, geometry, labelWidth, valueHeight)
   widgets.border:ClearAllPoints()
   widgets.border:SetPoint("BOTTOMLEFT", widgets.frame, "BOTTOMLEFT", 0, 0)
 
+  WIIIUI.Theme.ApplyFont(widgets.label, WIIIUI.Theme.ScaledSize(LABEL_FONT_SIZE, units), GameFontHighlightSmall)
   widgets.label:SetWidth(labelWidth)
+  widgets.label:SetHeight(15 * extra)
   widgets.label:ClearAllPoints()
   widgets.label:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.labelOffsetX, geometry.labelOffsetY)
 
+  WIIIUI.Theme.ApplyFont(widgets.value, WIIIUI.Theme.ScaledSize(VALUE_FONT_SIZE, units), GameFontHighlightSmall)
   widgets.value:SetWidth(labelWidth)
-  if valueHeight then
-    widgets.value:SetHeight(valueHeight)
-  end
+  widgets.value:SetHeight(valueHeight or (30 * extra))
   widgets.value:ClearAllPoints()
   widgets.value:SetPoint("BOTTOMLEFT", widgets.frame, "TOPLEFT", geometry.valueOffsetX, geometry.valueOffsetY)
 end
 
 function WIIIUI.InfoIcons.BuildWeaponIcons()
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
 
   for slotIndex = 1, 3 do
     local widgets = ensureIconWidgets(slotIndex)
@@ -643,9 +641,11 @@ end
 -- not start over the label.
 function WIIIUI.InfoIcons.BuildArmorIcon()
   local widgets = ensureIconWidgets("armor")
-  local geometry = WIIIUI.Theme.ArmorIconGeometry(wc3UI_Options.uiScale)
+  local units = WIIIUI.LayoutUnits()
+  local geometry = WIIIUI.Theme.ArmorIconGeometry(units)
+  local extra = WIIIUI.Theme.ExtraScale(units)
 
-  placeIcon(widgets, geometry, 100, 15)
+  placeIcon(widgets, geometry, 100 * extra, 15 * extra)
   WIIIUI.InfoIcons.RefreshArmor()
 end
 

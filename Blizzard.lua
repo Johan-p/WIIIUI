@@ -94,7 +94,7 @@ function WIIIUI.Blizzard.BuildMinimap()
     return
   end
 
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
   local geometry = WIIIUI.Theme.MinimapGeometry(uiScale)
 
   Minimap:ClearAllPoints()

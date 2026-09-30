@@ -306,12 +306,12 @@ function WIIIUI.Console.BuildLeft()
     -- invalid on modern clients and nothing anchored through it renders
     -- (API_ScriptRegion_IsRectValid, warcraft.wiki.gg).
     left:SetSize(1, 1)
-    anchorLeft(left, wc3UI_Options.uiScale)
+    anchorLeft(left, WIIIUI.LayoutUnits())
     WIIIUI.Layers.Apply(left, "console.left")
     WIIIUI.Console.left = left
   end
 
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
 
   -- Vanilla anchors these chain minimap -> portrait -> extension background
   -- (e17c352 WIIIUI.lua:1810, 1939, 2801); the extension background is the
@@ -347,7 +347,7 @@ function WIIIUI.Console.BuildGrid()
   end
 
   local theme = wc3UI_Options.theme
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
   local geometry = WIIIUI.Theme.GridGeometry(uiScale)
   local left = WIIIUI.Console.left
   local extensionBackgroundTexture = left and left.extensionBackgroundTexture
@@ -621,7 +621,7 @@ function WIIIUI.Console.BuildRight()
   end
 
   local theme = wc3UI_Options.theme
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
   local geometry = WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   -- Vanilla WIIIUI_rightpartBackground (e17c352 WIIIUI.xml:3131) was an
   -- opaque black texture behind the chat; it is not drawn any more (feature

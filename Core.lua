@@ -92,9 +92,14 @@ local function infoIcon(slot, default)
   }
 end
 
+-- spec 0005: the only place the console size limits live. Layout rules are
+-- tuned up to TUNED_MAX; above it the console grows by the same rules and text
+-- by Theme.ExtraScale. MAX is provisional until the in-game spike fixes it.
+WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_TUNED_MAX, WIIIUI.UI_SCALE_MAX = 240, 270, 340
+
 WIIIUI.SETTINGS = {
   { key = "theme", default = "orc", values = themeNames, label = "Theme", control = { kind = "theme" } },
-  range("uiScale", 240, 240, 270, "UI Scale", true),
+  range("uiScale", WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_MAX, "UI Scale", true),
   range("moveChatAreaUp", 10, 0, 150, "Chat Area Height"),
   range("portraitScale", 0, 0, 35, "Portrait Scale"),
   range("PortraitAlignmentX", 100, 0, 200, "Portrait X"),
@@ -224,6 +229,12 @@ function WIIIUI.MergeDefaults(saved)
   end
 
   return merged
+end
+
+-- spec 0005: every geometry read of the saved size goes through here, the only
+-- reader of wc3UI_Options.uiScale, so a later option B is a Theme.SizeSplit change.
+function WIIIUI.LayoutUnits()
+  return (WIIIUI.Theme.SizeSplit(wc3UI_Options.uiScale))
 end
 
 -- spec 0001 §A.3: the one apply-now-or-queue-to-PLAYER_REGEN_ENABLED seam

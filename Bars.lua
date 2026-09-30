@@ -208,10 +208,12 @@ local function buildXPBar(anchor, uiScale)
     bar.levelText = bar:CreateFontString(nil, "OVERLAY")
     bar.levelText:SetPoint("CENTER", bar, "CENTER", 0, 0)
 
-    WIIIUI.Theme.ApplyFont(bar.levelText, LEVEL_TEXT_FONT_SIZE, GameFontHighlightSmall)
-
     WIIIUI.Bars.xp = bar
   end
+
+  -- Text grows with the console above the tuned size, so it is re-applied on
+  -- every build (spec 0005).
+  WIIIUI.Theme.ApplyFont(bar.levelText, WIIIUI.Theme.ScaledSize(LEVEL_TEXT_FONT_SIZE, uiScale), GameFontHighlightSmall)
 
   local geometry = WIIIUI.Theme.XPBarGeometry(uiScale)
 
@@ -297,7 +299,7 @@ end
 -- after Console.BuildRight), so the minimap texture exists by the time this
 -- runs.
 function WIIIUI.Bars.BuildBars()
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
   local left = WIIIUI.Console.left
   local minimapTexture = left and left.minimapTexture
 
@@ -310,10 +312,10 @@ function WIIIUI.Bars.BuildBars()
       bar.text = bar:CreateFontString(nil, "OVERLAY")
       bar.text:SetPoint("CENTER", bar, "CENTER", 0, 0)
 
-      WIIIUI.Theme.ApplyFont(bar.text, FONT_SIZES[key], GameFontHighlightSmall)
-
       WIIIUI.Bars[key] = bar
     end
+
+    WIIIUI.Theme.ApplyFont(bar.text, WIIIUI.Theme.ScaledSize(FONT_SIZES[key], uiScale), GameFontHighlightSmall)
 
     local geometry = WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
 

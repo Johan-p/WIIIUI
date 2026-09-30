@@ -380,7 +380,7 @@ function WIIIUI.Buttons.BuildButtons()
     header:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
   end
 
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
   local geometry = WIIIUI.Theme.ActionButtonGeometry(uiScale)
   local grid = WIIIUI.Console.grid
   local rowOriginY = { geometry.row1OffsetY, geometry.row2OffsetY, geometry.row3OffsetY }
