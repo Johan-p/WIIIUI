@@ -1,4 +1,4 @@
-![WIIIUI_cover_text_2](https://user-images.githubusercontent.com/97316608/149594045-c5f69b42-0634-4792-a9a6-820b3527971b.png)
+![WIIIUI Forever](addonbanner.webp)
 
 # WIIIUI (Warcraft III - UI) for World of Warcraft: Forever and retail
 
