@@ -94,6 +94,7 @@ end
 -- spec 0007 §6: plain frame, no flag -- Show/Hide happens only inside Layout
 -- and the events only recolour, so it isn't combatToggled.
 addEntry("MinimapPieces.mail", "frame")
+addEntry("MinimapPieces.tracking", "frame")
 
 WIIIUI.registry = registry
 WIIIUI.Customizer.byId = registryById
