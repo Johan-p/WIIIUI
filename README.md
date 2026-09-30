@@ -1,52 +1,49 @@
-## WoW Forever version
-- Full redesign to align with new addon standars from Blizzard
-- Integrated bars so no need for bartender or other addons to get this addon working
-
-
-## Align Center Option, Chat area width option.
-- Option to center entire UI
-- **Disabled** (default) → The UI uses the classic Warcraft III–style anchoring based on the screen edges.  
-- Three modes, With chat area, no chat area with inventory, no chat area
-- Option to change the width of the chat area.
-- Fixed issues where the UI would look wrong when UI Scale was enabled from the 'Video Options → Use UI Scale'
-
-### How to use
-1. Open the WIIIUI config menu from the cogwheel at bottom right corner.  
-2. Check any of the **Center UI** to shift the layout to screen center.  
-3. Uncheck and reload to restore classic edge-anchored layout.
-4. Reload UI when changing 'Center UI'-modes
-
-Center UI  
-<img width="1920" height="250" alt="image" src="https://github.com/user-attachments/assets/35bf1ca5-cb06-44be-884c-b53277fa420a" />  
-
-Center UI, no chat area
-<img width="1920" height="233" alt="image" src="https://github.com/user-attachments/assets/105f6a67-de2a-4979-8da6-fea4dbf3bbfe" />
-
-Center UI, no chat area and no inventory  
-<img width="1920" height="227" alt="image" src="https://github.com/user-attachments/assets/07fa06e6-b87f-4def-a9e1-76e50236dc0f" />
-
-***
-
-
 ![WIIIUI_cover_text_2](https://user-images.githubusercontent.com/97316608/149594045-c5f69b42-0634-4792-a9a6-820b3527971b.png)
 
+# WIIIUI (Warcraft III - UI) for World of Warcraft: Forever and retail
 
-# WIIIUI
-**WIIIUI** was made for Warcraft III fans or people who just enjoy the aesthetics.  
+A full replacement for the bottom of your screen, styled after the Warcraft III in-game console: minimap and portrait on the left, your action bars in the middle, a chat panel on the right, plus an experience bar and health and power readouts.
 
-This addon have the four faction themes from Warcraft III, Human, Orc, Undead and Night Elf. The addon also have the possibility to add your own theme albeit it does not have good support for it with the initial release. 
-It also offers various feature that can be read below and instruction on how to modify the addon.
+## About this fork
 
-A video demonstrating the different menu options available.  
-https://youtu.be/agffQHWyWh8
+This is a **separate build of WIIIUI made for World of Warcraft: Forever and retail**. It is not compatible with vanilla (1.12) clients. If you play vanilla, use the original addon instead.
 
-Please give feedback for improvements or new features for future releases.  
-Don't forget to check out [Known issues](https://github.com/Fiurs-Hearth/WarcraftIII-UI_master#known-issues) section.  
+**The concept and the art are the work of Fiur**, who created WIIIUI. Thank you, Fiur, for a wonderful addon. Original repository: https://github.com/Fiurs-Hearth/WIIIUI
 
-Contact me on Discord: Fiur#8658
+The original has not been updated in over a year and was written for vanilla. This fork carries the same look over to the current game clients.
+
+## Screenshots
+
+*These screenshots come from the original vanilla version. The art is the same, but the game around it looks different. Screenshots from Forever will follow.*
+
+**Human**
+![Human_theme](https://user-images.githubusercontent.com/97316608/149590970-9f816046-1437-49f3-a054-57f0091d1da6.png)
+
+**Orc**
+![Orc_theme](https://user-images.githubusercontent.com/97316608/149590980-62941102-2bcf-4d16-b171-d282a12b2785.png)
+
+**Undead**
+![Undead_theme](https://user-images.githubusercontent.com/97316608/149590984-d022bb4e-a535-4fcb-a750-44d649bb1022.png)
+
+**Night Elf**
+![Night_elf_theme](https://user-images.githubusercontent.com/97316608/149590975-f7f840c8-c469-4cee-89cb-270efd60a959.png)
+
+## Features
+
+* Four faction themes from Warcraft III: Human, Orc (the default), Undead and Night Elf.
+* Replaces Blizzard's bottom action bars with its own, so you do not need Bartender or a similar addon.
+* 3 extra action slots next to the minimap (your hearthstone is placed in the top one automatically) and 6 extra "inventory" slots for spells, items and consumables. You can bind keys to all nine in the game's Key Bindings screen, under the "Warcraft III - UI" heading.
+* Health and power display, an experience bar, and a low-health warning.
+* Icons that show information about your character, such as weapon damage and armor.
+* Layout options (three checkboxes in the General tab, see below). Changing these no longer needs a reload.
+* A Customize tab in the config menu to adjust the position, size, transparency and look of individual parts of the UI. It only takes effect while **Enable Customizer** (a checkbox on the General tab) is ticked.
+* Your settings are saved per character.
+
+Custom themes (your own art folders) are **not supported** in this fork. If you would like them, please open an issue.
 
 ## Installation
-Requires **World of Warcraft: Forever** or **retail**. Vanilla 1.12 and unofficial clients are no longer supported.
+
+Requires **World of Warcraft: Forever** or **retail**. Vanilla 1.12 and unofficial clients are not supported.
 
 1. [Download the addon](https://github.com/Johan-p/WIIIUI-Forever-Fork/archive/refs/heads/master.zip)
 2. Unpack the zip. Inside is a folder named `WIIIUI-Forever-Fork-master`.
@@ -65,211 +62,25 @@ git clone https://github.com/Johan-p/WIIIUI-Forever-Fork.git WIIIUI
 
 The trailing `WIIIUI` sets the folder name. To update later, run `git pull` inside the `WIIIUI` folder and restart the game.
 
-Settings are saved per character. Blizzard's own bottom bars are replaced by WIIIUI, so no Bartender or similar addon is needed.
-
-### Don't forgot to open the config menu for configuration options, accessible in the lower right corner!
-
-![cog_pos](https://user-images.githubusercontent.com/97316608/148687659-82e5ddfa-b4a4-412d-a739-0f3123ebffe6.png)
-
-
-## Themes
-### Human Theme
-![Human_theme](https://user-images.githubusercontent.com/97316608/149590970-9f816046-1437-49f3-a054-57f0091d1da6.png)
-
-
-### Orc Theme
-![Orc_theme](https://user-images.githubusercontent.com/97316608/149590980-62941102-2bcf-4d16-b171-d282a12b2785.png)
-
-
-### Undead Theme
-![Undead_theme](https://user-images.githubusercontent.com/97316608/149590984-d022bb4e-a535-4fcb-a750-44d649bb1022.png)
-
-
-### Night Elf Theme
-![Night_elf_theme](https://user-images.githubusercontent.com/97316608/149590975-f7f840c8-c469-4cee-89cb-270efd60a959.png)  
-(Screenshots taken on server [Turtle WoW](https://turtle-wow.org/))
-
-## Features
-* (NEW!) Customization tab, allows you to edit size, position, transparency, texture, stacking etc. Use mouse scroll to change page.
-  
-![image](https://user-images.githubusercontent.com/97316608/153955704-44634062-df14-4ce3-b992-82f4ad7fb400.png)  
-
-Example of an edit with human theme:  
-
-![image](https://user-images.githubusercontent.com/97316608/153957920-623ca862-9a94-4cbd-a770-2976fe6b324c.png)  
-  
-#### Settings:  
-Page 8, extensionBackground, width: 500 (change to fit)  
-Page 22, rightpart, Frame strata: BACKGROUND  
-inventorySlots, Hide: Checked  
-  
-* Zoom minimap in and out with the mousescroll while hovering over the minimap
-* Scroll chat up or down with mousescroll while hovering over the chat
-* 3 extra custom bindable actionslots next to the minimap, hearthstone is automatically put into the top one if it's empty
-
-![minimap_empty_filled](https://user-images.githubusercontent.com/97316608/148685189-52fcec77-3a74-41d5-9656-ca19863fb7a1.png)
-
-* 6 extra custom bindable actionslots where you can put spells, items, consumables etc.
-
-![InventorySlots](https://user-images.githubusercontent.com/97316608/148687365-64b098b1-96ce-4e82-a3b1-f4ba88ef45f0.png)
-
-![custom_keys](https://user-images.githubusercontent.com/97316608/148855451-dfd5cd3d-afca-4cb4-bfb0-81b6cea93f2a.png)
-
-
-* Customizable icons to show different kind of information.
-
-![Icons_information](https://user-images.githubusercontent.com/97316608/148687081-e8bdebd4-f714-498a-8e26-6feb9a802d23.png)
-
-* A configuration menu, accessible in the lower right corner by hovering your mouse in the corner
-
-#### Cog wheel
-![cog_pos](https://user-images.githubusercontent.com/97316608/148687659-82e5ddfa-b4a4-412d-a739-0f3123ebffe6.png)
-
-#### Configuration menu
-![Config_Menu](https://user-images.githubusercontent.com/97316608/148777057-e33029d7-cafc-4805-beb9-5ba9e40ad7e4.png)  
-A video demonstrating the different menu options available.  
-https://youtu.be/agffQHWyWh8
-
-## Custom Themes
-
-> **Note for the Forever/retail version:** custom themes (the `custom1`-`custom8` art folders and the player-made themes below) have not been tested on World of Warcraft: Forever or retail and are not officially supported. They may work, but you will have to test them yourself. Customizations saved with the old vanilla version do not carry over. If proper custom theme support is a popular request, open an [issue](https://github.com/Johan-p/WIIIUI-Forever-Fork/issues) and it may be considered for a future version.
-
-The customization feature takes current settings of current theme and saves it as a base setting.
-Since it takes current settings and uses that as a base, some frames are set as hidden as base and needs to be unchecked to become visible (for example custom action slots).
-
-### Tips, Tricks and Solutions
-
-- **WARNING, this will remove your saved settings for your customized themes!!!** You can reset the base settings by deleting the WIIIUI.lua file in `WoW\WTF\Account\[ACCOUNT NAME]\[SERVER NAME]\[CHARACTER NAME]\SavedVariables` or by opening the file and remove the `base_settings` of the theme, do the same with the theme in `edit_theme_settings`.
-- Some frames are hidden or visible based on the UI scale and might be hidden based on your UI scale, just uncheck the Hide checkbox and it will appear.
-- Changes are not being applied? Enable customize settings from the config menu.
-- Inventory (custom action) slots are not visible, uncheck hide for each action slot you want to be visible.
-- Changing the UI scale from the General tab screws with my UI. Reload UI.
-- Name over the experience bar does not fit? Increase the width of `WIIIUI_xpName` on Page 14.
-- Level and class text does not fit?  Increase the width of `WIIIUI_xpName` on Page 14.
-- HP and/or Mana/Rage/Energy does not fit? Increase the width of `WIIIUI_HealthText` and `WIIIUI_PowerText` on Page 41.
-- Changing position of either Pos X or Pos Y does not work? If `Point` and `Relative to` are both or either is set to CENTER, try changing it to BOTTOMLEFT on `Point` and BOTTOMRIGHT on `Relative to`, requires you to reload UI. Other settings might work as well, if the frame disappears after this change it might be outside of the screen and you may have to put in negative value on Pos X or Pos Y.
-  
-#### Here are some example edits.
-
-![image](https://user-images.githubusercontent.com/97316608/154311175-3a032b69-6757-40a8-aa4c-97cf303bfb4b.png)  
-No inventory slots    
-For above solution you want to:
-1. Go to page 11, `Wc3_UI_right_left`, set it's Parent to `WIIIUI_rightpart` and Draw layer to OVERLAY.
-2. Go to page 22, `WIIIUI_inventorySlots`, check Hide if you want to hide the 6 action slots
-3. Go to page 23, `Wc3_UI_right_middle`, set Draw layer to ARTWORK
-
-### How to make a custom theme
-
-- Create a folder named `custom#` 1-8, example `custom4`.
-- Copy all files and folders in `WoW\Interface\AddOns\WIIIUI\art\orc` and paste it into your new folder. Orc is the template for custom themes, which is good if you do not intend to edit with the customization option.
-- Either use the images as a template and follow their form or go crazy and use the customization feature.
-- Do not save any image with higher resolution than 512x512 since it is not supported in vanilla WoW.
-- All images must be saved with width/height of a multiplier of 8. For example: 16,32,64,128,256,512.
-- You can edit and then save an image while ingame, you just need to reload the UI to see the changes ingame.
-
-### How to apply custom themes
-
-- Download a theme
-- Put the custom theme folder into `WoW\Interface\AddOns\WIIIUI\art`
-- (Optional) Go into `WoW\WTF\Account\[ACCOUNT NAME]\[SERVER NAME]\[CHARACTER NAME]\SavedVariables`
-- (Optional) Paste the WIIIUI.lua file and overwrite OR...
-- (Optional) If you don't want your old settings to be overriden, such as UI scale size etc, then you can go into the downloaded WIIIUI.lua file, copy the code block in `["base_settings"]={["THEME"]}`, paste it into your own WIIIUI.lua file. Now do the same with `["edit_theme_settings"]={["THEME"]}`.  
-  
-![image](https://user-images.githubusercontent.com/97316608/154137716-eaa9c73b-e2d3-44b6-b700-59041f45d84b.png)  
-Example of how it should look.
-
-#### How to share 
-
-- Upload your custom theme folder from `WoW\Interface\AddOns\WIIIUI\art`.
-- (Optional) Upload your `WoW\WTF\Account\[ACCOUNT NAME]\[SERVER NAME]\[CHARACTER NAME]\SavedVariables\WIIIUI.lua` file.
-- (Optional) Or share the code block in `["base_settings"]={["THEME"]}` and the same with `["edit_theme_settings"]={["THEME"]}`.  
-- Ask me to add your theme to the list of custom themes or share it as you please.
-
-### Player made Custom themes
-
-#### nobrains21's themes  
-
-Queensland UI  
-https://github.com/nobrains21/WIIIUI-QueenslandUI  
-
-![image](https://user-images.githubusercontent.com/97316608/154486374-89611645-4bf5-40ea-b49c-d44eb1afcdad.png)  
-
----
-
-NerubUI    
-https://github.com/nobrains21/WIIIUI-NerubUI  
-
-![image](https://user-images.githubusercontent.com/97316608/154486852-b0994114-b04f-4609-bb94-8026f4d7153a.png)  
-
----
-
-Void UI  
-https://github.com/nobrains21/WIIIUI-VoidUI  
-
-![image](https://user-images.githubusercontent.com/97316608/154486891-0eadd308-ad61-469c-9980-d47f9062efe8.png)  
-
----
-  
-#### Jirry's themes  
-  
-High Elf UI  
-https://www.mediafire.com/file/l7npfxg7oaniq2w/HighelfUI.rar/file  
-
-![highelfscreen](https://user-images.githubusercontent.com/97316608/155598181-4d1c74e2-29f8-4372-a309-4f4995c0866d.png)  
-
----
-
-Blood Elf UI  
-https://www.mediafire.com/file/ibkifm95o6vl1ab/BloodelfUI.rar/file  
-
-![bloodelfscreen](https://user-images.githubusercontent.com/97316608/155598569-2d4ceb48-6456-4247-81b2-f3e34684ab16.png)  
-
----
-
-Gnome UI  
-https://www.mediafire.com/file/gxixndwtmmxs03l/GnomeUI.rar/file  
-
-![gnomescreen](https://user-images.githubusercontent.com/97316608/155598651-c65981bd-b574-41a2-a865-48689464e7a3.png)  
-
----
-
-Goblin UI  
-https://www.mediafire.com/file/m3xh9rulsjp4mza/GoblinUI.rar/file  
-
-![goblinscreen](https://user-images.githubusercontent.com/97316608/155598722-40a8745d-6921-486a-95b2-c22664b2cdba.png)  
-
----
-
-Tauren UI  
-https://www.mediafire.com/file/x8bv3xbspxc6u2l/TaurenUI.rar/file  
-
-![taurenscreen](https://user-images.githubusercontent.com/97316608/155619995-131f687b-0603-4b2e-84e4-7dd2c7a08315.png)  
-
----
-
-## FAQ
-**Q:** How do I move or change size of the chat window?  
-  
-**A:** Check image below and follow these instructions:  
-  * To move the chat window, move mouse cursor to the location of the red square #1, after a second the 'General' tab will be displayed.
-  * Right click while mouse is on 'General' tab, move to the red square #2 and click 'Unlock Window'.
-  * Move mouse curosr to the red square #1, hold left click, drag and let go when you have found a position you like.
-  * To change the size of the chat window, make sure the chat window is unlocked, move mouse cursor to any edge (highlighted in blue in image below) of the chat window, hold left click, drag and release when you have found a size you enjoy.
-  
-![image](https://user-images.githubusercontent.com/97316608/153941630-09fc3f3f-13f9-4833-994c-865a76688421.png)
-  
-## Known issues
-* The UI looks wrong? Try reloading the UI from the config menu, if that doesn't work, hit Escape to open the game's Main Menu, click 'Video Options' and either uncheck 'Use UI Scale' if it's checked or
-* Options not saving is likely because your files are set to 'Read only', please look up how to remove 'Read only' as it is different depending on your OS.
-* When adding something to an empty minimap actionslot the icon is enlarged, please reload UI from config menu.
-* When adding something to an empty extra inventory slot the icon is enlarged, please pick it up with left mouse click and put it back or reload UI.
-* When adding something to an empty actionslot in the actiongrid the icon is enlarged, please pick it up with left mouse click and put it back or reload UI.
-* Undead male's animated portrait looks bugged, a fault caused by Blizzard and not the addon, this is the reason why I added the menu option to disable portrait animation.
-* If other issues arrive, try to note down what you did to create this issue and please contact me at Fiur#8648, in the meantime please reload UI. 
-
-
-
-
-
-
-
+## Getting started
+
+* **Open the config menu:** move your mouse into the bottom-right corner of the screen. A cogwheel appears; click it. There are no slash commands. The menu has a General tab and a Customize tab, and a Reload UI button.
+* **Some options live in Edit Mode.** On current game clients, Blizzard controls where things like the buff icons, the cast bar, the bags and the shapeshift bar sit. In the config menu those options show a "set in Edit Mode" note instead of a control. Move those pieces with the game's own Edit Mode.
+* **Layout modes.** Three checkboxes in the General tab:
+  * **Ultra-Wide Mode** shifts the chat panel's edges to suit very wide screens.
+  * **Center Slim Mode** hides the chat area but keeps the inventory panel.
+  * **Center Slim (No Inventory)** hides the whole right-hand panel, chat area and inventory both.
+  If both Center Slim boxes are ticked, Center Slim Mode wins.
+* **The extra slots share action bar page 2.** The 9 extra slots (3 by the minimap, 6 in the inventory) are action slots 13 to 21, which is page 2 of the main bar. If you page your main bar to page 2 (for example with Shift+2), you see the same actions, and changing them there changes the minimap and inventory slots too. This is intended.
+* **Layout string not available yet.** Config menu rows for pieces Blizzard controls show "-- set in Edit Mode (WIIIUI's layout string, build not yet exported)", and the "Copy layout string" box says "Not available in this build -- check for an addon update." That does not mean your install is out of date: the ready-made layout string is simply not shipped yet. For now, arrange Blizzard's pieces (chat, bags, micro menu, cast bar, buffs and so on) yourself in Edit Mode.
+* **Saved settings may not stick on some Forever beta builds.** WIIIUI works with default settings on every login, so if your choices are forgotten, that is why. Settings also cannot be saved if the game's saved-settings files are read-only, so check that too.
+
+## Tips and known issues
+
+* **Undead male portrait glitch:** Blizzard's animation for that portrait can look glitchy. Tick **Stop Portrait Animation** in the General tab to fix it.
+* **Settings not saving:** see the read-only-file and Forever beta notes above.
+* **Custom themes** are not supported (see Features).
+
+## Support and feedback
+
+Found a problem or want a feature? Please open an issue: https://github.com/Johan-p/WIIIUI-Forever-Fork/issues

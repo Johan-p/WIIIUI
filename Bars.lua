@@ -1,15 +1,15 @@
 -- spec 0001 §Module split "Bars.lua": health/power bars + text, power
 -- colour by UnitPowerType token (C1), plus §1.2's secret-safe % text, HP
--- gradient and low-HP pulse. Vanilla AlignHealthMana (e17c352
+-- gradient. Vanilla AlignHealthMana (e17c352
 -- WIIIUI.lua:1980-2059) reused Blizzard's PlayerFrameHealthBar/
 -- PlayerFrameManaBar, reparented to UIParent; PlayerFrame is now retired
 -- (R2, Core.lua's WIIIUI.Retire), which hides its children too, so this
 -- file builds WIIIUI's own StatusBar frames at the same position/size
 -- instead. The raw "cur / max" text (default) is CLAUDE.md's own sanctioned
 -- unguarded route (concatenation, SetValue and SetMinMaxValues are all
--- secret-tolerant); % text, the gradient and the pulse go through
--- WIIIUI.Safe (Core.lua) since they touch UnitHealthPercent/
--- UnitPowerPercent's SecretReturns results.
+-- secret-tolerant); % text and the gradient go through WIIIUI.Secret
+-- (Core.lua) since they touch UnitHealthPercent/UnitPowerPercent's
+-- SecretReturns results.
 local _, WIIIUI = ...
 
 WIIIUI.Bars = WIIIUI.Bars or {}
@@ -40,19 +40,6 @@ local XP_BAR_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\xpProgressBar"
 -- wc3UI_Options.xpRestedXpColor (CLAUDE.md Domain model), not this constant.
 local XP_BAR_MAIN_COLOR_R, XP_BAR_MAIN_COLOR_G, XP_BAR_MAIN_COLOR_B = 0.5, 0, 0.5
 
--- Vanilla LowHPWarning (e17c352 WIIIUI.lua:3875-3939): the low-HP flash
--- lives on PortraitBackground, ported forward here per spec 0001's
--- architecture note ("Bars.lua ... low-HP pulse ... Every secret-value
--- guard lives here"). white_background.tga already ships in art/other/
--- (the same file vanilla toggled between white_background/black_background
--- -- this port uses SetVertexColor for the fixed red tint instead, spec
--- 0001 §1.2, so only one of the two files is needed).
-local LOW_HP_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\white_background"
-local LOW_HP_OVERLAY_WIDTH_FRACTION = 0.35
-local LOW_HP_OVERLAY_HEIGHT_FRACTION = 0.35
-local LOW_HP_OVERLAY_HEIGHT_PAD = 20
-local LOW_HP_PULSE_DURATION = 1
-
 -- Vanilla never sets a static health-bar colour in AlignHealthMana itself
 -- (Blizzard's own texture supplied it). This is the fallback colour the bar
 -- keeps whenever the secret-guarded HP gradient (below) fails to build or
@@ -63,14 +50,44 @@ local HEALTH_BAR_DEFAULT_COLOR_R, HEALTH_BAR_DEFAULT_COLOR_G, HEALTH_BAR_DEFAULT
 -- Vanilla AlignHealthMana (e17c352 WIIIUI.lua:1999, 2018): health text at
 -- font size 10, power text at 9, same theme font as the rest of the console
 -- (CLAUDE.md "the look is the specification").
-local FONT_PATH = "Interface\\Addons\\WIIIUI\\art\\other\\fonts\\blq55.TTF"
-local FONT_SIZES = { health = 10, power = 9 }
+local FONT_SIZES = { health = 10, power = 9, mana = 9 }
 
--- spec 0004 §Phase-boundary "0002 druid resource bar": "(1) Bars.lua builds
--- bars from a list { "health", "power" } with a slotIndex." 0002 inserts
--- "form" between them; kept as an ordered list (not two hardcoded blocks)
--- so that insertion only touches this line, not BuildBars' body.
-local BAR_DEFS = { "health", "power" }
+-- spec 0002 §1 layout gate: class and toggle only, never form. PlayerClassToken
+-- yields nil for an unknown, secret or erroring class; only a plain token is
+-- cached, so an early unknown read is retried.
+local isDruidCache
+local function isDruid()
+  if isDruidCache == nil then
+    local token = WIIIUI.PlayerClassToken()
+    if token == nil then
+      return false
+    end
+    isDruidCache = token == "DRUID"
+  end
+  return isDruidCache
+end
+
+function WIIIUI.Bars.IsDruid()
+  return isDruid()
+end
+
+function WIIIUI.Bars.SlotCount()
+  if isDruid() and wc3UI_Options and wc3UI_Options.druidResourceBar then
+    return 3
+  end
+  return 2
+end
+
+-- spec 0002 §4: the slot list follows SlotCount(); mana exists only in the
+-- druid layout, so a non-druid never builds it.
+local builtSlotCount = 2
+
+local function barDefs()
+  if WIIIUI.Bars.SlotCount() == 3 then
+    return { "health", "power", "mana" }
+  end
+  return { "health", "power" }
+end
 
 -- Vanilla xpCurrLevel (e17c352 WIIIUI.lua:2213: SetFont(..., 12, "")).
 local LEVEL_TEXT_FONT_SIZE = 12
@@ -78,12 +95,13 @@ local LEVEL_TEXT_FONT_SIZE = 12
 -- spec 0001 §1.2: "Health % text (HealthPercent) ... fs:SetFormattedText(
 -- '%.0f%%', UnitHealthPercent('player', true, CurveConstants.ScaleTo100))
 -- inside pcall ... Fallback: falls back to cur / max text." The guard seam
--- is WIIIUI.Safe (Core.lua); CurveConstants.ScaleTo100 is Blizzard's own
+-- is a plain pcall here (the % text is a degrade, not a decision) with
+-- WIIIUI.Secret.PairText (Core.lua) as the fallback; CurveConstants.ScaleTo100 is Blizzard's own
 -- pre-built curve (Blizzard_SharedXMLBase/CurveConstants.lua), not one
 -- WIIIUI builds.
 local function setHealthText(bar)
   if wc3UI_Options.HealthPercent then
-    local ok = WIIIUI.Safe(function()
+    local ok = pcall(function()
       bar.text:SetFormattedText("%.0f%%", UnitHealthPercent("player", true, CurveConstants.ScaleTo100))
     end)
     if ok then
@@ -91,22 +109,31 @@ local function setHealthText(bar)
     end
   end
 
-  bar.text:SetText(UnitHealth("player") .. " / " .. UnitHealthMax("player"))
+  WIIIUI.Secret.PairText(bar.text, UnitHealth("player"), UnitHealthMax("player"))
+end
+
+-- Enum.PowerType.Mana, with the documented literal 0 as the fallback when the
+-- enum is missing (spec 0002 §1).
+local function manaPowerType()
+  return Enum and Enum.PowerType and Enum.PowerType.Mana or 0
 end
 
 -- spec 0001 §1.2: "Power % text (PowerPercent) ... Same with
 -- UnitPowerPercent('player', nil, false, CurveConstants.ScaleTo100)."
-local function setPowerText(bar)
+-- spec 0002 §4: `powerType` is nil for the primary power (today's call) and
+-- Enum.PowerType.Mana for the druid mana bar; the values go only to
+-- SetText/concatenation, never compared.
+local function setPowerText(bar, powerType)
   if wc3UI_Options.PowerPercent then
-    local ok = WIIIUI.Safe(function()
-      bar.text:SetFormattedText("%.0f%%", UnitPowerPercent("player", nil, false, CurveConstants.ScaleTo100))
+    local ok = pcall(function()
+      bar.text:SetFormattedText("%.0f%%", UnitPowerPercent("player", powerType, false, CurveConstants.ScaleTo100))
     end)
     if ok then
       return
     end
   end
 
-  bar.text:SetText(UnitPower("player") .. " / " .. UnitPowerMax("player"))
+  WIIIUI.Secret.PairText(bar.text, UnitPower("player", powerType), UnitPowerMax("player", powerType))
 end
 
 -- spec 0001 §1.2: "HP gradient ... One ColorCurve built at login: 0 -> red,
@@ -116,55 +143,24 @@ end
 -- else -> r=2*(1-healthPercent),g=1,b=0 (50%=yellow, 100%=green) -- exactly
 -- the three sampled points below. Built lazily (not at file/module load)
 -- and cached, so a missing C_CurveUtil/AddPoint/CreateColor API (spec 0001
--- §1.2's own "Unverified" list) degrades this one feature via WIIIUI.Safe
+-- §1.2's own "Unverified" list) degrades this one feature via Secret.CachedCurve
 -- instead of erroring Bars.lua's whole load. ScriptObject_ColorCurveObject
 -- (warcraft.wiki.gg): "AddPoint takes an x and y value; ... the y should be
 -- a ColorMixin structure", built via CreateColor(r,g,b) (SharedXML/
 -- Color.lua via FrameXML/Util.lua).
--- healthColorCurveFailed*/fingerprint cache a build failure (missing
--- C_CurveUtil/CreateColor) so a known-failing build isn't retried on every
--- UNIT_HEALTH/UNIT_MAXHEALTH event -- but only while the reason it failed
--- hasn't changed. The fingerprint is a cheap existence check of the two
--- globals the build needs, taken *before* attempting the build; a failure
--- is skipped only when a later call's fingerprint still matches the one
--- recorded at failure time, so a build that starts succeeding again (the
--- globals reappear) still gets retried on the very next call, per spec
--- 0001 §1.2's own degrade-and-recover expectation for this route.
-local function healthCurveFingerprint()
+-- The build failure is cached against a cheap existence check of the two
+-- globals the build needs (Secret.CachedCurve), so a known-failing build isn't
+-- retried on every UNIT_HEALTH/UNIT_MAXHEALTH event but is retried as soon as
+-- those globals reappear (spec 0001 §1.2 degrade-and-recover).
+local getHealthColorCurve = WIIIUI.Secret.CachedCurve(function()
+  local c = C_CurveUtil.CreateColorCurve()
+  c:AddPoint(0, CreateColor(1, 0, 0))
+  c:AddPoint(0.5, CreateColor(1, 1, 0))
+  c:AddPoint(1, CreateColor(0, 1, 0))
+  return c
+end, function()
   return C_CurveUtil ~= nil and CreateColor ~= nil
-end
-
-local healthColorCurve, healthColorCurveFailed, healthColorCurveFailedFingerprint
-
-local function getHealthColorCurve()
-  if healthColorCurve then
-    return healthColorCurve
-  end
-
-  local fingerprint = healthCurveFingerprint()
-
-  if healthColorCurveFailed and healthColorCurveFailedFingerprint == fingerprint then
-    return nil
-  end
-
-  local ok, curve = WIIIUI.Safe(function()
-    local c = C_CurveUtil.CreateColorCurve()
-    c:AddPoint(0, CreateColor(1, 0, 0))
-    c:AddPoint(0.5, CreateColor(1, 1, 0))
-    c:AddPoint(1, CreateColor(0, 1, 0))
-    return c
-  end)
-
-  if ok then
-    healthColorCurve = curve
-    healthColorCurveFailed = false
-  else
-    healthColorCurveFailed = true
-    healthColorCurveFailedFingerprint = fingerprint
-  end
-
-  return healthColorCurve
-end
+end)
 
 -- spec 0001 §1.2: "local c = UnitHealthPercent('player', true, curve) ->
 -- bar:GetStatusBarTexture():SetVertexColor(c:GetRGB()) in pcall." Leaves
@@ -176,150 +172,11 @@ local function updateHealthGradient(bar)
     return
   end
 
-  WIIIUI.Safe(function()
+  -- Degrade, not a decision: the result is secret and only handed on.
+  pcall(function()
     local color = UnitHealthPercent("player", true, curve)
     bar:GetStatusBarTexture():SetVertexColor(color:GetRGB())
   end)
-end
-
--- spec 0001 §1.2: "Low-HP pulse ... overlay is a frame holding the red
--- portrait-background texture. Its child texture runs a looping
--- AnimationGroup Alpha 0<->1 (1 s each way, the vanilla timing)." Anchored
--- to left.portraitTexture (not WIIIUI.Portrait.button/model) because
--- Bars.lua's BuildBars runs before Portrait.lua's BuildPortrait in
--- WIIIUI.Layout() (WIIIUI.toc load order) -- the portrait art texture is
--- already built by Console.BuildLeft by the time this runs, matching how
--- Portrait.lua itself anchors its own button to the same texture. Building
--- the animation is plain non-secret widget setup (no unit value involved),
--- so unlike the curve/SetAlpha calls below it isn't wrapped in WIIIUI.Safe.
-local function buildLowHpOverlay(anchor, uiScale)
-  local overlay = WIIIUI.Bars.lowHpOverlay
-
-  if not overlay then
-    overlay = CreateFrame("Frame", nil, UIParent)
-    overlay:SetFrameStrata("LOW")
-
-    local texture = overlay:CreateTexture(nil, "OVERLAY")
-    texture:SetAllPoints(overlay)
-    texture:SetTexture(LOW_HP_TEXTURE)
-    texture:SetVertexColor(1, 0, 0, 1)
-
-    -- "Its child texture runs a looping AnimationGroup Alpha 0<->1" --
-    -- BOUNCE plays the single 0->1 animation forward then backward each
-    -- cycle, giving the 1s-each-way ping-pong with one animation instead
-    -- of two (warcraft.wiki.gg API_AnimationGroup_SetLooping).
-    local animGroup = texture:CreateAnimationGroup()
-    local pulse = animGroup:CreateAnimation("Alpha")
-    pulse:SetFromAlpha(0)
-    pulse:SetToAlpha(1)
-    pulse:SetDuration(LOW_HP_PULSE_DURATION)
-    animGroup:SetLooping("BOUNCE")
-    animGroup:Play()
-
-    overlay.texture = texture
-    overlay.animGroup = animGroup
-    WIIIUI.Bars.lowHpOverlay = overlay
-  end
-
-  overlay:ClearAllPoints()
-  if anchor then
-    overlay:SetPoint("CENTER", anchor, "CENTER", 0, 0)
-  end
-  overlay:SetSize(
-    uiScale * LOW_HP_OVERLAY_WIDTH_FRACTION,
-    uiScale * LOW_HP_OVERLAY_HEIGHT_FRACTION + LOW_HP_OVERLAY_HEIGHT_PAD
-  )
-
-  return overlay
-end
-
--- spec 0001 §1.2: "A Step curve with points (0,1), (hpWarning/100,1),
--- (hpWarning/100+0.0001,0), (1,0) ... The curve is rebuilt when hpWarning
--- changes." Cached alongside the threshold it was built for (not just
--- built once at login) so this file alone -- without a Config.lua hook --
--- notices a changed wc3UI_Options.hpWarning on the next health event.
--- lowHpCurveFailed*/fingerprint cache a build failure (missing
--- Enum.LuaCurveType/C_CurveUtil) against the threshold *and* the
--- prerequisite-existence fingerprint it failed at (same reasoning as
--- healthCurveFingerprint above), so a known-failing build isn't retried on
--- every health event, but still recovers on the next event once the
--- missing piece reappears, without waiting for hpWarning to change.
-local function lowHpCurveFingerprint()
-  return C_CurveUtil ~= nil and Enum ~= nil and Enum.LuaCurveType ~= nil
-end
-
-local lowHpCurve, lowHpCurveThreshold
-local lowHpCurveFailed, lowHpCurveFailedThreshold, lowHpCurveFailedFingerprint
-
-local function getLowHpCurve()
-  local threshold = wc3UI_Options.hpWarning
-
-  if lowHpCurve and lowHpCurveThreshold == threshold then
-    return lowHpCurve
-  end
-
-  local fingerprint = lowHpCurveFingerprint()
-
-  if
-    lowHpCurveFailed
-    and lowHpCurveFailedThreshold == threshold
-    and lowHpCurveFailedFingerprint == fingerprint
-  then
-    return nil
-  end
-
-  local ok, curve = WIIIUI.Safe(function()
-    local cutoff = threshold / 100
-    local c = C_CurveUtil.CreateCurve()
-    c:SetType(Enum.LuaCurveType.Step)
-    c:AddPoint(0, 1)
-    c:AddPoint(cutoff, 1)
-    c:AddPoint(cutoff + 0.0001, 0)
-    c:AddPoint(1, 0)
-    return c
-  end)
-
-  if ok then
-    lowHpCurve = curve
-    lowHpCurveThreshold = threshold
-    lowHpCurveFailed = false
-  else
-    lowHpCurve = nil
-    lowHpCurveThreshold = nil
-    lowHpCurveFailed = true
-    lowHpCurveFailedThreshold = threshold
-    lowHpCurveFailedFingerprint = fingerprint
-  end
-
-  return lowHpCurve
-end
-
--- spec 0001 §1.2: "overlay:SetAlpha(UnitHealthPercent('player', true,
--- stepCurve)) ... Effective alpha = parent (secret 0/1) x child (animated),
--- so there is no comparison, no arithmetic and no OnUpdate." Never calls
--- Show/Hide based on the secret result itself -- only WIIIUI.Safe's own ok
--- flag (a plain boolean, not a unit value) drives the one degrade action.
-local function updateLowHpPulse()
-  local overlay = WIIIUI.Bars.lowHpOverlay
-  if not overlay then
-    return
-  end
-
-  local curve = getLowHpCurve()
-  if not curve then
-    overlay:Hide()
-    return
-  end
-
-  local ok = WIIIUI.Safe(function()
-    overlay:SetAlpha(UnitHealthPercent("player", true, curve))
-  end)
-
-  if ok then
-    overlay:Show()
-  else
-    overlay:Hide()
-  end
 end
 
 local function updateHealth()
@@ -336,7 +193,6 @@ local function updateHealth()
   end
 
   updateHealthGradient(bar)
-  updateLowHpPulse()
 end
 
 local function updatePower()
@@ -366,6 +222,45 @@ local function updatePower()
   if color then
     bar:SetStatusBarColor(color.r, color.g, color.b, 1)
   end
+
+  -- spec 0002 §1 middle-bar gate: in the druid layout the power bar shows
+  -- whatever the main resource is, unless that is mana (the mana bar below
+  -- already shows it). Show/Hide, not SetAlpha, so the customizer's
+  -- Transparency isn't fought; Bars.power carries combatToggled for it.
+  -- Gated on what BuildBars built, not the live SlotCount(): the class token
+  -- or toggle can change between a queued Layout and this event.
+  if builtSlotCount == 3 then
+    local powerType = UnitPowerType("player")
+    if powerType == nil then
+      bar:Hide()
+    elseif not WIIIUI.Secret.IsSecret(powerType) then
+      if powerType ~= manaPowerType() then
+        bar:Show()
+      else
+        bar:Hide()
+      end
+    end
+  end
+end
+
+local function updateMana()
+  local bar = WIIIUI.Bars.mana
+  if not bar or not bar:IsShown() then
+    return
+  end
+
+  local manaType = manaPowerType()
+  bar:SetMinMaxValues(0, UnitPowerMax("player", manaType))
+  bar:SetValue(UnitPower("player", manaType))
+
+  if bar.text then
+    setPowerText(bar, manaType)
+  end
+end
+
+local function updatePowerBars()
+  updatePower()
+  updateMana()
 end
 
 -- spec 0001 §Phased plan "C4 XP bar + tracking-bar starve/hide". Builds two
@@ -392,63 +287,38 @@ local function buildXPBar(anchor, uiScale)
     bar.levelText = bar:CreateFontString(nil, "OVERLAY")
     bar.levelText:SetPoint("CENTER", bar, "CENTER", 0, 0)
 
-    -- Same font-fallback pattern as the health/power bars' text above
-    -- (CLAUDE.md "Tech stack quirks"): GameFontHighlightSmall first, then
-    -- the theme font, re-applying the fallback if SetFont/GetFont didn't
-    -- take.
-    bar.levelText:SetFontObject(GameFontHighlightSmall)
-    local fontApplied = bar.levelText:SetFont(FONT_PATH, LEVEL_TEXT_FONT_SIZE, "")
-
-    if not fontApplied or not bar.levelText:GetFont() then
-      bar.levelText:SetFontObject(GameFontHighlightSmall)
-    end
-
     WIIIUI.Bars.xp = bar
   end
 
+  -- Text grows with the console above the tuned size, so it is re-applied on
+  -- every build (spec 0005).
+  WIIIUI.Theme.ApplyFont(bar.levelText, WIIIUI.Theme.ScaledSize(LEVEL_TEXT_FONT_SIZE, uiScale), GameFontHighlightSmall)
+
   local geometry = WIIIUI.Theme.XPBarGeometry(uiScale)
 
-  -- Finding 7 (ui-reviewer, gate-fix): validate shape before handing to
-  -- SetStatusBarColor -- MergeDefaults only checks xpRestedXpColor is a
-  -- table, not that it holds 4 numbers, so a hand-edited SavedVariable like
-  -- {} would otherwise reach SetStatusBarColor(nil, ...) and throw, aborting
-  -- the rest of WIIIUI.Layout() (Portrait/Buttons/Config never get built,
-  -- since ApplyOrQueue calls WIIIUI.Layout without a pcall). Falls back to
-  -- WIIIUI.DEFAULTS.xpRestedXpColor, matching CLAUDE.md's "degrade to
-  -- hidden rather than wrong" spirit for corrupted saved data.
+  -- MergeDefaults resets a malformed colour to the default (spec 0006 Slice
+  -- 09), so the saved table always holds 4 numbers here.
   local restColor = wc3UI_Options.xpRestedXpColor
-  if
-    type(restColor) ~= "table"
-    or type(restColor[1]) ~= "number"
-    or type(restColor[2]) ~= "number"
-    or type(restColor[3]) ~= "number"
-  then
-    restColor = WIIIUI.DEFAULTS.xpRestedXpColor
-  end
   rested:SetStatusBarColor(restColor[1], restColor[2], restColor[3], restColor[4])
 
-  -- Finding 1 (ui-reviewer, gate-fix): both bars share UIParent and neither
-  -- overrides frame level, so per warcraft.wiki.gg's UI_rendering_process
-  -- ("there is no defined render order" for identical strata+level) the
-  -- rested overlay could draw on top of the current-XP fill. Explicit
-  -- levels (API_Frame_SetFrameLevel/GetFrameLevel, warcraft.wiki.gg) make
-  -- bar draw strictly above rested, deterministically.
+  -- Both bars share UIParent, and warcraft.wiki.gg's UI_rendering_process
+  -- defines no render order for identical strata+level, so the Layers slots
+  -- give the fill a level strictly above the rested overlay.
+  WIIIUI.Layers.Apply(rested, "xp.rested")
+  WIIIUI.Layers.Apply(bar, "xp.fill")
   for _, xpBar in ipairs({ rested, bar }) do
-    xpBar:SetFrameStrata("LOW")
     xpBar:SetSize(geometry.width, geometry.height)
     xpBar:ClearAllPoints()
     if anchor then
       xpBar:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", geometry.anchorOffsetX, geometry.anchorOffsetY)
     end
   end
-  bar:SetFrameLevel(rested:GetFrameLevel() + 1)
 end
 
 -- spec 0001 §Event -> widget wiring: "PLAYER_XP_UPDATE, UPDATE_EXHAUSTION,
--- PLAYER_LEVEL_UP | XP bar, rested, level text (XP not secret; still
--- Safe)". Not a secret-value guard (XP is never secret, CLAUDE.md "Secret
--- values") -- WIIIUI.Safe here is the same generic "degrade rather than
--- error" seam Bars.lua's colour-curve builders already use, covering a
+-- PLAYER_LEVEL_UP | XP bar, rested, level text (XP is not secret, but the
+-- update is still wrapped in a pcall)". Not a secret-value guard (XP is never secret, CLAUDE.md "Secret
+-- values") -- a plain pcall: degrade, not a decision. It covers a
 -- missing UnitXP/UnitXPMax/GetXPExhaustion/UnitClass or a UnitXPMax==0 edge
 -- case without taking down the rest of WIIIUI.Layout().
 local function updateXP()
@@ -458,7 +328,7 @@ local function updateXP()
     return
   end
 
-  local ok = WIIIUI.Safe(function()
+  local ok = pcall(function()
     local maxXP = UnitXPMax("player")
     local curXP = UnitXP("player")
 
@@ -504,14 +374,20 @@ end
 -- bars anchor to minimapFrame (the minimap art texture, WIIIUI.Console.left.
 -- minimapTexture -- see BuildLeft's own citation of this same vanilla
 -- naming quirk). Console.BuildLeft/BuildGrid/BuildRight already ran earlier
--- in this same WIIIUI.Layout() call (Core.lua's canonical module order), so
--- the minimap texture exists by the time this runs.
+-- in this same WIIIUI.Layout() call (TOC order; this step registers
+-- after Console.BuildRight), so the minimap texture exists by the time this
+-- runs.
 function WIIIUI.Bars.BuildBars()
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
   local left = WIIIUI.Console.left
   local minimapTexture = left and left.minimapTexture
 
-  for slotIndex, key in ipairs(BAR_DEFS) do
+  local defs = barDefs()
+  local slotCount = #defs
+  builtSlotCount = slotCount
+  local lift = slotCount == 3 and WIIIUI.Theme.DruidLift(uiScale, wc3UI_Options.theme) or 0
+
+  for slotIndex, key in ipairs(defs) do
     local bar = WIIIUI.Bars[key]
 
     if not bar then
@@ -520,28 +396,35 @@ function WIIIUI.Bars.BuildBars()
       bar.text = bar:CreateFontString(nil, "OVERLAY")
       bar.text:SetPoint("CENTER", bar, "CENTER", 0, 0)
 
-      -- CLAUDE.md "Tech stack quirks": "FontString:SetFont returns success
-      -- on Forever; the pattern stays: set the font object, then SetFont,
-      -- then confirm with GetFont(), fall back to a Blizzard font object."
-      -- GameFontHighlightSmall (FrameXML/Fonts.xml) is the safety net set
-      -- first and re-applied if the custom theme font doesn't take;
-      -- FontInstance:SetFontObject/GetFont, warcraft.wiki.gg.
-      bar.text:SetFontObject(GameFontHighlightSmall)
-      local fontApplied = bar.text:SetFont(FONT_PATH, FONT_SIZES[key], "")
-
-      if not fontApplied or not bar.text:GetFont() then
-        bar.text:SetFontObject(GameFontHighlightSmall)
-      end
-
       WIIIUI.Bars[key] = bar
     end
 
-    local geometry = WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
+    WIIIUI.Theme.ApplyFont(bar.text, WIIIUI.Theme.ScaledSize(FONT_SIZES[key], uiScale), GameFontHighlightSmall)
 
-    bar:SetFrameStrata("LOW")
+    local geometry = WIIIUI.Theme.BarGeometry(uiScale, slotIndex, slotCount, lift)
+
+    -- Same strata as the left console art, so the level must clear it (fix6 B5).
+    WIIIUI.Layers.Apply(bar, "bars")
     bar:SetSize(geometry.width, geometry.height)
     bar:ClearAllPoints()
     bar:SetPoint("BOTTOMLEFT", minimapTexture, "BOTTOMRIGHT", geometry.offsetX, geometry.offsetY)
+  end
+
+  local mana = WIIIUI.Bars.mana
+  if slotCount == 3 then
+    -- PowerBarColor is a Blizzard global (spec 0002 §4); blue as the fallback.
+    local color = PowerBarColor and PowerBarColor.MANA
+    if color then
+      mana:SetStatusBarColor(color.r, color.g, color.b, 1)
+    else
+      mana:SetStatusBarColor(0, 0, 1, 1)
+    end
+    mana:Show()
+  else
+    if mana then
+      mana:Hide()
+    end
+    WIIIUI.Bars.power:Show()
   end
 
   WIIIUI.Bars.health:SetStatusBarColor(
@@ -551,11 +434,10 @@ function WIIIUI.Bars.BuildBars()
     1
   )
 
-  buildLowHpOverlay(left and left.portraitTexture, uiScale)
   buildXPBar(left and left.portraitTexture, uiScale)
 
   updateHealth()
-  updatePower()
+  updatePowerBars()
   updateXP()
 end
 
@@ -566,9 +448,14 @@ end
 -- Build* convention.
 WIIIUI.On("UNIT_HEALTH", updateHealth, "player")
 WIIIUI.On("UNIT_MAXHEALTH", updateHealth, "player")
-WIIIUI.On("UNIT_POWER_UPDATE", updatePower, "player")
-WIIIUI.On("UNIT_MAXPOWER", updatePower, "player")
-WIIIUI.On("UNIT_DISPLAYPOWER", updatePower, "player")
+-- UNIT_POWER_FREQUENT alone: same payload as UNIT_POWER_UPDATE, fires on every
+-- change and more often while regenerating; registering both repaints twice.
+WIIIUI.On("UNIT_POWER_FREQUENT", updatePowerBars, "player")
+WIIIUI.On("UNIT_MAXPOWER", updatePowerBars, "player")
+WIIIUI.On("UNIT_DISPLAYPOWER", updatePowerBars, "player")
+-- No payload, so a plain registration; InfoIcons registers it the same way,
+-- and WIIIUI.On rejects one event under two unit filters (spec 0002 §1.2).
+WIIIUI.On("UPDATE_SHAPESHIFT_FORM", updatePowerBars)
 
 -- PLAYER_XP_UPDATE/UPDATE_EXHAUSTION/PLAYER_LEVEL_UP are plain RegisterEvent
 -- calls, not RegisterUnitEvent, despite this file's other events using the
@@ -612,3 +499,5 @@ end
 WIIIUI.On("PLAYER_LOGIN", function()
   WIIIUI.ApplyOrQueue("trackingBarStarve", starveTrackingBars)
 end)
+
+WIIIUI.RegisterBuild("Bars.BuildBars", WIIIUI.Bars.BuildBars, { after = { "Console.BuildRight" } })

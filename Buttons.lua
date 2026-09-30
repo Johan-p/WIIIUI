@@ -22,16 +22,56 @@ local LAB = LibStub("LibActionButton-1.0")
 -- button's own global name, WIIIUI_ prefixed per spec 0001 "Named frames"),
 -- baseAction (the action slot each button's index adds onto), bindingPrefix
 -- (spec 0001 §Event -> widget wiring "UPDATE_BINDINGS": ACTIONBUTTONi /
--- MULTIACTIONBAR1BUTTONi / MULTIACTIONBAR2BUTTONi, in that B/M/T order).
+-- MULTIACTIONBAR1BUTTONi / MULTIACTIONBAR2BUTTONi, in that B/M/T order),
+-- paged (only the bottom row is state-paged by the driver below).
 -- GridM/GridT slots (61-72, 49-60) are spec 0001 §Buttons and paging's
 -- decided fixed rows ("Bar 2"/"Bar 3", as vanilla).
 local ROWS = {
-  { key = "GridB", namePrefix = "WIIIUI_GridB", baseAction = 0, bindingPrefix = "ACTIONBUTTON" },
+  { key = "GridB", namePrefix = "WIIIUI_GridB", baseAction = 0, bindingPrefix = "ACTIONBUTTON", paged = true },
   { key = "GridM", namePrefix = "WIIIUI_GridM", baseAction = 60, bindingPrefix = "MULTIACTIONBAR1BUTTON" },
   { key = "GridT", namePrefix = "WIIIUI_GridT", baseAction = 48, bindingPrefix = "MULTIACTIONBAR2BUTTON" },
 }
 
 local header
+
+-- Ordered, first-match-wins (macro-conditional evaluation order): the driver
+-- string is derived from this list, never hand-built. `group` only decides
+-- where the driver string puts a space (a change of group), keeping the
+-- registered string byte-identical to the one validated in-game.
+-- The clause with a `class` is emitted only for that class token: spec 0001
+-- §Buttons and paging "Bottom-row state driver" (amended 2026-09-28) --
+-- [bonusbar:1,stealth] is class-agnostic (Druid Cat Form and Rogue
+-- "Stealthed" share bonus-bar offset 1,
+-- https://warcraft.wiki.gg/wiki/API_GetBonusBarOffset), so an unconditional
+-- clause would route a stealthed rogue to page 8 (empty) instead of their real
+-- stealth bar (7, the plain [bonusbar:1]7 clause). It sits before that plain
+-- clause so it wins while prowling.
+-- (The possess cond carries its own trailing space: its page is a word, the
+-- one clause whose separator is inside the condition.)
+local PAGES = {
+  { cond = "[vehicleui][possessbar][overridebar][shapeshift] ", page = "possess", group = "possess" },
+  { cond = "[bar:2]", page = 2, group = "bar" },
+  { cond = "[bar:3]", page = 3, group = "bar" },
+  { cond = "[bar:4]", page = 4, group = "bar" },
+  { cond = "[bar:5]", page = 5, group = "bar" },
+  { cond = "[bar:6]", page = 6, group = "bar" },
+  { cond = "[bonusbar:1,stealth]", page = 8, group = "bonus", class = "DRUID" },
+  { cond = "[bonusbar:1]", page = 7, group = "bonus" },
+  { cond = "[bonusbar:2]", page = 8, group = "bonus" },
+  { cond = "[bonusbar:3]", page = 9, group = "bonus" },
+  { cond = "[bonusbar:4]", page = 10, group = "bonus" },
+  { cond = "", page = 1, group = "default" },
+}
+
+-- Pages the "possess" state resolves to at runtime (ONSTATE_PAGE_SNIPPET,
+-- below), so they never appear as numbers in the driver string. Vehicle,
+-- temp-shapeshift and override are pages 16 / 17 / 18 on modern clients
+-- (Dominos Action-Bar-Mappings wiki); 13-15 are MultiBar5-7 (forever
+-- Blizzard_ActionBar/Shared/MultiActionBars.lua:6-8).
+local RUNTIME_PAGES = { vehicle = 16, tempShapeshift = 17, override = 18 }
+
+WIIIUI.Buttons.PAGES = PAGES
+WIIIUI.Buttons.RUNTIME_PAGES = RUNTIME_PAGES
 
 -- spec 0001 §Buttons and paging "Bottom-row state driver" (D3), written
 -- fresh from https://warcraft.wiki.gg/wiki/Macro_conditionals and
@@ -39,48 +79,30 @@ local header
 -- forever branch), not copied from Bartender (CLAUDE.md "Libraries").
 -- vehicleui/possessbar/overridebar/shapeshift ("the temporary shapeshift
 -- action bar is replacing the main action bar" per the wiki -- a TEMPORARY
--- form, distinct from the permanent stances/forms bonusbar:1-4 cover below)
--- all route to the runtime-resolved "possess" state (ONSTATE_PAGE_SNIPPET,
--- below); bar:2-6 are the vanilla Shift-paged bars. The exact ordering needs
--- in-game verification (Prowl, stances, vehicle) -- slice 13 Notes.
-local PAGE_STATE_PREFIX =
-  "[vehicleui][possessbar][overridebar][shapeshift] possess;"
-  .. " [bar:2]2;[bar:3]3;[bar:4]4;[bar:5]5;[bar:6]6;"
-  .. " "
-
-local PAGE_STATE_SUFFIX =
-  "[bonusbar:1]7;[bonusbar:2]8;[bonusbar:3]9;[bonusbar:4]10;"
-  .. " 1"
-
--- spec 0001 §Buttons and paging "Bottom-row state driver" (amended
--- 2026-09-28): [bonusbar:1,stealth] is class-agnostic -- Druid Cat Form and
--- Rogue "Stealthed" share bonus-bar offset 1
--- (https://warcraft.wiki.gg/wiki/API_GetBonusBarOffset), so an unconditional
--- clause would also route a stealthed rogue to page 8 (empty) instead of
--- their real stealth bar (7, the plain [bonusbar:1]7 clause). Placed before
--- that plain clause so it wins while prowling, per macro-conditional
--- first-match-wins evaluation order -- but only when buildPageStateConditional
--- (below) confirms the class is druid.
-local PROWL_CLAUSE = "[bonusbar:1,stealth]8;"
-
--- spec 0001 §Buttons and paging "Bottom-row state driver" (amended
--- 2026-09-28): the Prowl clause is druid-only, gated through WIIIUI.Safe
--- since UnitClass carries SecretWhenUnitIdentityRestricted/MayReturnNothing
--- (https://warcraft.wiki.gg/wiki/API_UnitClass) -- a secret, missing or
--- erroring classFilename degrades to the base string (no Prowl clause)
--- instead of throwing out of BuildButtons(). classFilename
--- (select(2, UnitClass("player"))) is the locale-independent upper-case
--- token, same page. Called once per BuildButtons() build (a player's class
--- never changes within a session), not cached at file scope, so the string
--- is rebuilt fresh -- and a headless test can load this file fresh per
--- UnitClass fixture.
-local function buildPageStateConditional()
-  local ok, isDruid = WIIIUI.Safe(function()
-    return select(2, UnitClass("player")) == "DRUID"
-  end)
-  local prowl = (ok and isDruid) and PROWL_CLAUSE or ""
-  return PAGE_STATE_PREFIX .. prowl .. PAGE_STATE_SUFFIX
+-- form, distinct from the permanent stances/forms bonusbar:1-4) all route to
+-- the runtime-resolved "possess" state; bar:2-6 are the vanilla Shift-paged
+-- bars. The exact ordering needs in-game verification (Prowl, stances,
+-- vehicle) -- slice 13 Notes.
+-- classToken comes from WIIIUI.PlayerClassToken (UnitClass carries
+-- SecretWhenUnitIdentityRestricted/MayReturnNothing,
+-- https://warcraft.wiki.gg/wiki/API_UnitClass): a secret, missing or
+-- erroring class degrades to nil, i.e. no class clause, instead of throwing
+-- out of BuildButtons().
+local function pageDriver(classToken)
+  local out, previous = {}, nil
+  for _, clause in ipairs(PAGES) do
+    if not clause.class or clause.class == classToken then
+      if previous and previous.group ~= clause.group then
+        out[#out] = out[#out] .. " "
+      end
+      out[#out + 1] = clause.cond .. clause.page .. (clause.cond ~= "" and ";" or "")
+      previous = clause
+    end
+  end
+  return table.concat(out)
 end
+
+WIIIUI.Buttons.PageDriver = pageDriver
 
 -- spec 0001 §Buttons and paging: "The _onstate-page snippet resolves
 -- possess at runtime with HasVehicleActionBar/GetVehicleBarIndex,
@@ -116,14 +138,23 @@ local ONSTATE_PAGE_SNIPPET = [[
 ]]
 
 -- spec 0001 §Buttons and paging: "Each bottom button gets SetState(p,
--- 'action', (p-1)*12 + i) for p = 1..N, set at build." 1-10 are the direct
--- macro-conditional states. The "possess" snippet above pages to
--- GetVehicleBarIndex / GetTempShapeshiftBarIndex / GetOverrideBarIndex, which
--- are pages 16 / 17 / 18 on modern clients (Dominos Action-Bar-Mappings wiki);
--- 13-15 are MultiBar5-7 (forever Blizzard_ActionBar/Shared/MultiActionBars.lua
--- :6-8). Covering 1..18 leaves no page without an entry, so LAB never blanks a
--- button in a vehicle, override-bar or temp-shapeshift state.
-local PAGE_COUNT = 18
+-- 'action', (p-1)*12 + i) for p = 1..N, set at build." N is the highest page
+-- the driver or the "possess" snippet can emit, iterated contiguously so no
+-- page (e.g. 11-15, which only some clients resolve to) is left without an
+-- entry: LAB would blank a button in a vehicle, override-bar or
+-- temp-shapeshift state.
+local function highestPage()
+  local highest = 0
+  for _, clause in ipairs(PAGES) do
+    if type(clause.page) == "number" and clause.page > highest then highest = clause.page end
+  end
+  for _, page in pairs(RUNTIME_PAGES) do
+    if page > highest then highest = page end
+  end
+  return highest
+end
+
+local PAGE_COUNT = highestPage()
 
 -- Fixed buttons (rows 2-3, the 9 extras) are children of the same header, so
 -- the driver's ChildUpdate("state", page) reaches them too, and LAB shows a
@@ -293,8 +324,8 @@ end
 -- right:Hide() under centerSlimNoInv never cascades to them -- unlike
 -- vanilla, where the equivalent ActionButton_CustomInventory_N buttons were
 -- parented to rightFrame and hid along with it. Mirrors applyLayoutModes'
--- own precedence (Console.lua: "centerSlimNoInv ... not centerSlim") so
--- centerSlim's per-piece hiding still wins when both flags are set. The 3
+-- own precedence (Console.LayoutMode) so centerSlim's per-piece hiding still
+-- wins when both flags are set. The 3
 -- minimap extras (i=1..3) are untouched -- centerSlimNoInv only ever hid the
 -- right/inventory side in vanilla. Runs from buildExtras alongside
 -- anchorExtras, so it's on the same "create once, refresh every
@@ -302,7 +333,7 @@ end
 -- ApplyOrQueue("layout", ...) (Core.lua), so this Show/Hide is already
 -- combat-gated with no new queue path.
 local function applyInventoryExtraVisibility(extras)
-  local hideInventory = wc3UI_Options.centerSlimNoInv and not wc3UI_Options.centerSlim
+  local hideInventory = WIIIUI.Console.LayoutMode() == "centerSlimNoInv"
 
   for i = 4, EXTRA_SLOT_COUNT do
     local button = extras[i]
@@ -349,7 +380,7 @@ function WIIIUI.Buttons.BuildButtons()
     header:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, 0)
   end
 
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
   local geometry = WIIIUI.Theme.ActionButtonGeometry(uiScale)
   local grid = WIIIUI.Console.grid
   local rowOriginY = { geometry.row1OffsetY, geometry.row2OffsetY, geometry.row3OffsetY }
@@ -362,7 +393,7 @@ function WIIIUI.Buttons.BuildButtons()
 
       for i = 1, 12 do
         local button = getOrCreateButton(row.namePrefix, i)
-        if row.key == "GridB" then
+        if row.paged then
           button:SetState(0, "action", row.baseAction + i)
         else
           applyFixedState(button, row.baseAction + i)
@@ -373,15 +404,15 @@ function WIIIUI.Buttons.BuildButtons()
       WIIIUI.Buttons.rows[row.key] = buttons
 
       -- spec 0001 §Buttons and paging "Bottom-row state driver": only
-      -- GridB is state-paged; GridM/GridT stay fixed (Bar 2/Bar 3, as
+      -- the paged row is state-paged; GridM/GridT stay fixed (Bar 2/Bar 3, as
       -- vanilla, §Buttons and paging "Grid rows"). Tied to this same
       -- build-once guard so a second WIIIUI.Layout() call neither
       -- re-registers the state driver nor duplicates the per-page
       -- SetState table.
-      if row.key == "GridB" then
+      if row.paged then
         applyPageStates(buttons)
         header:SetAttribute("_onstate-page", ONSTATE_PAGE_SNIPPET)
-        RegisterStateDriver(header, "page", buildPageStateConditional())
+        RegisterStateDriver(header, "page", pageDriver(WIIIUI.PlayerClassToken()))
       end
     end
 
@@ -539,3 +570,5 @@ end)
 WIIIUI.On("PLAYER_LOGIN", function()
   WIIIUI.ApplyOrQueue("hearthstone", WIIIUI.Buttons.PlaceHearthstone)
 end)
+
+WIIIUI.RegisterBuild("Buttons.BuildButtons", WIIIUI.Buttons.BuildButtons, { after = { "Console.BuildRight" } })

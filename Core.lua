@@ -1,54 +1,7 @@
--- spec 0001 §A.3-A.4, §Settings schema: WIIIUI namespace + defaults merge.
+-- spec 0001 §A.3-A.4, §Settings schema; spec 0006 Slice 09: WIIIUI namespace
+-- and the one settings schema.
 local ADDON, WIIIUI = ...
 _G.WIIIUI = WIIIUI
-
--- spec 0001 §Settings schema: full key set from CLAUDE.md -> Domain model,
--- plus EnableCustomize/edit_theme_settings (added to DEFAULTS) and the
--- "Set in Edit Mode" keys (kept, no control renders them). rightPartWidth
--- is intentionally absent: its default is derived from uiScale at read time.
-WIIIUI.DEFAULTS = {
-  theme = "orc",
-  uiScale = 240,
-  moveChatAreaUp = 10,
-  hpWarning = 25,
-  xpRestedXpColor = { 0, 0, 1, 0.5 },
-  weaponIconSelected1 = 16,
-  weaponIconSelected2 = "none",
-  weaponIconSelected3 = "none",
-  portraitScale = 0,
-  PortraitAlignmentX = 100,
-  PortraitAlignmentY = 100,
-  shapeshiftAuraPos = 2,
-  castbarAlignmentOption = 190,
-  HealthPercent = false,
-  PowerPercent = false,
-  MultiBarRightHorizontal = false,
-  MultiBarLeftHorizontal = false,
-  chatInputAbove = false,
-  hideGride = false,
-  HideChatArrows = false,
-  StopAnimation = false,
-  hideMicroButtons = true,
-  hideBagsAboveChatFrame = true,
-  buffTopRight = true,
-  ZoneTextPos = 1,
-  ultraWide = false,
-  centerSlim = false,
-  centerSlimNoInv = false,
-  EnableCustomize = false,
-  edit_theme_settings = {},
-}
-
--- Clamp ranges applied on load (spec 0001 §Settings schema); castbarAlignmentOption
--- is kept but unused, so it has no clamp.
-local CLAMPS = {
-  hpWarning = { 1, 99 },
-  uiScale = { 240, 270 },
-  moveChatAreaUp = { 0, 150 },
-  portraitScale = { 0, 35 },
-  PortraitAlignmentX = { 0, 200 },
-  PortraitAlignmentY = { 0, 200 },
-}
 
 local function deepCopy(value)
   if type(value) ~= "table" then
@@ -61,61 +14,236 @@ local function deepCopy(value)
   return copy
 end
 
-local function clamp(value, low, high)
-  if value < low then
-    return low
-  elseif value > high then
-    return high
+-- Owner-supplied lists (themes, info-icon ids and labels) are functions read
+-- at use time: Theme.lua and InfoIcons.lua load after this file. A function
+-- returning nil means "owner not loaded", and Validate then skips the
+-- membership check (a Core-only test; never the client).
+local function themeNames()
+  return WIIIUI.Theme and WIIIUI.Theme.NAMES
+end
+
+local function infoIconIds()
+  return WIIIUI.InfoIcons and WIIIUI.InfoIcons.OPTION_IDS
+end
+
+local function infoIconLabels()
+  return WIIIUI.InfoIcons and WIIIUI.InfoIcons.OPTION_LABELS
+end
+
+local function infoIconApply(slot)
+  return function()
+    WIIIUI.ApplyOrQueue("infoIconSlot" .. slot, function()
+      if WIIIUI.InfoIcons then
+        WIIIUI.InfoIcons.RefreshSlot(slot)
+      end
+    end)
+  end
+end
+
+-- spec 0001 §1.6 "ZoneTextPos ... depend on the spike": Blizzard.lua exposes
+-- ZoneTextAvailable(); a fixture without it keeps the live cycle control.
+local function zoneTextAvailable()
+  return not WIIIUI.Blizzard or WIIIUI.Blizzard.ZoneTextAvailable()
+end
+
+local function xpColorIsValid(value)
+  if type(value) ~= "table" or #value ~= 4 then
+    return false
+  end
+  for i = 1, 4 do
+    if type(value[i]) ~= "number" then
+      return false
+    end
+  end
+  return true
+end
+
+-- Entry: { key, default, type, range = {lo, hi} | values = list-or-fn,
+-- valueLabels = map-or-fn, validate = fn, label, control = { kind,
+-- showRange?, available?, shown?, apply? }, legacy = true }.
+-- Order = the General tab's row order, then the keys with no control, then
+-- the legacy keys. A values entry has no `type`: weaponIconSelected1..3 hold
+-- a number or "none", so membership decides. The "Set in Edit Mode" keys keep
+-- their defaults unread by any control (spec 0001 §1.6/§1.9 Q3);
+-- rightPartWidth has no entry, its default is derived from uiScale at read
+-- time. chatInputAbove, HideChatArrows and edit_theme_settings have no
+-- control (decisions.md 2026-09-30, config cleanup); "Gride" is upstream's
+-- typo, kept for save compatibility.
+local function druidBarShown()
+  return WIIIUI.Bars ~= nil and WIIIUI.Bars.IsDruid()
+end
+
+local function checkbox(key, default, label)
+  return { key = key, default = default, type = "boolean", label = label, control = { kind = "checkbox" } }
+end
+
+local function range(key, default, lo, hi, label, showRange)
+  return {
+    key = key, default = default, type = "number", range = { lo, hi }, label = label,
+    control = { kind = "editbox", showRange = showRange },
+  }
+end
+
+local function editModeNote(key, default, valueType, label)
+  return { key = key, default = default, type = valueType, label = label, control = { kind = "note" } }
+end
+
+local function infoIcon(slot, default)
+  return {
+    key = "weaponIconSelected" .. slot, default = default,
+    values = infoIconIds, valueLabels = infoIconLabels, label = "Info Icon " .. slot,
+    control = { kind = "cycle", apply = infoIconApply(slot) },
+  }
+end
+
+-- spec 0005: the only place the console size limits live. Layout rules are
+-- tuned up to TUNED_MAX; above it the console grows by the same rules and text
+-- by Theme.ExtraScale. MAX is provisional until the in-game spike fixes it.
+WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_TUNED_MAX, WIIIUI.UI_SCALE_MAX = 240, 270, 340
+
+WIIIUI.SETTINGS = {
+  { key = "theme", default = "orc", values = themeNames, label = "Theme", control = { kind = "theme" } },
+  range("uiScale", WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_MAX, "UI Scale", true),
+  range("moveChatAreaUp", 10, 0, 150, "Chat Area Height"),
+  range("portraitScale", 0, 0, 35, "Portrait Scale"),
+  range("PortraitAlignmentX", 100, 0, 200, "Portrait X"),
+  range("PortraitAlignmentY", 100, 0, 200, "Portrait Y"),
+  range("hpWarning", 25, 1, 99, "Low HP Warning %"),
+  checkbox("HealthPercent", false, "Show Health As %"),
+  checkbox("PowerPercent", false, "Show Power As %"),
+  -- spec 0002 §2: druid-only; `shown` skips the row entirely (not a note). `shown` may only go false -> true across builds (the row cache never hides a built row); a toggling condition would need a hide pass.
+  {
+    key = "druidResourceBar", default = true, type = "boolean", label = "Druid resource bar",
+    control = { kind = "checkbox", shown = druidBarShown },
+  },
+  checkbox("hideGride", false, "Hide Action Grid"),
+  checkbox("StopAnimation", false, "Stop Portrait Animation"),
+  checkbox("hideMicroButtons", true, "Hide Micro Menu"),
+  checkbox("EnableCustomize", false, "Enable Customizer"),
+  checkbox("ultraWide", false, "Ultra-Wide Mode"),
+  checkbox("centerSlim", false, "Center Slim Mode"),
+  checkbox("centerSlimNoInv", false, "Center Slim (No Inventory)"),
+  {
+    key = "ZoneTextPos", default = 1, values = { 1, 2, 3 },
+    valueLabels = { [1] = "Top", [2] = "Bottom", [3] = "Hidden" }, label = "Zone Text Position",
+    control = { kind = "cycle", available = zoneTextAvailable },
+  },
+  infoIcon(1, 16),
+  infoIcon(2, "none"),
+  infoIcon(3, "none"),
+  editModeNote("shapeshiftAuraPos", 2, "number", "Shapeshift Bar Position"),
+  editModeNote("castbarAlignmentOption", 190, "number", "Cast Bar Position"),
+  editModeNote("buffTopRight", true, "boolean", "Buffs Top Right"),
+  editModeNote("hideBagsAboveChatFrame", true, "boolean", "Bags Above Chat"),
+  editModeNote("MultiBarRightHorizontal", false, "boolean", "Right Multi-Bar Orientation"),
+  editModeNote("MultiBarLeftHorizontal", false, "boolean", "Left Multi-Bar Orientation"),
+  { key = "xpRestedXpColor", default = { 0, 0, 1, 0.5 }, type = "table", validate = xpColorIsValid },
+  { key = "chatInputAbove", default = false, type = "boolean" },
+  { key = "HideChatArrows", default = false, type = "boolean" },
+  { key = "edit_theme_settings", default = {}, type = "table" },
+  -- Legacy: no default, no control; the merge keeps them as unknown keys
+  -- (CLAUDE.md Domain model).
+  { key = "VPlus", legacy = true },
+  { key = "base_settings", legacy = true },
+  { key = "base_scale", legacy = true },
+  { key = "MiniMapBattlefieldFrameX", legacy = true },
+  { key = "MiniMapBattlefieldFrameY", legacy = true },
+}
+
+WIIIUI.Settings = { RANGES = {} }
+
+WIIIUI.DEFAULTS = {}
+local BY_KEY = {}
+for _, entry in ipairs(WIIIUI.SETTINGS) do
+  BY_KEY[entry.key] = entry
+  if entry.default ~= nil then
+    WIIIUI.DEFAULTS[entry.key] = deepCopy(entry.default)
+  end
+  if entry.range then
+    WIIIUI.Settings.RANGES[entry.key] = entry.range
+  end
+end
+
+local function listOf(source)
+  if type(source) == "function" then
+    return source()
+  end
+  return source
+end
+
+-- A fresh copy for table defaults, so callers never alias DEFAULTS.
+function WIIIUI.Settings.Default(key)
+  return deepCopy(WIIIUI.DEFAULTS[key])
+end
+
+-- Returns the canonical value, or nil to reject. Unknown and legacy keys pass
+-- through unchanged (they are kept as-is).
+function WIIIUI.Settings.Validate(key, value)
+  local entry = BY_KEY[key]
+  if not entry or entry.default == nil then
+    return value
+  end
+  if value == nil then
+    return nil
+  end
+
+  if entry.values then
+    local list = listOf(entry.values)
+    if not list then
+      return value
+    end
+    for _, member in ipairs(list) do
+      if member == value then
+        return value
+      end
+    end
+    return nil
+  end
+
+  if type(value) ~= entry.type then
+    return nil
+  end
+  if entry.range then
+    -- NaN is the only value that is not equal to itself, and it is neither
+    -- below nor above a range, so a clamp would pass it through.
+    if value ~= value then
+      return nil
+    end
+    return math.max(entry.range[1], math.min(entry.range[2], value))
+  end
+  if entry.validate and not entry.validate(value) then
+    return nil
   end
   return value
 end
 
--- spec 0001 §Settings schema: weaponIconSelected1..3 legitimately hold either
--- a number or "none", with a different-typed default per slot -- the generic
--- type(current) ~= type(value) branch below would wipe a valid cross-type
--- saved value, so these three keys validate against the allowed set instead.
-local WEAPON_ICON_KEYS = {
-  weaponIconSelected1 = true,
-  weaponIconSelected2 = true,
-  weaponIconSelected3 = true,
-}
-
-local WEAPON_ICON_VALUES = {
-  [16] = true,
-  [17] = true,
-  [18] = true,
-  [0] = true,
-  [98] = true,
-  [99] = true,
-  ["none"] = true,
-}
-
+-- Unknown keys are kept as-is; a missing, wrong-type or out-of-set key gets
+-- the default; a range key is clamped. Table defaults are deep-copied so
+-- callers never share the schema's tables.
 function WIIIUI.MergeDefaults(saved)
   local merged = {}
 
-  -- Unknown keys are kept as-is.
   for key, value in pairs(saved or {}) do
     merged[key] = value
   end
 
-  -- Missing keys are added; a wrong-type key is reset to the default.
-  -- Table defaults are deep-copied so callers never share DEFAULTS' tables.
-  for key, value in pairs(WIIIUI.DEFAULTS) do
-    local current = merged[key]
-    if WEAPON_ICON_KEYS[key] then
-      if current == nil or not WEAPON_ICON_VALUES[current] then
-        merged[key] = value
+  for _, entry in ipairs(WIIIUI.SETTINGS) do
+    if entry.default ~= nil then
+      local value = WIIIUI.Settings.Validate(entry.key, merged[entry.key])
+      if value == nil then
+        value = deepCopy(entry.default)
       end
-    elseif current == nil or type(current) ~= type(value) then
-      merged[key] = deepCopy(value)
+      merged[entry.key] = value
     end
   end
 
-  for key, range in pairs(CLAMPS) do
-    merged[key] = clamp(merged[key], range[1], range[2])
-  end
-
   return merged
+end
+
+-- spec 0005: every geometry read of the saved size goes through here, the only
+-- reader of wc3UI_Options.uiScale, so a later option B is a Theme.SizeSplit change.
+function WIIIUI.LayoutUnits()
+  return (WIIIUI.Theme.SizeSplit(wc3UI_Options.uiScale))
 end
 
 -- spec 0001 §A.3: the one apply-now-or-queue-to-PLAYER_REGEN_ENABLED seam
@@ -123,6 +251,14 @@ end
 -- WIIIUI table fields, because they are this seam's private implementation
 -- state; nothing outside ApplyOrQueue/Flush reads or writes them.
 local pending, order = {}, {}
+
+-- spec 0006 §Phase 2 Slice 04: the one error-report seam. geterrorhandler is
+-- Blizzard's own route to the Lua-error popup (API_geterrorhandler;
+-- Blizzard_SharedXMLBase/ErrorUtil.lua:3,18-19 on forever). Used as the
+-- xpcall message handler so the origin stack survives.
+local function report(err)
+  geterrorhandler()(err)
+end
 
 function WIIIUI.ApplyOrQueue(key, fn)
   if InCombatLockdown() then
@@ -132,7 +268,7 @@ function WIIIUI.ApplyOrQueue(key, fn)
     pending[key] = fn
     return false
   end
-  fn()
+  xpcall(fn, report)
   return true
 end
 
@@ -143,18 +279,98 @@ function WIIIUI.Flush()
   local runOrder, runPending = order, pending
   pending, order = {}, {}
   for _, key in ipairs(runOrder) do
-    pcall(runPending[key])
+    xpcall(runPending[key], report)
   end
 end
 
--- spec 0001 §1.2/§A.3: "The guard seam is WIIIUI.Safe(fn, ...), which
--- returns ok, result." / "WIIIUI.Safe(fn, ...) = pcall." The one
--- secret-value guard seam (CLAUDE.md "Secret-value tolerant"): every
--- HP/power-percent-text, HP-gradient, low-HP-pulse and portrait-combat-text
--- call site that might touch a secret unit value goes through this instead
--- of a bare pcall of its own.
-function WIIIUI.Safe(fn, ...)
-  return pcall(fn, ...)
+-- spec 0006 Slice 06 / Amendments item 2: the one owner of secret-value reads.
+-- issecretvalue (FrameScriptDocumentation.lua, forever branch) is called only
+-- in this table; a decision on a possibly-secret value goes through Read.
+WIIIUI.Secret = {}
+
+function WIIIUI.Secret.IsSecret(value)
+  return issecretvalue ~= nil and issecretvalue(value) == true
+end
+
+local function passThroughPlain(ok, ...)
+  if not ok then
+    return nil
+  end
+  for i = 1, select("#", ...) do
+    if WIIIUI.Secret.IsSecret((select(i, ...))) then
+      return nil
+    end
+  end
+  return ...
+end
+
+-- Returns fn's results unchanged, or a lone nil if it threw or any result is
+-- secret, so callers decide on plain values and nil takes the degrade path.
+function WIIIUI.Secret.Read(fn, ...)
+  return passThroughPlain(pcall(fn, ...))
+end
+
+-- Tiers: "cur / max" (the vanilla text), then cur alone. Each is its own
+-- pcall so a text that can't be built never reaches the caller; secrets are
+-- only concatenated and handed to SetText, never read (spec 0006 Amendments
+-- item 2: no thousands-separator tier).
+function WIIIUI.Secret.PairText(fs, cur, max)
+  if pcall(function()
+    fs:SetText(cur .. " / " .. max)
+  end) then
+    return
+  end
+  pcall(fs.SetText, fs, cur)
+end
+
+-- Lazily builds a Blizzard curve object. Only the most recent successful
+-- param is cached (a free-typed threshold must not grow the cache); a
+-- failure is cached per (param, fingerprint()), so a build that can't work
+-- isn't retried on every health event but is retried as soon as the
+-- fingerprint (a cheap existence check of what the build needs) changes.
+local NO_PARAM = {}
+
+function WIIIUI.Secret.CachedCurve(build, fingerprint)
+  local built, failedAt = {}, {}
+
+  return function(param)
+    local key = param
+    if key == nil then
+      key = NO_PARAM
+    end
+
+    if built[key] then
+      return built[key]
+    end
+
+    local current = fingerprint and fingerprint()
+    if failedAt[key] ~= nil and failedAt[key].fingerprint == current then
+      return nil
+    end
+
+    local ok, curve = pcall(build, param)
+    if ok and curve ~= nil then
+      for other in pairs(built) do
+        if other ~= key then
+          built[other] = nil
+        end
+      end
+      built[key] = curve
+      failedAt[key] = nil
+      return curve
+    end
+
+    failedAt[key] = { fingerprint = current }
+    return nil
+  end
+end
+
+-- UnitClass is SecretWhenUnitIdentityRestricted / MayReturnNothing
+-- (UnitDocumentation.lua, forever branch); nil means "unknown class".
+function WIIIUI.PlayerClassToken()
+  return WIIIUI.Secret.Read(function()
+    return (select(2, UnitClass("player")))
+  end)
 end
 
 -- spec 0001 §A.3: "WIIIUI.hider is an unnamed hidden Frame." Reused here as
@@ -180,8 +396,16 @@ local function dispatch(_, event, ...)
   if not list then
     return
   end
+  -- Closure instead of xpcall arg forwarding: plain Lua 5.1 (the test
+  -- runner) doesn't forward extra args; the client does.
+  local n, args = select("#", ...), { ... }
+  local fn
+  local function call()
+    return fn(unpack(args, 1, n))
+  end
   for i = 1, #list do
-    list[i](...)
+    fn = list[i]
+    xpcall(call, report)
   end
 end
 
@@ -203,53 +427,33 @@ function WIIIUI.On(event, fn, unit)
   handlers[event][#handlers[event] + 1] = fn
 end
 
--- spec 0001 §A.3/§Module split: "WIIIUI.Layout() orchestration" -- the
--- single public entrypoint PLAYER_LOGIN queues through
--- ApplyOrQueue("layout", WIIIUI.Layout) (§A.4). Each region file (Console.lua
--- now; Bars.lua/Portrait.lua/etc. in later phases) owns its own Build*
--- function; Core.lua only calls them, so this list grows without Core.lua
--- depending on any region file existing before it's built.
--- WIIIUI.Buttons is existence-checked (not yet another list entry) because
--- console_test.lua/bars_test.lua/events_test.lua/retire_test.lua load
--- Core/Theme/Console/Bars/Portrait without Buttons.lua and call
--- WIIIUI.Layout() directly (or override Layout to a no-op) -- same
--- existence-check convention as the retire handler below. Portrait stays
--- unconditional (slice 08): every file that calls WIIIUI.Layout() for real
--- already loads Portrait.lua alongside it.
-function WIIIUI.Layout()
-  -- spec 0001 §Customizer "Apply", second round: "Revert first ... called
-  -- in two places: first thing in WIIIUI.Layout() ... before
-  -- Console.BuildLeft." Every module's Build* then runs on uncustomized
-  -- objects, including Console's ultra-wide GetLeft/GetRight reads.
-  if WIIIUI.Customizer then
-    WIIIUI.Customizer.Revert()
-  end
+-- spec 0006 §Phase 2 Slice 04: each module registers its own Build* step at
+-- the end of its file, so the build order is TOC order and Core names no
+-- module. Steps are xpcalled in Layout() so one failing region doesn't blank
+-- the rest of the console (or the cogwheel).
+local steps, registered = {}, {}
 
-  WIIIUI.Console.BuildLeft()
-  WIIIUI.Console.BuildGrid()
-  WIIIUI.Console.BuildRight()
-  WIIIUI.Bars.BuildBars()
-  WIIIUI.Portrait.BuildPortrait()
-  if WIIIUI.Buttons then
-    WIIIUI.Buttons.BuildButtons()
+function WIIIUI.RegisterBuild(name, fn, opts)
+  opts = opts or {}
+  for _, dep in ipairs(opts.after or {}) do
+    if not registered[dep] then
+      error("WIIIUI.RegisterBuild: " .. name .. " needs " .. dep .. " registered first (TOC order)", 2)
+    end
   end
-  if WIIIUI.Blizzard then
-    WIIIUI.Blizzard.BuildMinimap()
-    WIIIUI.Blizzard.BuildMicroMenu()
-  end
-  if WIIIUI.InfoIcons then
-    WIIIUI.InfoIcons.BuildWeaponIcons()
-    WIIIUI.InfoIcons.BuildArmorIcon()
-  end
-  if WIIIUI.Config then
-    WIIIUI.Config.BuildConfig()
-  end
-  -- spec 0001 §Customizer "Apply": "WIIIUI.Customizer.Apply() is the last
-  -- step of WIIIUI.Layout()." Runs after every other Build* call above, on
-  -- the uncustomized base each of them just (re-)established, and layers
-  -- overrides on top.
-  if WIIIUI.Customizer then
-    WIIIUI.Customizer.Apply()
+  registered[name] = true
+  steps[#steps + 1] = { name = name, fn = fn, first = opts.first and true or false }
+end
+
+-- The public entrypoint PLAYER_LOGIN queues through ApplyOrQueue
+-- ("layout", WIIIUI.Layout); spec 0001 §Customizer "Apply": Revert runs
+-- first (so every Build* sees uncustomized objects) and Apply last.
+function WIIIUI.Layout()
+  for pass = 1, 2 do
+    for _, step in ipairs(steps) do
+      if step.first == (pass == 1) then
+        xpcall(step.fn, report)
+      end
+    end
   end
 end
 
@@ -305,8 +509,8 @@ end
 -- bindings are later phases, not yet built.
 -- spec 0004 §3: "12 retires the action bars through WIIIUI.Retire, so it
 -- uses 07's seam" -- WIIIUI.Buttons.RetireBlizzardBars (Buttons.lua,
--- existence-checked the same way as the Layout() call above, since
--- retire_test.lua/older tests load Core.lua alone) joins the same "retire"
+-- existence-checked, since retire_test.lua/older tests load Core.lua alone)
+-- joins the same "retire"
 -- queue key as PlayerFrame, so both apply (or queue) as one atomic unit.
 -- "bindings" is its own queue key per spec 0001 §A.4's PLAYER_LOGIN list --
 -- WIIIUI.Buttons.ApplyBindings applies the initial override bindings once at

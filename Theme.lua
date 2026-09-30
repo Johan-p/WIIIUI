@@ -5,24 +5,96 @@ local _, WIIIUI = ...
 
 WIIIUI.Theme = {}
 
-local KNOWN_THEMES = {
-  human = true,
-  orc = true,
-  undead = true,
-  nightelf = true,
-  custom1 = true,
-  custom2 = true,
-  custom3 = true,
-  custom4 = true,
-  custom5 = true,
-  custom6 = true,
-  custom7 = true,
-  custom8 = true,
+-- The one theme list, in menu order (spec 0006 Slice 09): the settings schema
+-- validates against it and Config builds one button per name.
+WIIIUI.Theme.NAMES = { "human", "orc", "undead", "nightelf" }
+
+-- The fork dropped upstream's custom1-custom8 slots (docs/decisions.md,
+-- 2026-09-30); a save that still holds one resolves to the default theme.
+
+-- The one owner of draw order (spec 0006 slice 05). `relative` levels are
+-- offsets from Console.left's own frame level: the console art shares its
+-- strata with the bars and portrait, so they must clear it explicitly. A slot
+-- with no strata leaves the frame's own (inherited) strata alone.
+WIIIUI.Layers = {
+  SLOTS = {
+    ["console.right"] = { strata = "BACKGROUND" },
+    ["console.left"] = { strata = "LOW" },
+    ["console.grid"] = { strata = "MEDIUM" },
+    ["config.hover"] = { strata = "HIGH" },
+    ["config.cogwheel"] = { strata = "DIALOG" },
+    ["config.panel"] = { strata = "DIALOG" },
+    ["portrait.overlay"] = { strata = "LOW", relative = 1 },
+    ["portrait.model"] = { strata = "LOW", relative = 2 },
+    ["portrait.button"] = { strata = "LOW", relative = 3 },
+    bars = { strata = "LOW", relative = 4 },
+    ["xp.rested"] = { strata = "LOW", relative = 4 },
+    ["xp.fill"] = { strata = "LOW", relative = 5 },
+    minimap = { strata = "LOW", level = 1 },
+    ["infoicon.border"] = { level = 10 },
+  },
 }
 
+-- Strata first, then level. A parent is applied before its children because
+-- SetFrameLevel on a parent shifts the levels of its children.
+function WIIIUI.Layers.Apply(frame, slot)
+  local entry = WIIIUI.Layers.SLOTS[slot]
+  assert(entry, "unknown Layers slot: " .. tostring(slot))
+
+  if entry.strata then
+    frame:SetFrameStrata(entry.strata)
+  end
+
+  if entry.relative then
+    local left = WIIIUI.Console and WIIIUI.Console.left
+    frame:SetFrameLevel((left and left:GetFrameLevel() or 1) + entry.relative)
+  elseif entry.level then
+    frame:SetFrameLevel(entry.level)
+  end
+end
+
+WIIIUI.Theme.FONT_PATH = "Interface\\Addons\\WIIIUI\\art\\other\\fonts\\blq55.TTF"
+
+-- CLAUDE.md "Tech stack quirks": SetFont returns success on Forever, so the
+-- font object goes first as the safety net and is re-applied when SetFont
+-- fails or GetFont confirms nothing (FontInstance:SetFontObject/GetFont,
+-- warcraft.wiki.gg).
+function WIIIUI.Theme.ApplyFont(fontString, size, fallbackObject)
+  fontString:SetFontObject(fallbackObject)
+  local applied = fontString:SetFont(WIIIUI.Theme.FONT_PATH, size, "")
+
+  if not applied or not fontString:GetFont() then
+    fontString:SetFontObject(fallbackObject)
+  end
+end
+
+-- spec 0005 §Shape: option A lays out in the saved units with no root scale.
+-- Returns (layoutUnits, rootScale); an option-B branch would cap the units.
+function WIIIUI.Theme.SizeSplit(uiScale)
+  return uiScale, 1
+end
+
+-- Text and the fixed-size text boxes grow past the size the layout was tuned
+-- at; 1 up to WIIIUI.UI_SCALE_TUNED_MAX, so saves at 240-270 look unchanged.
+function WIIIUI.Theme.ExtraScale(units)
+  return math.max(1, units / WIIIUI.UI_SCALE_TUNED_MAX)
+end
+
+-- Font sizes are whole points (fractional sizes render soft); at or below the
+-- tuned size the base is returned untouched so saved 240-270 layouts don't move.
+function WIIIUI.Theme.ScaledSize(base, units)
+  local extra = WIIIUI.Theme.ExtraScale(units)
+  if extra == 1 then
+    return base
+  end
+  return math.floor(base * extra + 0.5)
+end
+
 function WIIIUI.Theme.ResolveThemeName(theme)
-  if KNOWN_THEMES[theme] then
-    return theme
+  for _, name in ipairs(WIIIUI.Theme.NAMES) do
+    if name == theme then
+      return theme
+    end
   end
   return "orc"
 end
@@ -62,20 +134,22 @@ end
 -- is a small window, not the whole portrait art -- anchored BOTTOMLEFT to the
 -- minimap texture's BOTTOMLEFT at (uiScale*0.86 - (100 - alignX),
 -- uiScale*0.10 - (100 - alignY)), uiScale*0.27 + portraitScale square.
-function WIIIUI.Theme.PortraitModelGeometry(uiScale, portraitScale, alignX, alignY)
+function WIIIUI.Theme.PortraitModelGeometry(uiScale, portraitScale, alignX, alignY, lift)
+  lift = lift or 0
+  local width = uiScale * 0.27 + portraitScale
   return {
-    size = uiScale * 0.27 + portraitScale,
+    width = width,
+    height = width - lift,
     offsetX = uiScale * 0.86 - (100 - alignX),
-    offsetY = uiScale * 0.10 - (100 - alignY),
+    offsetY = uiScale * 0.10 + lift - (100 - alignY),
   }
 end
 
 -- Vanilla AlignActionBarUIGrid (e17c352 WIIIUI.lua ~2695-2739): the grid
 -- frame is uiScale*0.91851 square, anchored BOTTOMLEFT of extensionBackground.
 -- Slots 2-4 chain BOTTOMLEFT-to-BOTTOMRIGHT off the previous slot. Only the
--- unconditional numbers are ported here; the hideGride/nightelf
--- parent-swapping in that function is frame visibility/parenting, out of
--- scope until the grid frames themselves are built.
+-- unconditional numbers are ported here; hideGride (Console.BuildGrid) is
+-- frame visibility, not geometry.
 function WIIIUI.Theme.GridGeometry(uiScale)
   return {
     size = uiScale * 0.91851,
@@ -247,13 +321,42 @@ end
 -- uiScale*0.05 step down per slot, derived from those two known offsets so
 -- slotIndex generalizes to a later inserted bar (0002's druid "form" bar,
 -- spec 0004 §Phase-boundary) without a new hardcoded constant per bar.
-function WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
+function WIIIUI.Theme.BarGeometry(uiScale, slotIndex, slotCount, lift)
+  slotCount = slotCount or 2
+  lift = lift or 0
+  -- Slots stack from the bottom (spec 0002 §3): r = slots above this one.
+  local r = slotCount - slotIndex
+  local offsetY = uiScale * 0.02
+  if r >= 1 then
+    offsetY = offsetY + uiScale * 0.05
+  end
+  if r >= 2 then
+    offsetY = offsetY + lift
+  end
   return {
     width = uiScale * 0.27,
     height = uiScale * 0.03,
     offsetX = uiScale * -0.147,
-    offsetY = uiScale * 0.07 - (slotIndex - 1) * uiScale * 0.05,
+    offsetY = offsetY,
   }
+end
+
+-- Art px of 512 by which the druid left art raises the bars' stack, measured
+-- from the committed *_druid art by dev/scripts/make_druid_art.py (b1 - b0 per
+-- theme). A hand touch-up that changes a theme's pitch must update its value;
+-- the in-game check is the link (spec 0002 §3).
+WIIIUI.Theme.DRUID_LIFT_PX = { human = 30, orc = 26, undead = 29, nightelf = 28 }
+
+function WIIIUI.Theme.DruidLift(uiScale, theme)
+  -- A theme missing a lift entry degrades to no lift rather than erroring.
+  return uiScale * (WIIIUI.Theme.DRUID_LIFT_PX[WIIIUI.Theme.ResolveThemeName(theme)] or 0) / 512
+end
+
+function WIIIUI.Theme.LeftArtFile(base, slotCount)
+  if slotCount == 3 then
+    return base .. "_druid"
+  end
+  return base
 end
 
 -- Vanilla AlignActionBars (e17c352 WIIIUI.lua:2639-2667): button size and
@@ -297,7 +400,9 @@ function WIIIUI.Theme.ActionButtonGeometry(uiScale)
   return {
     size = size,
     columnOffsetX = columnOffsetX,
-    row1OffsetY = 5,
+    -- A fixed 5 units drifts off its art cell as the art grows past the tuned
+    -- size (spec 0005 spike, buttons_test at 340), so it scales with ExtraScale.
+    row1OffsetY = 5 * WIIIUI.Theme.ExtraScale(uiScale),
     row2OffsetY = size + uiScale * 0.0667,
     row3OffsetY = size + uiScale * 0.0667 + size + uiScale * 0.04444,
   }
@@ -371,7 +476,7 @@ end
 -- already the combined left+middle+right span (Finding 2 above). Label/value
 -- text offsets port weaponDamageText/weaponNumbersText's own anchors
 -- (BOTTOMLEFT to the icon frame's TOPLEFT); extraSpace/the uiScale<=210
--- nudge are the exact vanilla thresholds, kept even though CLAMPS' uiScale
+-- nudge are the exact vanilla thresholds, kept even though the uiScale range
 -- floor (Core.lua, 240) makes the <=210 branch unreachable today.
 local WEAPON_ICON_SLOT_OFFSETS = {
   { x = 0, y = 0 },
@@ -437,9 +542,8 @@ end
 
 -- Vanilla Minimap_ActionButtons's per-theme resize (e17c352 WIIIUI.lua:
 -- 1547-1568): only the orc/human/undead/nightelf branches set a delta; any
--- other theme name (custom1-8, or a bogus name ResolveThemeName already
--- folds to orc before this table is consulted) falls through with all three
--- deltas at 0, matching vanilla's own if/elseif chain having no `else`.
+-- other theme name (ResolveThemeName folds unknown names to orc before this
+-- table is consulted) falls through with all three deltas at 0.
 local MINIMAP_SLOT_NUDGES = {
   orc = { resize = 3, width = 2, height = 1 },
   human = { resize = 4, width = 2, height = 2 },

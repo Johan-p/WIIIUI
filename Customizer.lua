@@ -38,7 +38,11 @@ addEntry("Console.left", "frame")
 addEntry("Console.grid", "frame")
 addEntry("Console.right", "frame")
 addEntry("Bars.health", "frame")
-addEntry("Bars.power", "frame")
+-- Bars.power and Bars.mana are Show()n/Hide()n by Bars.lua's middle-bar
+-- gate from an event handler (spec 0002 §1); only power is toggled by it, but
+-- mana is hidden by Layout when the toggle turns off, which is out of combat.
+addEntry("Bars.power", "frame", { combatToggled = true })
+addEntry("Bars.mana", "frame")
 addEntry("Bars.xp", "frame", { combatToggled = true })
 addEntry("Bars.xpRested", "frame", { combatToggled = true })
 addEntry("Portrait.model", "frame")
@@ -53,33 +57,21 @@ for i = 1, 9 do
   addEntry("Buttons.extras." .. i, "button", { secure = true })
 end
 
--- texture kind (Contents table row 6): Console.lua's art textures. Grouped
--- by which Console sub-table creates them, matching Console.lua's own
--- getOrCreateTexture cache-key convention.
-addEntry("Console.left.minimapTexture", "texture")
-addEntry("Console.left.portraitTexture", "texture")
-addEntry("Console.left.extensionBackgroundTexture", "texture")
-
-for i = 1, 4 do
-  addEntry("Console.grid.tile" .. i, "texture")
-end
-
-local RIGHT_TEXTURES = {
-  "rightPartMiddle", "rightPartLeft", "lid",
-  "chatTop", "chatMiddle", "chatBottom",
-}
-for _, name in ipairs(RIGHT_TEXTURES) do
-  addEntry("Console.right." .. name, "texture")
-end
-for i = 1, 3 do
-  addEntry("Console.right.fillerTop" .. i, "texture")
-  addEntry("Console.right.fillerBottom" .. i, "texture")
+-- texture kind (Contents table row 6): Console.lua's art textures, derived
+-- from its declared piece tables (WIIIUI.Console.ART) in declaration order.
+-- The region list is explicit and static, never a walk over the frames'
+-- children, so the registry order stays deterministic.
+for _, region in ipairs({ "left", "grid", "right" }) do
+  for _, piece in ipairs(WIIIUI.Console.ART[region]) do
+    addEntry("Console." .. region .. "." .. piece.key, "texture")
+  end
 end
 
 -- fontstring kind (Contents table row 7): the two bar texts, the XP bar's
 -- level text, and each of the 4 InfoIcons slots' label/value pair.
 addEntry("Bars.health.text", "fontstring")
 addEntry("Bars.power.text", "fontstring")
+addEntry("Bars.mana.text", "fontstring")
 addEntry("Bars.xp.levelText", "fontstring")
 
 -- InfoIcons.lua's 3 weapon slots (numeric keys) plus the armor slot (string
@@ -203,9 +195,8 @@ end
 -- spec 0001 §Customizer "Apply" (amended 2026-09-29, second round): "revert,
 -- then re-apply" replaces the old "Layout re-applies anchor and size, only
 -- parent/strata/... need a baseline" model, which was false as built
--- (several objects -- Console.left.minimapTexture, Console.grid.tile1,
--- Console.right, Bars.xp.levelText, Bars.health/power.text, the InfoIcons
--- label/value heights -- are anchored/sized only when created). One rule
+-- (several objects -- Console.right, Bars.xp.levelText, Bars.health/power.text,
+-- the InfoIcons label/value heights -- are anchored/sized only when created). One rule
 -- covers every field the same way: "Just before Apply writes a field on an
 -- object, it records the object's current value in the module-local
 -- baseline[id], which is never saved." Module-local, not on WIIIUI or
@@ -304,7 +295,7 @@ local function revertOne(id, data)
     obj:SetAlpha(data.transparency)
   end
   if c.drawLayer then
-    obj:SetDrawLayer(data.drawLayer)
+    obj:SetDrawLayer(data.drawLayer[1], data.drawLayer[2])
   end
   if c.texCoord then
     local tc = data.texCoord
@@ -343,8 +334,8 @@ end
 
 -- spec 0001 §Customizer "Apply", second round: "WIIIUI.Customizer.Revert()
 -- writes back every value the customizer wrote since the last revert, then
--- empties the session baseline." Called first in WIIIUI.Layout() (Core.lua,
--- before Console.BuildLeft) and first in Apply() itself -- when Layout
+-- empties the session baseline." Registered with first = true, so WIIIUI.Layout()
+-- runs it before every other step, and called first in Apply() itself -- when Layout
 -- already reverted, the second call finds an empty baseline and does
 -- nothing.
 --
@@ -633,7 +624,7 @@ local function applyAnchor(id, obj, overrides)
     end
   end
 
-  local scale = (wc3UI_Options.uiScale or 240) / 240
+  local scale = WIIIUI.LayoutUnits() / WIIIUI.DEFAULTS.uiScale
   local newX = overrides.PosX ~= nil and (overrides.PosX * scale) or x
   local newY = overrides.PosY ~= nil and (overrides.PosY * scale) or y
 
@@ -683,7 +674,7 @@ end
 -- API_ScriptRegion_GetSize), for the overridden dimension only, matching
 -- Revert()'s per-dimension SetWidth/SetHeight above.
 local function applySize(id, obj, overrides)
-  local scale = (wc3UI_Options.uiScale or 240) / 240
+  local scale = WIIIUI.LayoutUnits() / WIIIUI.DEFAULTS.uiScale
 
   if overrides.Width ~= nil then
     local w = obj:GetSize(true)
@@ -784,8 +775,10 @@ local function applyEntry(entry, overrides)
   end
 
   if entry.kind == "texture" and overrides.SetDrawLayer ~= nil then
-    local layer = obj.GetDrawLayer and obj:GetDrawLayer()
-    capture(id, "drawLayer", layer)
+    -- Both returns: a bare layer would reset the sublayer to 0 on revert.
+    if obj.GetDrawLayer then
+      capture(id, "drawLayer", { obj:GetDrawLayer() })
+    end
     obj:SetDrawLayer(overrides.SetDrawLayer)
   end
 
@@ -1247,3 +1240,9 @@ function WIIIUI.Customizer.BuildEditor(panel)
   WIIIUI.Customizer.RefreshEditor()
   return editor
 end
+
+-- Revert runs before every Build* so each sees uncustomized objects; Apply
+-- registers last (Customizer.lua is the last TOC file) so it layers over them
+-- (spec 0001 §Customizer "Apply").
+WIIIUI.RegisterBuild("Customizer.Revert", WIIIUI.Customizer.Revert, { first = true })
+WIIIUI.RegisterBuild("Customizer.Apply", WIIIUI.Customizer.Apply)

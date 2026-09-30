@@ -67,7 +67,7 @@ end
 -- Minimap/Frame widget methods (warcraft.wiki.gg API_Frame_
 -- EnableMouseWheel, API_Minimap_SetMaskTexture -- the latter's wiki page
 -- lists Forever 1.60.1 explicitly among its confirmed client versions).
--- SetFrameStrata("LOW")/SetFrameLevel(1) right after the reparent match
+-- The "minimap" Layers slot right after the reparent matches
 -- vanilla's own AlignMinimap (e17c352 WIIIUI.lua:1817-1818) -- SetParent
 -- doesn't change a frame's own strata/level, and Minimap sets no explicit
 -- frameStrata of its own on Forever, so without this it would keep
@@ -94,13 +94,12 @@ function WIIIUI.Blizzard.BuildMinimap()
     return
   end
 
-  local uiScale = wc3UI_Options.uiScale
+  local uiScale = WIIIUI.LayoutUnits()
   local geometry = WIIIUI.Theme.MinimapGeometry(uiScale)
 
   Minimap:ClearAllPoints()
   Minimap:SetParent(left)
-  Minimap:SetFrameStrata("LOW")
-  Minimap:SetFrameLevel(1)
+  WIIIUI.Layers.Apply(Minimap, "minimap")
   Minimap:SetSize(geometry.minimapSize, geometry.minimapSize)
   Minimap:SetPoint("CENTER", minimapTexture, "CENTER", geometry.minimapOffsetX, geometry.minimapOffsetY)
   Minimap:EnableMouseWheel(true)
@@ -237,3 +236,6 @@ end
 -- §..." into UI copy (ui-reviewer finding, slice 17 gate iteration 1).
 WIIIUI.LAYOUT_STRING = "Not available in this build -- check for an addon update."
 WIIIUI.LAYOUT_BUILD = "not yet exported"
+
+WIIIUI.RegisterBuild("Blizzard.BuildMinimap", WIIIUI.Blizzard.BuildMinimap, { after = { "Console.BuildLeft" } })
+WIIIUI.RegisterBuild("Blizzard.BuildMicroMenu", WIIIUI.Blizzard.BuildMicroMenu)
