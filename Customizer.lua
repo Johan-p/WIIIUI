@@ -2,16 +2,16 @@
 -- overrides-only storage). §Customizer (decision 17, amended 2026-09-29):
 -- "an explicit, static registry ... keyed by WIIIUI table path IDs ...
 -- rather than frame names." Every entry below is one of the 57 IDs the
--- amendment's own Contents table lists, mapped 1:1 onto what slices 04-19
+-- amendment's own Contents table lists, mapped 1:1 onto what the modules
 -- actually built (Console.lua/Bars.lua/Portrait.lua/Buttons.lua/
 -- InfoIcons.lua) -- no naming pass, no edit to any of those files.
 local _, WIIIUI = ...
 
 WIIIUI.Customizer = WIIIUI.Customizer or {}
 
--- spec 0001 §Customizer: "WIIIUI.registry is this list; slice 21's parent
+-- spec 0001 §Customizer: "WIIIUI.registry is this list; the parent
 -- guardrail reads it." Top-level WIIIUI field (not WIIIUI.Customizer.*) --
--- named exactly as the spec cites it, since slice 21 depends on this name.
+-- named exactly as the spec cites it, since the parent guardrail depends on this name.
 local registry = {}
 local registryById = {}
 
@@ -216,7 +216,7 @@ end
 -- (0, false, an unset "" texture path).
 local baseline = {}
 
--- security-specialist finding (Medium), slice 20 gate-fix: reverting must
+-- Reverting must
 -- undo mutations in the REVERSE of the order they were applied -- two
 -- mutual ParentPosOf overrides (each anchored to the other's post-apply
 -- object) revert safely only in that order; pairs(baseline) gives no
@@ -240,7 +240,7 @@ local function capture(id, key, value)
   end
 end
 
--- security-specialist finding (Low), slice 20 gate-fix round 2: recorded
+-- Recorded
 -- (never saved) the same way lastErrors already records Apply()'s own
 -- per-entry pcall failures, so a revertOne failure -- in Revert() below or
 -- in revertEntry() -- is never completely silent. Reset at the start of
@@ -323,7 +323,7 @@ end
 -- than WIIIUI.Customizer.Revert(): only this one id's baseline, so a failed
 -- entry doesn't undo fields already written by earlier entries in the same
 -- Apply() loop.
--- security-specialist finding (Low), slice 20 gate-fix round 2: wrapped the
+-- Wrapped the
 -- same way Revert()'s own loop below is, for the same reason -- a bad
 -- revertOne here can't wedge this specific rollback path either. Doesn't
 -- change the caller's contract: baseline[id]/captureOrder are still cleared
@@ -349,7 +349,7 @@ end
 -- already reverted, the second call finds an empty baseline and does
 -- nothing.
 --
--- security-specialist finding (Medium), slice 20 gate-fix: walks
+-- Walks
 -- captureOrder LAST to FIRST -- the exact reverse of the order Apply()
 -- captured (== applied) each id -- so a set of mutual anchor overrides
 -- unwinds in the same order a real anchor graph mutation must: undo the
@@ -405,8 +405,7 @@ end
 -- a bad saved value skips that entry and never aborts Layout." Recorded here
 -- (never saved, id -> error message, reset at the start of every Apply()
 -- call) so a future debug session -- or a later editor polish pass -- can
--- surface which entries are currently failing, and so this slice's own
--- headless tests can prove an entry was actually skipped via a pcall
+-- surface which entries are currently failing, and so the headless tests can prove an entry was actually skipped via a pcall
 -- failure, not merely absent for an unrelated reason.
 WIIIUI.Customizer.lastErrors = {}
 
@@ -468,7 +467,7 @@ local function resolveAnchorTarget(value)
 end
 
 -- ParentOf (an actual SetParent target) is narrower: "a texture cannot be a
--- parent" (§Customizer "Parent of / Parent position of", slice 21) -- only a
+-- parent" (§Customizer "Parent of / Parent position of") -- only a
 -- frame/button registry entry, or "UIParent".
 local function resolveParentOfTarget(value)
   if value == "UIParent" then
@@ -481,7 +480,7 @@ local function resolveParentOfTarget(value)
   return WIIIUI.Customizer.Resolve(value)
 end
 
--- spec 0001 §Customizer "Parent of / Parent position of" (slice 21): a value
+-- spec 0001 §Customizer "Parent of / Parent position of": a value
 -- outside the registry (or of the wrong kind) is never an error -- it falls
 -- back to UIParent with a warning. SetOverride (below) is the normal
 -- catcher and stores "UIParent" instead; this Apply-time path only matters
@@ -662,7 +661,7 @@ end
 -- fails closed regardless), testing it in a boolean context throws the same
 -- way and the entry still rolls back -- no special-casing needed.
 --
--- security-specialist finding (Low), slice 20 gate-fix: takes the entry's
+-- Takes the entry's
 -- own id (so the message names which entry's edit was rejected, not only
 -- the combat-toggled frame that would have locked) and a single fieldName
 -- rather than choosing between two -- applyEntry below calls this once right
@@ -726,7 +725,7 @@ end
 -- spec 0001 §Customizer "Apply": "Order within one entry: parent (Hide,
 -- ParentOf), then anchor, then the protection check, then size, then
 -- texture, then strata, level, alpha, draw layer, tex coords and backdrop."
--- security-specialist finding (Low), slice 20 gate-fix: the protection
+-- The protection
 -- check now runs twice -- right after parent (ParentOf only) and right
 -- after anchor (ParentPosOf only) -- both still strictly before size, so
 -- checkCombatToggledProtection's fieldName always names the step that just
@@ -901,7 +900,7 @@ end
 -- existence-checked (absent under the headless stub, so tests stay silent)
 -- the same way every other optional Blizzard global in this codebase is.
 --
--- security-specialist finding (Low), slice 20 gate-fix round 2: the same
+-- The same
 -- before/after diff, applied to lastRevertErrors -- Apply() always calls
 -- Revert() first, so a revert failure surfaced by this same edit is no more
 -- silent than an apply failure already was.
@@ -993,15 +992,14 @@ local FIELD_ROW_HEIGHT = 16
 local FIELD_BOX_WIDTH = 90
 local FIELD_LABEL_WIDTH = 90
 
--- ui-reviewer finding (Medium), slice 20 gate-fix: an unconstrained title
+-- An unconstrained title
 -- FontString renders at natural width and can bleed into the next block --
 -- blocks sit edge-to-edge with no gap (RefreshEditor below:
 -- (blockIndex - 1) * BLOCK_WIDTH). SetWidth(BLOCK_WIDTH) + SetWordWrap(true)
 -- is the same pattern Config.lua's buildNote already uses for the same
--- reason (Config.lua's own "Width/wrap guard" comment, slice 17 gate
--- iteration 2).
+-- reason (Config.lua's own "Width/wrap guard" comment).
 --
--- ui-reviewer finding (Medium), slice 20 gate iteration 2: SetWordWrap alone
+-- SetWordWrap alone
 -- only breaks at whitespace. Every registry id is dot-separated with zero
 -- whitespace, so as one unbreakable "word" it never wrapped -- it silently
 -- truncated on line 1 instead, defeating the title reservation below.
@@ -1035,7 +1033,7 @@ local NUMERIC_FIELDS = {
   TexCoordLeft = true, TexCoordRight = true, TexCoordTop = true, TexCoordBottom = true,
 }
 
--- ui-reviewer finding (Medium), slice 20 gate-fix: a second return value,
+-- A second return value,
 -- `ok`, distinguishes "empty string -> intentionally clear" (ok = true,
 -- value = nil) from "non-empty text tonumber couldn't parse -> reject the
 -- edit" (ok = false) -- both previously collapsed to the same nil,
@@ -1104,7 +1102,7 @@ local function ensureBlock(index)
       self:SetText(row.id and row.field and fieldValueToText(WIIIUI.Customizer.GetOverride(row.id, row.field)) or "")
       self:ClearFocus()
     end)
-    -- ui-reviewer finding (Medium), slice 20 gate-fix: an unparseable
+    -- An unparseable
     -- numeric edit (ok = false) skips SetOverride entirely rather than
     -- silently clearing the field, then re-syncs the box from the actual
     -- saved state (like OnEscapePressed already does) so it never keeps
@@ -1181,7 +1179,7 @@ function WIIIUI.Customizer.RefreshEditor()
     end
   end
 
-  -- ui-reviewer finding (Low), slice 20 gate-fix: a page-count indicator,
+  -- A page-count indicator,
   -- same precedent this file's own header comment already cites
   -- (e17c352 WIIIUI.lua ~1092-1112, WIIIUI_pagesFrame's "cur / max" text) but
   -- hadn't built. One SetText call per refresh -- no OnUpdate, no new
@@ -1214,7 +1212,7 @@ function WIIIUI.Customizer.BuildEditor(panel)
       WIIIUI.Customizer.RefreshEditor()
     end)
 
-    -- ui-reviewer finding (Low), slice 20 gate-fix: "N / max" page-count
+    -- "N / max" page-count
     -- indicator, bottom-center of the editor (vanilla's own WIIIUI_pagesFrame
     -- placement, e17c352 WIIIUI.lua ~1101: SetPoint("BOTTOM", 0, -30)).
     -- Whether a tall block's own field rows (a texture entry's own
@@ -1228,7 +1226,7 @@ function WIIIUI.Customizer.BuildEditor(panel)
     pageIndicator:SetText(editor.page .. " / " .. pageCount())
     editor.pageIndicator = pageIndicator
 
-    -- slice 21: Reset (spec 0001 §Customizer "Storage"). Bottom-right of
+    -- Reset (spec 0001 §Customizer "Storage"). Bottom-right of
     -- the editor: the blocks fill the top-left (3 x BLOCK_WIDTH wide, one
     -- block tall) and the page indicator sits bottom-center, so neither
     -- overlaps this corner. In-game only: visual clearance at real font

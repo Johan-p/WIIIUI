@@ -418,6 +418,7 @@ local function refreshCalendar()
   if not (calendar and day) then
     return
   end
+  P.calendarDay = day
 
   local up = string.format(CALENDAR_ATLAS, day, "up")
   if _G.C_Texture and _G.C_Texture.GetAtlasInfo and _G.C_Texture.GetAtlasInfo(up) then
@@ -528,15 +529,19 @@ end
 
 -- The one OnUpdate-style exception (spec 0007 §3.4): no event carries the
 -- time, and Blizzard's own clock ticks at 1 s for the same reason
--- (Blizzard_TimeManager.lua:352-361). Idle while the clock is hidden.
+-- (Blizzard_TimeManager.lua:352-361). The calendar day is checked on its own
+-- visibility so a hidden clock doesn't leave a stale day; the clock text idles
+-- while hidden.
 local function tick()
+  local calendar = P.calendar
+  if calendar and calendar:IsVisible() and currentMonthDay() ~= P.calendarDay then
+    refreshCalendar()
+  end
   local clock = P.clock
   if not (clock and clock:IsVisible()) then
     return
   end
-  if refreshClock() then
-    refreshCalendar()
-  end
+  refreshClock()
 end
 
 local function ensureClock(parent)
