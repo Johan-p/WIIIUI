@@ -12,6 +12,7 @@ Bars.lua
 Portrait.lua
 Buttons.lua
 Blizzard.lua
+MinimapPieces.lua
 InfoIcons.lua
 Config.lua
 Customizer.lua
