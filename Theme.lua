@@ -138,8 +138,6 @@ function WIIIUI.Theme.PortraitModelGeometry(uiScale, portraitScale, alignX, alig
   lift = lift or 0
   local width = uiScale * 0.27 + portraitScale
   return {
-    -- size stays until Portrait.lua reads width/height (spec 0002 slice 03).
-    size = width,
     width = width,
     height = width - lift,
     offsetX = uiScale * 0.86 - (100 - alignX),

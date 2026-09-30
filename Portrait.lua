@@ -700,9 +700,10 @@ function WIIIUI.Portrait.BuildPortrait()
     uiScale,
     wc3UI_Options.portraitScale,
     wc3UI_Options.PortraitAlignmentX,
-    wc3UI_Options.PortraitAlignmentY
+    wc3UI_Options.PortraitAlignmentY,
+    WIIIUI.Bars.SlotCount() == 3 and WIIIUI.Theme.DruidLift(uiScale, wc3UI_Options.theme) or 0
   )
-  model:SetSize(modelGeometry.size, modelGeometry.size)
+  model:SetSize(modelGeometry.width, modelGeometry.height)
   model:ClearAllPoints()
   if minimapAnchor then
     model:SetPoint("BOTTOMLEFT", minimapAnchor, "BOTTOMLEFT", modelGeometry.offsetX, modelGeometry.offsetY)

@@ -50,7 +50,7 @@ local HEALTH_BAR_DEFAULT_COLOR_R, HEALTH_BAR_DEFAULT_COLOR_G, HEALTH_BAR_DEFAULT
 -- Vanilla AlignHealthMana (e17c352 WIIIUI.lua:1999, 2018): health text at
 -- font size 10, power text at 9, same theme font as the rest of the console
 -- (CLAUDE.md "the look is the specification").
-local FONT_SIZES = { health = 10, power = 9 }
+local FONT_SIZES = { health = 10, power = 9, mana = 9 }
 
 -- spec 0002 §1 layout gate: class and toggle only, never form. PlayerClassToken
 -- yields nil for an unknown, secret or erroring class; only a plain token is
@@ -78,11 +78,16 @@ function WIIIUI.Bars.SlotCount()
   return 2
 end
 
--- spec 0004 §Phase-boundary "0002 druid resource bar": "(1) Bars.lua builds
--- bars from a list { "health", "power" } with a slotIndex." 0002 inserts
--- "form" between them; kept as an ordered list (not two hardcoded blocks)
--- so that insertion only touches this line, not BuildBars' body.
-local BAR_DEFS = { "health", "power" }
+-- spec 0002 §4: the slot list follows SlotCount(); mana exists only in the
+-- druid layout, so a non-druid never builds it.
+local builtSlotCount = 2
+
+local function barDefs()
+  if WIIIUI.Bars.SlotCount() == 3 then
+    return { "health", "power", "mana" }
+  end
+  return { "health", "power" }
+end
 
 -- Vanilla xpCurrLevel (e17c352 WIIIUI.lua:2213: SetFont(..., 12, "")).
 local LEVEL_TEXT_FONT_SIZE = 12
@@ -107,19 +112,28 @@ local function setHealthText(bar)
   WIIIUI.Secret.PairText(bar.text, UnitHealth("player"), UnitHealthMax("player"))
 end
 
+-- Enum.PowerType.Mana, with the documented literal 0 as the fallback when the
+-- enum is missing (spec 0002 §1).
+local function manaPowerType()
+  return Enum and Enum.PowerType and Enum.PowerType.Mana or 0
+end
+
 -- spec 0001 §1.2: "Power % text (PowerPercent) ... Same with
 -- UnitPowerPercent('player', nil, false, CurveConstants.ScaleTo100)."
-local function setPowerText(bar)
+-- spec 0002 §4: `powerType` is nil for the primary power (today's call) and
+-- Enum.PowerType.Mana for the druid mana bar; the values go only to
+-- SetText/concatenation, never compared.
+local function setPowerText(bar, powerType)
   if wc3UI_Options.PowerPercent then
     local ok = pcall(function()
-      bar.text:SetFormattedText("%.0f%%", UnitPowerPercent("player", nil, false, CurveConstants.ScaleTo100))
+      bar.text:SetFormattedText("%.0f%%", UnitPowerPercent("player", powerType, false, CurveConstants.ScaleTo100))
     end)
     if ok then
       return
     end
   end
 
-  WIIIUI.Secret.PairText(bar.text, UnitPower("player"), UnitPowerMax("player"))
+  WIIIUI.Secret.PairText(bar.text, UnitPower("player", powerType), UnitPowerMax("player", powerType))
 end
 
 -- spec 0001 §1.2: "HP gradient ... One ColorCurve built at login: 0 -> red,
@@ -208,6 +222,45 @@ local function updatePower()
   if color then
     bar:SetStatusBarColor(color.r, color.g, color.b, 1)
   end
+
+  -- spec 0002 §1 middle-bar gate: in the druid layout the power bar shows
+  -- whatever the main resource is, unless that is mana (the mana bar below
+  -- already shows it). Show/Hide, not SetAlpha, so the customizer's
+  -- Transparency isn't fought; Bars.power carries combatToggled for it.
+  -- Gated on what BuildBars built, not the live SlotCount(): the class token
+  -- or toggle can change between a queued Layout and this event.
+  if builtSlotCount == 3 then
+    local powerType = UnitPowerType("player")
+    if powerType == nil then
+      bar:Hide()
+    elseif not WIIIUI.Secret.IsSecret(powerType) then
+      if powerType ~= manaPowerType() then
+        bar:Show()
+      else
+        bar:Hide()
+      end
+    end
+  end
+end
+
+local function updateMana()
+  local bar = WIIIUI.Bars.mana
+  if not bar or not bar:IsShown() then
+    return
+  end
+
+  local manaType = manaPowerType()
+  bar:SetMinMaxValues(0, UnitPowerMax("player", manaType))
+  bar:SetValue(UnitPower("player", manaType))
+
+  if bar.text then
+    setPowerText(bar, manaType)
+  end
+end
+
+local function updatePowerBars()
+  updatePower()
+  updateMana()
 end
 
 -- spec 0001 §Phased plan "C4 XP bar + tracking-bar starve/hide". Builds two
@@ -329,7 +382,12 @@ function WIIIUI.Bars.BuildBars()
   local left = WIIIUI.Console.left
   local minimapTexture = left and left.minimapTexture
 
-  for slotIndex, key in ipairs(BAR_DEFS) do
+  local defs = barDefs()
+  local slotCount = #defs
+  builtSlotCount = slotCount
+  local lift = slotCount == 3 and WIIIUI.Theme.DruidLift(uiScale, wc3UI_Options.theme) or 0
+
+  for slotIndex, key in ipairs(defs) do
     local bar = WIIIUI.Bars[key]
 
     if not bar then
@@ -343,13 +401,30 @@ function WIIIUI.Bars.BuildBars()
 
     WIIIUI.Theme.ApplyFont(bar.text, WIIIUI.Theme.ScaledSize(FONT_SIZES[key], uiScale), GameFontHighlightSmall)
 
-    local geometry = WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
+    local geometry = WIIIUI.Theme.BarGeometry(uiScale, slotIndex, slotCount, lift)
 
     -- Same strata as the left console art, so the level must clear it (fix6 B5).
     WIIIUI.Layers.Apply(bar, "bars")
     bar:SetSize(geometry.width, geometry.height)
     bar:ClearAllPoints()
     bar:SetPoint("BOTTOMLEFT", minimapTexture, "BOTTOMRIGHT", geometry.offsetX, geometry.offsetY)
+  end
+
+  local mana = WIIIUI.Bars.mana
+  if slotCount == 3 then
+    -- PowerBarColor is a Blizzard global (spec 0002 §4); blue as the fallback.
+    local color = PowerBarColor and PowerBarColor.MANA
+    if color then
+      mana:SetStatusBarColor(color.r, color.g, color.b, 1)
+    else
+      mana:SetStatusBarColor(0, 0, 1, 1)
+    end
+    mana:Show()
+  else
+    if mana then
+      mana:Hide()
+    end
+    WIIIUI.Bars.power:Show()
   end
 
   WIIIUI.Bars.health:SetStatusBarColor(
@@ -362,7 +437,7 @@ function WIIIUI.Bars.BuildBars()
   buildXPBar(left and left.portraitTexture, uiScale)
 
   updateHealth()
-  updatePower()
+  updatePowerBars()
   updateXP()
 end
 
@@ -373,9 +448,14 @@ end
 -- Build* convention.
 WIIIUI.On("UNIT_HEALTH", updateHealth, "player")
 WIIIUI.On("UNIT_MAXHEALTH", updateHealth, "player")
-WIIIUI.On("UNIT_POWER_UPDATE", updatePower, "player")
-WIIIUI.On("UNIT_MAXPOWER", updatePower, "player")
-WIIIUI.On("UNIT_DISPLAYPOWER", updatePower, "player")
+-- UNIT_POWER_FREQUENT alone: same payload as UNIT_POWER_UPDATE, fires on every
+-- change and more often while regenerating; registering both repaints twice.
+WIIIUI.On("UNIT_POWER_FREQUENT", updatePowerBars, "player")
+WIIIUI.On("UNIT_MAXPOWER", updatePowerBars, "player")
+WIIIUI.On("UNIT_DISPLAYPOWER", updatePowerBars, "player")
+-- No payload, so a plain registration; InfoIcons registers it the same way,
+-- and WIIIUI.On rejects one event under two unit filters (spec 0002 §1.2).
+WIIIUI.On("UPDATE_SHAPESHIFT_FORM", updatePowerBars)
 
 -- PLAYER_XP_UPDATE/UPDATE_EXHAUSTION/PLAYER_LEVEL_UP are plain RegisterEvent
 -- calls, not RegisterUnitEvent, despite this file's other events using the

@@ -21,11 +21,20 @@ WIIIUI.Console = WIIIUI.Console or {}
 --   to     "$parent" | "UIParent" | sibling key on the same parent | fn() -> region
 --   x, y   offset: number, or a field name of geos[geo]; nil is 0
 -- Order is creation order and the Customizer's registry order.
+-- The druid layout swaps the minimap/portrait pair for the three-trough art
+-- (spec 0002 §3). WIIIUI.Bars loads after Console but exists by Layout time.
+local function leftArt(file)
+  return function(theme)
+    local slotCount = WIIIUI.Bars and WIIIUI.Bars.SlotCount() or 2
+    return WIIIUI.Theme.TexturePath(theme, "minimap_portrait", WIIIUI.Theme.LeftArtFile(file, slotCount))
+  end
+end
+
 local LEFT_PIECES = {
   { key = "minimapTexture", layer = "ARTWORK", geo = "minimap", w = "frameSize", h = "frameSize",
-    tex = { "minimap_portrait", "minimap" }, point = "BOTTOM", to = "$parent", rel = "BOTTOM" },
+    tex = leftArt("minimap"), point = "BOTTOM", to = "$parent", rel = "BOTTOM" },
   { key = "portraitTexture", layer = "BORDER", geo = "portrait", w = "size", h = "size",
-    tex = { "minimap_portrait", "portrait" }, point = "BOTTOMLEFT", to = "minimapTexture", rel = "BOTTOMRIGHT",
+    tex = leftArt("portrait"), point = "BOTTOMLEFT", to = "minimapTexture", rel = "BOTTOMRIGHT",
     x = "anchorOffsetX", y = "anchorOffsetY" },
   { key = "extensionBackgroundTexture", layer = "BACKGROUND", geo = "extensionBackground", w = "width", h = "height",
     tex = "Interface\\Addons\\WIIIUI\\art\\other\\black_background", point = "BOTTOMLEFT", to = "portraitTexture",

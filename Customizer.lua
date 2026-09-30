@@ -38,7 +38,11 @@ addEntry("Console.left", "frame")
 addEntry("Console.grid", "frame")
 addEntry("Console.right", "frame")
 addEntry("Bars.health", "frame")
-addEntry("Bars.power", "frame")
+-- Bars.power and Bars.mana are Show()n/Hide()n by Bars.lua's middle-bar
+-- gate from an event handler (spec 0002 §1); only power is toggled by it, but
+-- mana is hidden by Layout when the toggle turns off, which is out of combat.
+addEntry("Bars.power", "frame", { combatToggled = true })
+addEntry("Bars.mana", "frame")
 addEntry("Bars.xp", "frame", { combatToggled = true })
 addEntry("Bars.xpRested", "frame", { combatToggled = true })
 addEntry("Portrait.model", "frame")
@@ -67,6 +71,7 @@ end
 -- level text, and each of the 4 InfoIcons slots' label/value pair.
 addEntry("Bars.health.text", "fontstring")
 addEntry("Bars.power.text", "fontstring")
+addEntry("Bars.mana.text", "fontstring")
 addEntry("Bars.xp.levelText", "fontstring")
 
 -- InfoIcons.lua's 3 weapon slots (numeric keys) plus the armor slot (string
