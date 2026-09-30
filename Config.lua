@@ -535,11 +535,9 @@ local LAYOUT_STRING_BOX_WIDTH = 300
 local LAYOUT_STRING_BOX_HEIGHT = 20
 
 local function layoutStringValue()
-  -- Same player-facing wording as Blizzard.lua's own placeholder (ui-reviewer
-  -- finding, slice 17 gate iteration 1) -- this fallback only renders when
-  -- WIIIUI.LAYOUT_STRING is nil (never true once Blizzard.lua loads, but a
-  -- test fixture that builds this control table without loading Blizzard.lua
-  -- reaches it, per config_test.lua). No internal doc pointer, no
+  -- Fallback wording for when Blizzard.lua isn't loaded (WIIIUI.LAYOUT_STRING
+  -- nil): only test fixtures that build this control table without it reach
+  -- it (config_test.lua). Player-facing: no internal doc pointer, no
   -- instruction to edit the read-only box it's displayed in.
   return WIIIUI.LAYOUT_STRING or "Not available in this build -- check for an addon update."
 end
@@ -598,9 +596,8 @@ local function ensureLayoutStringBox(panel, x, y)
   widget.box:ClearAllPoints()
   widget.box:SetPoint("TOPLEFT", panel, "TOPLEFT", x + LABEL_COLUMN_WIDTH, y)
 
-  -- Re-sync on every call, matching every other Build* row: once the
-  -- maintainer's real export replaces the Blizzard.lua placeholder, the box
-  -- must show it without needing a fresh widget.
+  -- Re-sync on every call, like every other Build* row, so a changed
+  -- LAYOUT_STRING shows without needing a fresh widget.
   if widget.box:GetText() ~= layoutStringValue() then
     widget.box:SetText(layoutStringValue())
   end
