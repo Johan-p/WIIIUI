@@ -134,11 +134,16 @@ end
 -- is a small window, not the whole portrait art -- anchored BOTTOMLEFT to the
 -- minimap texture's BOTTOMLEFT at (uiScale*0.86 - (100 - alignX),
 -- uiScale*0.10 - (100 - alignY)), uiScale*0.27 + portraitScale square.
-function WIIIUI.Theme.PortraitModelGeometry(uiScale, portraitScale, alignX, alignY)
+function WIIIUI.Theme.PortraitModelGeometry(uiScale, portraitScale, alignX, alignY, lift)
+  lift = lift or 0
+  local width = uiScale * 0.27 + portraitScale
   return {
-    size = uiScale * 0.27 + portraitScale,
+    -- size stays until Portrait.lua reads width/height (spec 0002 slice 03).
+    size = width,
+    width = width,
+    height = width - lift,
     offsetX = uiScale * 0.86 - (100 - alignX),
-    offsetY = uiScale * 0.10 - (100 - alignY),
+    offsetY = uiScale * 0.10 + lift - (100 - alignY),
   }
 end
 
@@ -318,13 +323,41 @@ end
 -- uiScale*0.05 step down per slot, derived from those two known offsets so
 -- slotIndex generalizes to a later inserted bar (0002's druid "form" bar,
 -- spec 0004 §Phase-boundary) without a new hardcoded constant per bar.
-function WIIIUI.Theme.BarGeometry(uiScale, slotIndex)
+function WIIIUI.Theme.BarGeometry(uiScale, slotIndex, slotCount, lift)
+  slotCount = slotCount or 2
+  lift = lift or 0
+  -- Slots stack from the bottom (spec 0002 §3): r = slots above this one.
+  local r = slotCount - slotIndex
+  local offsetY = uiScale * 0.02
+  if r >= 1 then
+    offsetY = offsetY + uiScale * 0.05
+  end
+  if r >= 2 then
+    offsetY = offsetY + lift
+  end
   return {
     width = uiScale * 0.27,
     height = uiScale * 0.03,
     offsetX = uiScale * -0.147,
-    offsetY = uiScale * 0.07 - (slotIndex - 1) * uiScale * 0.05,
+    offsetY = offsetY,
   }
+end
+
+-- PROVISIONAL art px of 512 by which the druid left art raises the bars'
+-- stack; slice 02 replaces these and they must match the committed
+-- *_druid art (spec 0002 §3).
+WIIIUI.Theme.DRUID_LIFT_PX = { orc = 26, human = 31, undead = 30, nightelf = 29 }
+
+function WIIIUI.Theme.DruidLift(uiScale, theme)
+  -- A theme missing a lift entry degrades to no lift rather than erroring.
+  return uiScale * (WIIIUI.Theme.DRUID_LIFT_PX[WIIIUI.Theme.ResolveThemeName(theme)] or 0) / 512
+end
+
+function WIIIUI.Theme.LeftArtFile(base, slotCount)
+  if slotCount == 3 then
+    return base .. "_druid"
+  end
+  return base
 end
 
 -- Vanilla AlignActionBars (e17c352 WIIIUI.lua:2639-2667): button size and

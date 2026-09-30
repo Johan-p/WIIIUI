@@ -52,6 +52,32 @@ local HEALTH_BAR_DEFAULT_COLOR_R, HEALTH_BAR_DEFAULT_COLOR_G, HEALTH_BAR_DEFAULT
 -- (CLAUDE.md "the look is the specification").
 local FONT_SIZES = { health = 10, power = 9 }
 
+-- spec 0002 §1 layout gate: class and toggle only, never form. PlayerClassToken
+-- yields nil for an unknown, secret or erroring class; only a plain token is
+-- cached, so an early unknown read is retried.
+local isDruidCache
+local function isDruid()
+  if isDruidCache == nil then
+    local token = WIIIUI.PlayerClassToken()
+    if token == nil then
+      return false
+    end
+    isDruidCache = token == "DRUID"
+  end
+  return isDruidCache
+end
+
+function WIIIUI.Bars.IsDruid()
+  return isDruid()
+end
+
+function WIIIUI.Bars.SlotCount()
+  if isDruid() and wc3UI_Options and wc3UI_Options.druidResourceBar then
+    return 3
+  end
+  return 2
+end
+
 -- spec 0004 §Phase-boundary "0002 druid resource bar": "(1) Bars.lua builds
 -- bars from a list { "health", "power" } with a slotIndex." 0002 inserts
 -- "form" between them; kept as an ordered list (not two hardcoded blocks)
