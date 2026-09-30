@@ -60,7 +60,7 @@ end
 
 -- Entry: { key, default, type, range = {lo, hi} | values = list-or-fn,
 -- valueLabels = map-or-fn, validate = fn, label, control = { kind,
--- showRange?, available?, apply? }, legacy = true }.
+-- showRange?, available?, shown?, apply? }, legacy = true }.
 -- Order = the General tab's row order, then the keys with no control, then
 -- the legacy keys. A values entry has no `type`: weaponIconSelected1..3 hold
 -- a number or "none", so membership decides. The "Set in Edit Mode" keys keep
@@ -69,6 +69,10 @@ end
 -- time. chatInputAbove, HideChatArrows and edit_theme_settings have no
 -- control (decisions.md 2026-09-30, config cleanup); "Gride" is upstream's
 -- typo, kept for save compatibility.
+local function druidBarShown()
+  return WIIIUI.Bars ~= nil and WIIIUI.Bars.IsDruid()
+end
+
 local function checkbox(key, default, label)
   return { key = key, default = default, type = "boolean", label = label, control = { kind = "checkbox" } }
 end
@@ -107,6 +111,11 @@ WIIIUI.SETTINGS = {
   range("hpWarning", 25, 1, 99, "Low HP Warning %"),
   checkbox("HealthPercent", false, "Show Health As %"),
   checkbox("PowerPercent", false, "Show Power As %"),
+  -- spec 0002 §2: druid-only; `shown` skips the row entirely (not a note). `shown` may only go false -> true across builds (the row cache never hides a built row); a toggling condition would need a hide pass.
+  {
+    key = "druidResourceBar", default = true, type = "boolean", label = "Druid resource bar",
+    control = { kind = "checkbox", shown = druidBarShown },
+  },
   checkbox("hideGride", false, "Hide Action Grid"),
   checkbox("StopAnimation", false, "Stop Portrait Animation"),
   checkbox("hideMicroButtons", true, "Hide Micro Menu"),
@@ -131,8 +140,6 @@ WIIIUI.SETTINGS = {
   { key = "xpRestedXpColor", default = { 0, 0, 1, 0.5 }, type = "table", validate = xpColorIsValid },
   { key = "chatInputAbove", default = false, type = "boolean" },
   { key = "HideChatArrows", default = false, type = "boolean" },
-  -- spec 0002 §2: no control until the Config row lands.
-  { key = "druidResourceBar", default = true, type = "boolean" },
   { key = "edit_theme_settings", default = {}, type = "table" },
   -- Legacy: no default, no control; the merge keeps them as unknown keys
   -- (CLAUDE.md Domain model).

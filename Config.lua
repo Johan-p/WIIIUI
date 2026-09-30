@@ -65,6 +65,7 @@ local function makeRow(entry)
     kind = control.kind,
     label = entry.label,
     available = control.available,
+    shown = control.shown,
     apply = control.apply,
   }
   if control.kind == "note" then
@@ -639,7 +640,8 @@ function WIIIUI.Config.BuildConfig()
 
   for _, row in ipairs(WIIIUI.Config.CONTROLS) do
     local build = isNoteRow(row) and WIIIUI.Config.BUILDERS.note or WIIIUI.Config.BUILDERS[row.kind]
-    if build then
+    -- A row whose shown() fails isn't rendered at all; unlike `available`, no note. shown may only go false -> true (built rows are never hidden); a toggling condition needs a hide pass.
+    if build and not (row.shown and not row.shown()) then
       y = y - build(content, row, ROW_X, y)
     end
   end
