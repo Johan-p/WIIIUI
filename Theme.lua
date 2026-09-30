@@ -31,6 +31,7 @@ WIIIUI.Layers = {
     ["xp.rested"] = { strata = "LOW", relative = 4 },
     ["xp.fill"] = { strata = "LOW", relative = 5 },
     minimap = { strata = "LOW", level = 1 },
+    ["minimap.piece"] = { strata = "LOW", relative = 3 },
     ["infoicon.border"] = { level = 10 },
   },
 }
@@ -69,7 +70,8 @@ function WIIIUI.Theme.ApplyFont(fontString, size, fallbackObject)
 end
 
 -- spec 0005 §Shape: option A lays out in the saved units with no root scale.
--- Returns (layoutUnits, rootScale); an option-B branch would cap the units.
+-- Returns (layoutUnits, rootScale). Option B (a root scale) was not needed:
+-- measured in-game 2026-09-30, so this stays the identity.
 function WIIIUI.Theme.SizeSplit(uiScale)
   return uiScale, 1
 end
@@ -401,7 +403,7 @@ function WIIIUI.Theme.ActionButtonGeometry(uiScale)
     size = size,
     columnOffsetX = columnOffsetX,
     -- A fixed 5 units drifts off its art cell as the art grows past the tuned
-    -- size (spec 0005 spike, buttons_test at 340), so it scales with ExtraScale.
+    -- size (spec 0005 spike), so it scales with ExtraScale.
     row1OffsetY = 5 * WIIIUI.Theme.ExtraScale(uiScale),
     row2OffsetY = size + uiScale * 0.0667,
     row3OffsetY = size + uiScale * 0.0667 + size + uiScale * 0.04444,
@@ -437,15 +439,6 @@ function WIIIUI.Theme.XPBarGeometry(uiScale)
     anchorOffsetY = uiScale * 0.3,
   }
 end
-
--- ZoneTextGeometry/MailIndicatorGeometry (vanilla AlignZoneText/AlignMinimap's
--- mail block, e17c352 WIIIUI.lua:1834-1837, 1878-1889) were deleted here --
--- their only caller, Blizzard.lua's BuildZoneText/BuildMailIndicator, was
--- confirmed dead code (MinimapZoneTextButton/MiniMapMailFrame don't exist as
--- globals on Forever or retail, Blizzard.lua's header comment) and deleted
--- too. Revive both, geometry and build function together, if a follow-up
--- reaches the real nested frames through the shipped Edit Mode layout
--- string.
 
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
@@ -632,4 +625,48 @@ function WIIIUI.Theme.ExtraSlotGeometry(uiScale, theme, i)
     return inventorySlotGeometry(uiScale, i - 3)
   end
   return nil
+end
+
+-- spec 0007 §3.5: every offset is relative to minimapTexture's CENTER, in the
+-- layout units, so the pieces follow the console through resize and the
+-- centring modes. Mail continues the art's side column onto its fourth square
+-- (the extras' rule, nudges included); tracking is vanilla's own centre, which
+-- lands in the art's round hole in all four themes (spec 0007 §1.5).
+function WIIIUI.Theme.MinimapPieceGeometry(uiScale, theme)
+  local m = WIIIUI.Theme.MinimapGeometry(uiScale)
+  local top = m.minimapOffsetY + m.minimapSize / 2
+  local bottom = m.minimapOffsetY - m.minimapSize / 2
+  local right = m.minimapOffsetX + m.minimapSize / 2
+
+  return {
+    mail = minimapSlotGeometry(uiScale, theme, 4),
+    tracking = {
+      point = "CENTER",
+      relativePoint = "CENTER",
+      offsetX = m.trackingOffsetX,
+      offsetY = m.trackingOffsetY,
+      size = uiScale * 0.07,
+    },
+    zone = {
+      point = "CENTER",
+      relativePoint = "CENTER",
+      offsetX = m.minimapOffsetX,
+      offsetY = top + uiScale * 0.03,
+      width = m.minimapSize,
+    },
+    clock = {
+      point = "BOTTOM",
+      relativePoint = "CENTER",
+      offsetX = m.minimapOffsetX,
+      offsetY = bottom + uiScale * 0.01,
+      width = m.minimapSize,
+    },
+    calendar = {
+      point = "TOPRIGHT",
+      relativePoint = "CENTER",
+      offsetX = right - uiScale * 0.01,
+      offsetY = top - uiScale * 0.01,
+      size = uiScale * 0.075,
+    },
+  }
 end

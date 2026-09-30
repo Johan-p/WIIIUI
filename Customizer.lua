@@ -91,6 +91,16 @@ for _, slot in ipairs(INFO_ICON_SLOTS) do
   addEntry("InfoIcons." .. slot .. ".value", "fontstring")
 end
 
+-- spec 0007 §6: plain frame, no flag -- Show/Hide happens only inside Layout
+-- and the events only recolour, so it isn't combatToggled.
+addEntry("MinimapPieces.mail", "frame")
+addEntry("MinimapPieces.tracking", "frame")
+addEntry("MinimapPieces.zone", "frame")
+addEntry("MinimapPieces.zone.text", "fontstring")
+addEntry("MinimapPieces.clock", "frame")
+addEntry("MinimapPieces.clock.text", "fontstring")
+addEntry("MinimapPieces.calendar", "frame")
+
 WIIIUI.registry = registry
 WIIIUI.Customizer.byId = registryById
 
