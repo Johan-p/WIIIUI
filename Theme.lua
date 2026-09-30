@@ -5,12 +5,9 @@ local _, WIIIUI = ...
 
 WIIIUI.Theme = {}
 
-local KNOWN_THEMES = {
-  human = true,
-  orc = true,
-  undead = true,
-  nightelf = true,
-}
+-- The one theme list, in menu order (spec 0006 Slice 09): the settings schema
+-- validates against it and Config builds one button per name.
+WIIIUI.Theme.NAMES = { "human", "orc", "undead", "nightelf" }
 
 -- The fork dropped upstream's custom1-custom8 slots (docs/decisions.md,
 -- 2026-09-30); a save that still holds one resolves to the default theme.
@@ -72,8 +69,10 @@ function WIIIUI.Theme.ApplyFont(fontString, size, fallbackObject)
 end
 
 function WIIIUI.Theme.ResolveThemeName(theme)
-  if KNOWN_THEMES[theme] then
-    return theme
+  for _, name in ipairs(WIIIUI.Theme.NAMES) do
+    if name == theme then
+      return theme
+    end
   end
   return "orc"
 end
@@ -421,7 +420,7 @@ end
 -- already the combined left+middle+right span (Finding 2 above). Label/value
 -- text offsets port weaponDamageText/weaponNumbersText's own anchors
 -- (BOTTOMLEFT to the icon frame's TOPLEFT); extraSpace/the uiScale<=210
--- nudge are the exact vanilla thresholds, kept even though CLAMPS' uiScale
+-- nudge are the exact vanilla thresholds, kept even though the uiScale range
 -- floor (Core.lua, 240) makes the <=210 branch unreachable today.
 local WEAPON_ICON_SLOT_OFFSETS = {
   { x = 0, y = 0 },

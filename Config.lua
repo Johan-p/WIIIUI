@@ -22,182 +22,79 @@ WIIIUI.Config.labels = WIIIUI.Config.labels or {}
 -- is not).
 local COGWHEEL_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\cogwheel"
 
--- Same 4 names as Theme.lua's KNOWN_THEMES; duplicated locally rather than
--- exporting a list from Theme.lua for this one caller (no other file needs
--- an enumerable theme list yet).
-local THEME_LIST = {
-  "human", "orc", "undead", "nightelf",
-}
-
-local ZONE_TEXT_POS_LABELS = { [1] = "Top", [2] = "Bottom", [3] = "Hidden" }
-
--- Display labels for every control-table row below (checkbox/editbox/cycle
--- rows show these next to their widget; note rows show these before the
--- "Set in Edit Mode" suffix).
-local LABELS = {
-  theme = "Theme",
-  uiScale = "UI Scale (240-270)",
-  moveChatAreaUp = "Chat Area Height",
-  portraitScale = "Portrait Scale",
-  PortraitAlignmentX = "Portrait X",
-  PortraitAlignmentY = "Portrait Y",
-  hpWarning = "Low HP Warning %",
-  HealthPercent = "Show Health As %",
-  PowerPercent = "Show Power As %",
-  hideGride = "Hide Action Grid",
-  StopAnimation = "Stop Portrait Animation",
-  hideMicroButtons = "Hide Micro Menu",
-  EnableCustomize = "Enable Customizer",
-  ultraWide = "Ultra-Wide Mode",
-  centerSlim = "Center Slim Mode",
-  centerSlimNoInv = "Center Slim (No Inventory)",
-  ZoneTextPos = "Zone Text Position",
-  weaponIconSelected1 = "Info Icon 1",
-  weaponIconSelected2 = "Info Icon 2",
-  weaponIconSelected3 = "Info Icon 3",
-  shapeshiftAuraPos = "Shapeshift Bar Position",
-  castbarAlignmentOption = "Cast Bar Position",
-  buffTopRight = "Buffs Top Right",
-  hideBagsAboveChatFrame = "Bags Above Chat",
-  MultiBarRightHorizontal = "Right Multi-Bar Orientation",
-  MultiBarLeftHorizontal = "Left Multi-Bar Orientation",
-}
-
-local function label(key)
-  return LABELS[key] or key
-end
-
-local function clamp(value, min, max)
-  if value < min then
-    return min
-  elseif value > max then
-    return max
+-- spec 0006 Slice 09: every row is derived from an entry of WIIIUI.SETTINGS
+-- (Core.lua) that has a `control`; the schema owns key, label, range and value
+-- lists, so nothing here restates them. The 6 "Set in Edit Mode" rows never
+-- render a control (spec 0001 §1.6/§1.9 Q3); their keys stay readable and
+-- writable in wc3UI_Options for whatever later code wants them.
+local function listOf(source)
+  if type(source) == "function" then
+    return source()
   end
-  return value
+  return source
 end
 
-local function makeBoolControl(key)
-  return {
-    key = key,
-    kind = "checkbox",
-    get = function() return wc3UI_Options[key] end,
-    set = function(value) wc3UI_Options[key] = value and true or false end,
-  }
-end
-
-local function makeRangeControl(key, min, max)
-  return {
-    key = key,
-    kind = "editbox",
-    min = min,
-    max = max,
-    get = function() return wc3UI_Options[key] end,
-    set = function(value)
-      local number = tonumber(value)
-      -- tonumber("nan") returns a float that is neither < min nor > max, so
-      -- clamp() would pass it through unchanged (security-specialist
-      -- finding, slice 06 gate iteration 1). NaN is the only Lua value for
-      -- which self-equality is false; reject it the same way a
-      -- non-numeric string is already rejected below.
-      if number and number == number then
-        wc3UI_Options[key] = clamp(number, min, max)
+local function makeSet(entry)
+  local key, kind = entry.key, entry.control.kind
+  if kind == "editbox" then
+    -- The edit box hands over text: a non-number or NaN is rejected by
+    -- Validate (or tonumber) and leaves the stored value untouched.
+    return function(value)
+      local valid = WIIIUI.Settings.Validate(key, tonumber(value))
+      if valid ~= nil then
+        wc3UI_Options[key] = valid
       end
-    end,
+    end
+  end
+  return function(value)
+    if kind == "checkbox" then
+      value = value and true or false
+    end
+    local valid = WIIIUI.Settings.Validate(key, value)
+    if valid == nil then
+      valid = WIIIUI.Settings.Default(key)
+    end
+    wc3UI_Options[key] = valid
+  end
+end
+
+local function makeRow(entry)
+  local control = entry.control
+  local row = {
+    key = entry.key,
+    kind = control.kind,
+    label = entry.label,
+    available = control.available,
+    apply = control.apply,
   }
+  if control.kind == "note" then
+    row.editMode = true
+  else
+    row.get = function() return wc3UI_Options[entry.key] end
+    row.set = makeSet(entry)
+  end
+  if entry.range then
+    row.min, row.max = entry.range[1], entry.range[2]
+    if control.showRange then
+      row.label = entry.label .. " (" .. row.min .. "-" .. row.max .. ")"
+    end
+  end
+  if control.kind == "cycle" then
+    -- The info-icon lists come from InfoIcons.lua; if that file didn't load they
+    -- resolve to nil, and the row degrades to an inert cycle rather than
+    -- failing the whole menu. The schema test pins that every entry supplies them.
+    row.values = listOf(entry.values) or {}
+    row.valueLabels = listOf(entry.valueLabels) or {}
+  end
+  return row
 end
 
--- e17c352 ChangeWeaponIcon (WIIIUI.lua:5243): store the choice, then
--- re-align that one icon. InfoIcons.RefreshSlot redraws just that slot; it goes
--- through ApplyOrQueue like every frame change. InfoIcons.lua loads before this
--- file (TOC order), so its option lists exist at file scope.
-local function makeInfoIconControl(slotIndex)
-  local key = "weaponIconSelected" .. slotIndex
-  return {
-    key = key,
-    kind = "cycle",
-    values = WIIIUI.InfoIcons.OPTION_IDS,
-    valueLabels = WIIIUI.InfoIcons.OPTION_LABELS,
-    get = function() return wc3UI_Options[key] end,
-    set = function(value)
-      -- Same fallback as MergeDefaults and InfoIcons.ResolveOption: the
-      -- slot's own default (16 for slot 1), not "none".
-      if WIIIUI.InfoIcons.OPTION_LABELS[value] == nil then
-        value = WIIIUI.DEFAULTS[key]
-      end
-      wc3UI_Options[key] = value
-    end,
-    apply = function()
-      WIIIUI.ApplyOrQueue("infoIconSlot" .. slotIndex, function()
-        WIIIUI.InfoIcons.RefreshSlot(slotIndex)
-      end)
-    end,
-  }
+WIIIUI.Config.CONTROLS = {}
+for _, entry in ipairs(WIIIUI.SETTINGS) do
+  if entry.control then
+    WIIIUI.Config.CONTROLS[#WIIIUI.Config.CONTROLS + 1] = makeRow(entry)
+  end
 end
-
-local function makeNoteControl(key)
-  return { key = key, kind = "note", editMode = true }
-end
-
--- spec 0001 §1.6/§1.9 Q3: "Hidden in the config menu with a one-line 'Set in
--- Edit Mode' note; SV keys kept." -- these 6 rows never render a control;
--- their keys stay readable/writable in wc3UI_Options for whatever later
--- code (0003+, a restored feature) still wants them, exactly as DEFAULTS
--- keeps them (Core.lua).
-WIIIUI.Config.CONTROLS = {
-  {
-    key = "theme",
-    kind = "theme",
-    get = function() return wc3UI_Options.theme end,
-    set = function(value) wc3UI_Options.theme = WIIIUI.Theme.ResolveThemeName(value) end,
-  },
-  makeRangeControl("uiScale", 240, 270),
-  makeRangeControl("moveChatAreaUp", 0, 150),
-  makeRangeControl("portraitScale", 0, 35),
-  makeRangeControl("PortraitAlignmentX", 0, 200),
-  makeRangeControl("PortraitAlignmentY", 0, 200),
-  makeRangeControl("hpWarning", 1, 99),
-  makeBoolControl("HealthPercent"),
-  makeBoolControl("PowerPercent"),
-  makeBoolControl("hideGride"),
-  makeBoolControl("StopAnimation"),
-  makeBoolControl("hideMicroButtons"),
-  makeBoolControl("EnableCustomize"),
-  makeBoolControl("ultraWide"),
-  makeBoolControl("centerSlim"),
-  makeBoolControl("centerSlimNoInv"),
-  {
-    key = "ZoneTextPos",
-    kind = "cycle",
-    values = { 1, 2, 3 },
-    -- spec 0001 §1.6 "ZoneTextPos ... depend on the spike": Blizzard.lua
-    -- (slice 15) exposes WIIIUI.Blizzard.ZoneTextAvailable(), the Phase E
-    -- in-game check for this control (§1.9 Q3: "any of ... ZoneTextPos ...
-    -- that fails its in-game check joins the same treatment"). Blizzard.lua
-    -- isn't loaded by every test fixture that builds this control table
-    -- (config_test.lua's own), so this stays a live cycle control there --
-    -- only a real client (or a test that loads Blizzard.lua too) sees the
-    -- degrade.
-    available = function()
-      return not WIIIUI.Blizzard or WIIIUI.Blizzard.ZoneTextAvailable()
-    end,
-    get = function() return wc3UI_Options.ZoneTextPos end,
-    set = function(value)
-      if value ~= 1 and value ~= 2 and value ~= 3 then
-        value = 1
-      end
-      wc3UI_Options.ZoneTextPos = value
-    end,
-  },
-  makeInfoIconControl(1),
-  makeInfoIconControl(2),
-  makeInfoIconControl(3),
-  makeNoteControl("shapeshiftAuraPos"),
-  makeNoteControl("castbarAlignmentOption"),
-  makeNoteControl("buffTopRight"),
-  makeNoteControl("hideBagsAboveChatFrame"),
-  makeNoteControl("MultiBarRightHorizontal"),
-  makeNoteControl("MultiBarLeftHorizontal"),
-}
 
 -- spec 0001 §1.6: "each control-table row ... carries editMode = true
 -- (static) or available = fn (in-game-check result); the menu renders such a
@@ -229,7 +126,7 @@ local function ensureLabel(panel, row, x, y)
   end
   text:ClearAllPoints()
   text:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
-  text:SetText(label(row.key))
+  text:SetText(row.label)
   return text
 end
 
@@ -271,6 +168,7 @@ local function buildCheckbox(panel, row, x, y)
   cb:ClearAllPoints()
   cb:SetPoint("TOPLEFT", panel, "TOPLEFT", x + LABEL_COLUMN_WIDTH, y)
   cb:SetChecked(row.get())
+  return ROW_HEIGHT
 end
 
 local function buildEditbox(panel, row, x, y)
@@ -304,12 +202,12 @@ local function buildEditbox(panel, row, x, y)
   eb:ClearAllPoints()
   eb:SetPoint("TOPLEFT", panel, "TOPLEFT", x + LABEL_COLUMN_WIDTH, y)
   eb:SetText(tostring(row.get()))
+  return ROW_HEIGHT
 end
 
 local function cycleButtonText(row)
   local value = row.get()
-  local labels = row.valueLabels or ZONE_TEXT_POS_LABELS
-  return label(row.key) .. ": " .. (labels[value] or tostring(value))
+  return row.label .. ": " .. (row.valueLabels[value] or tostring(value))
 end
 
 local function buildCycle(panel, row, x, y)
@@ -334,6 +232,7 @@ local function buildCycle(panel, row, x, y)
   btn:ClearAllPoints()
   btn:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
   btn:SetText(cycleButtonText(row))
+  return ROW_HEIGHT
 end
 
 local THEME_COLUMNS = 4
@@ -344,7 +243,7 @@ local function buildTheme(panel, row, x, y)
   local buttons = WIIIUI.Config.widgets[row.key]
   if not buttons then
     buttons = {}
-    for i, name in ipairs(THEME_LIST) do
+    for i, name in ipairs(WIIIUI.Theme.NAMES) do
       local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
       btn:SetSize(THEME_BUTTON_WIDTH - 6, THEME_BUTTON_HEIGHT)
       btn:SetText(name)
@@ -365,7 +264,7 @@ local function buildTheme(panel, row, x, y)
   end
 
   local lines = math.ceil(#buttons / THEME_COLUMNS)
-  return lines * THEME_BUTTON_HEIGHT
+  return lines * THEME_BUTTON_HEIGHT + 6
 end
 
 -- spec 0001 §1.6: every "Set in Edit Mode" row (the fixed 6 plus any
@@ -412,7 +311,7 @@ local function buildNote(panel, row, x, y)
 
   note:ClearAllPoints()
   note:SetPoint("TOPLEFT", panel, "TOPLEFT", x, y)
-  note:SetText(label(row.key) .. editModeNoteSuffix())
+  note:SetText(row.label .. editModeNoteSuffix())
 
   -- Row height: at least the fixed single-line ROW_HEIGHT every other row
   -- uses (so short notes keep vanilla's exact row spacing), or the wrapped
@@ -420,6 +319,16 @@ local function buildNote(panel, row, x, y)
   -- line.
   return math.max(ROW_HEIGHT, note:GetHeight() + 6)
 end
+
+-- Each builder places its row and returns the row's height; BuildConfig picks
+-- one by kind (a row whose `available` fails is a note).
+WIIIUI.Config.BUILDERS = {
+  checkbox = buildCheckbox,
+  editbox = buildEditbox,
+  cycle = buildCycle,
+  theme = buildTheme,
+  note = buildNote,
+}
 
 -- UIPanelScrollFrameTemplate anchors its scrollbar 6px right of the scroll
 -- frame's own right edge (Gethe/wow-ui-source forever branch,
@@ -729,21 +638,9 @@ function WIIIUI.Config.BuildConfig()
   local y = CONTENT_START_Y
 
   for _, row in ipairs(WIIIUI.Config.CONTROLS) do
-    if isNoteRow(row) then
-      local height = buildNote(content, row, ROW_X, y)
-      y = y - height
-    elseif row.kind == "checkbox" then
-      buildCheckbox(content, row, ROW_X, y)
-      y = y - ROW_HEIGHT
-    elseif row.kind == "editbox" then
-      buildEditbox(content, row, ROW_X, y)
-      y = y - ROW_HEIGHT
-    elseif row.kind == "cycle" then
-      buildCycle(content, row, ROW_X, y)
-      y = y - ROW_HEIGHT
-    elseif row.kind == "theme" then
-      local height = buildTheme(content, row, ROW_X, y)
-      y = y - height - 6
+    local build = isNoteRow(row) and WIIIUI.Config.BUILDERS.note or WIIIUI.Config.BUILDERS[row.kind]
+    if build then
+      y = y - build(content, row, ROW_X, y)
     end
   end
 

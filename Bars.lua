@@ -215,23 +215,9 @@ local function buildXPBar(anchor, uiScale)
 
   local geometry = WIIIUI.Theme.XPBarGeometry(uiScale)
 
-  -- Finding 7 (ui-reviewer, gate-fix): validate shape before handing to
-  -- SetStatusBarColor -- MergeDefaults only checks xpRestedXpColor is a
-  -- table, not that it holds 4 numbers, so a hand-edited SavedVariable like
-  -- {} would otherwise reach SetStatusBarColor(nil, ...) and throw, aborting
-  -- the rest of the build steps' input (a throw here is xpcalled per step,
-  -- but this bar would not be built). Falls back to
-  -- WIIIUI.DEFAULTS.xpRestedXpColor, matching CLAUDE.md's "degrade to
-  -- hidden rather than wrong" spirit for corrupted saved data.
+  -- MergeDefaults resets a malformed colour to the default (spec 0006 Slice
+  -- 09), so the saved table always holds 4 numbers here.
   local restColor = wc3UI_Options.xpRestedXpColor
-  if
-    type(restColor) ~= "table"
-    or type(restColor[1]) ~= "number"
-    or type(restColor[2]) ~= "number"
-    or type(restColor[3]) ~= "number"
-  then
-    restColor = WIIIUI.DEFAULTS.xpRestedXpColor
-  end
   rested:SetStatusBarColor(restColor[1], restColor[2], restColor[3], restColor[4])
 
   -- Both bars share UIParent, and warcraft.wiki.gg's UI_rendering_process

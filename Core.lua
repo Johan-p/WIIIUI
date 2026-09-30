@@ -1,57 +1,7 @@
--- spec 0001 §A.3-A.4, §Settings schema: WIIIUI namespace + defaults merge.
+-- spec 0001 §A.3-A.4, §Settings schema; spec 0006 Slice 09: WIIIUI namespace
+-- and the one settings schema.
 local ADDON, WIIIUI = ...
 _G.WIIIUI = WIIIUI
-
--- spec 0001 §Settings schema: full key set from CLAUDE.md -> Domain model,
--- plus EnableCustomize/edit_theme_settings (added to DEFAULTS) and the
--- "Set in Edit Mode" keys (kept, no control renders them). rightPartWidth
--- is intentionally absent: its default is derived from uiScale at read time.
-WIIIUI.DEFAULTS = {
-  theme = "orc",
-  uiScale = 240,
-  moveChatAreaUp = 10,
-  hpWarning = 25,
-  xpRestedXpColor = { 0, 0, 1, 0.5 },
-  weaponIconSelected1 = 16,
-  weaponIconSelected2 = "none",
-  weaponIconSelected3 = "none",
-  portraitScale = 0,
-  PortraitAlignmentX = 100,
-  PortraitAlignmentY = 100,
-  shapeshiftAuraPos = 2,
-  castbarAlignmentOption = 190,
-  HealthPercent = false,
-  PowerPercent = false,
-  MultiBarRightHorizontal = false,
-  MultiBarLeftHorizontal = false,
-  -- Legacy keys: no control and no reader, kept so old saves stay valid
-  -- (decisions.md 2026-09-30, config cleanup).
-  chatInputAbove = false,
-  -- "Gride" is upstream's typo, kept for save compatibility.
-  hideGride = false,
-  HideChatArrows = false,
-  StopAnimation = false,
-  hideMicroButtons = true,
-  hideBagsAboveChatFrame = true,
-  buffTopRight = true,
-  ZoneTextPos = 1,
-  ultraWide = false,
-  centerSlim = false,
-  centerSlimNoInv = false,
-  EnableCustomize = false,
-  edit_theme_settings = {},
-}
-
--- Clamp ranges applied on load (spec 0001 §Settings schema); castbarAlignmentOption
--- is kept but unused, so it has no clamp.
-local CLAMPS = {
-  hpWarning = { 1, 99 },
-  uiScale = { 240, 270 },
-  moveChatAreaUp = { 0, 150 },
-  portraitScale = { 0, 35 },
-  PortraitAlignmentX = { 0, 200 },
-  PortraitAlignmentY = { 0, 200 },
-}
 
 local function deepCopy(value)
   if type(value) ~= "table" then
@@ -64,71 +14,213 @@ local function deepCopy(value)
   return copy
 end
 
-local function clamp(value, low, high)
-  if value < low then
-    return low
-  elseif value > high then
-    return high
+-- Owner-supplied lists (themes, info-icon ids and labels) are functions read
+-- at use time: Theme.lua and InfoIcons.lua load after this file. A function
+-- returning nil means "owner not loaded", and Validate then skips the
+-- membership check (a Core-only test; never the client).
+local function themeNames()
+  return WIIIUI.Theme and WIIIUI.Theme.NAMES
+end
+
+local function infoIconIds()
+  return WIIIUI.InfoIcons and WIIIUI.InfoIcons.OPTION_IDS
+end
+
+local function infoIconLabels()
+  return WIIIUI.InfoIcons and WIIIUI.InfoIcons.OPTION_LABELS
+end
+
+local function infoIconApply(slot)
+  return function()
+    WIIIUI.ApplyOrQueue("infoIconSlot" .. slot, function()
+      if WIIIUI.InfoIcons then
+        WIIIUI.InfoIcons.RefreshSlot(slot)
+      end
+    end)
+  end
+end
+
+-- spec 0001 §1.6 "ZoneTextPos ... depend on the spike": Blizzard.lua exposes
+-- ZoneTextAvailable(); a fixture without it keeps the live cycle control.
+local function zoneTextAvailable()
+  return not WIIIUI.Blizzard or WIIIUI.Blizzard.ZoneTextAvailable()
+end
+
+local function xpColorIsValid(value)
+  if type(value) ~= "table" or #value ~= 4 then
+    return false
+  end
+  for i = 1, 4 do
+    if type(value[i]) ~= "number" then
+      return false
+    end
+  end
+  return true
+end
+
+-- Entry: { key, default, type, range = {lo, hi} | values = list-or-fn,
+-- valueLabels = map-or-fn, validate = fn, label, control = { kind,
+-- showRange?, available?, apply? }, legacy = true }.
+-- Order = the General tab's row order, then the keys with no control, then
+-- the legacy keys. A values entry has no `type`: weaponIconSelected1..3 hold
+-- a number or "none", so membership decides. The "Set in Edit Mode" keys keep
+-- their defaults unread by any control (spec 0001 §1.6/§1.9 Q3);
+-- rightPartWidth has no entry, its default is derived from uiScale at read
+-- time. chatInputAbove, HideChatArrows and edit_theme_settings have no
+-- control (decisions.md 2026-09-30, config cleanup); "Gride" is upstream's
+-- typo, kept for save compatibility.
+local function checkbox(key, default, label)
+  return { key = key, default = default, type = "boolean", label = label, control = { kind = "checkbox" } }
+end
+
+local function range(key, default, lo, hi, label, showRange)
+  return {
+    key = key, default = default, type = "number", range = { lo, hi }, label = label,
+    control = { kind = "editbox", showRange = showRange },
+  }
+end
+
+local function editModeNote(key, default, valueType, label)
+  return { key = key, default = default, type = valueType, label = label, control = { kind = "note" } }
+end
+
+local function infoIcon(slot, default)
+  return {
+    key = "weaponIconSelected" .. slot, default = default,
+    values = infoIconIds, valueLabels = infoIconLabels, label = "Info Icon " .. slot,
+    control = { kind = "cycle", apply = infoIconApply(slot) },
+  }
+end
+
+WIIIUI.SETTINGS = {
+  { key = "theme", default = "orc", values = themeNames, label = "Theme", control = { kind = "theme" } },
+  range("uiScale", 240, 240, 270, "UI Scale", true),
+  range("moveChatAreaUp", 10, 0, 150, "Chat Area Height"),
+  range("portraitScale", 0, 0, 35, "Portrait Scale"),
+  range("PortraitAlignmentX", 100, 0, 200, "Portrait X"),
+  range("PortraitAlignmentY", 100, 0, 200, "Portrait Y"),
+  range("hpWarning", 25, 1, 99, "Low HP Warning %"),
+  checkbox("HealthPercent", false, "Show Health As %"),
+  checkbox("PowerPercent", false, "Show Power As %"),
+  checkbox("hideGride", false, "Hide Action Grid"),
+  checkbox("StopAnimation", false, "Stop Portrait Animation"),
+  checkbox("hideMicroButtons", true, "Hide Micro Menu"),
+  checkbox("EnableCustomize", false, "Enable Customizer"),
+  checkbox("ultraWide", false, "Ultra-Wide Mode"),
+  checkbox("centerSlim", false, "Center Slim Mode"),
+  checkbox("centerSlimNoInv", false, "Center Slim (No Inventory)"),
+  {
+    key = "ZoneTextPos", default = 1, values = { 1, 2, 3 },
+    valueLabels = { [1] = "Top", [2] = "Bottom", [3] = "Hidden" }, label = "Zone Text Position",
+    control = { kind = "cycle", available = zoneTextAvailable },
+  },
+  infoIcon(1, 16),
+  infoIcon(2, "none"),
+  infoIcon(3, "none"),
+  editModeNote("shapeshiftAuraPos", 2, "number", "Shapeshift Bar Position"),
+  editModeNote("castbarAlignmentOption", 190, "number", "Cast Bar Position"),
+  editModeNote("buffTopRight", true, "boolean", "Buffs Top Right"),
+  editModeNote("hideBagsAboveChatFrame", true, "boolean", "Bags Above Chat"),
+  editModeNote("MultiBarRightHorizontal", false, "boolean", "Right Multi-Bar Orientation"),
+  editModeNote("MultiBarLeftHorizontal", false, "boolean", "Left Multi-Bar Orientation"),
+  { key = "xpRestedXpColor", default = { 0, 0, 1, 0.5 }, type = "table", validate = xpColorIsValid },
+  { key = "chatInputAbove", default = false, type = "boolean" },
+  { key = "HideChatArrows", default = false, type = "boolean" },
+  { key = "edit_theme_settings", default = {}, type = "table" },
+  -- Legacy: no default, no control; the merge keeps them as unknown keys
+  -- (CLAUDE.md Domain model).
+  { key = "VPlus", legacy = true },
+  { key = "base_settings", legacy = true },
+  { key = "base_scale", legacy = true },
+  { key = "MiniMapBattlefieldFrameX", legacy = true },
+  { key = "MiniMapBattlefieldFrameY", legacy = true },
+}
+
+WIIIUI.Settings = { RANGES = {} }
+
+WIIIUI.DEFAULTS = {}
+local BY_KEY = {}
+for _, entry in ipairs(WIIIUI.SETTINGS) do
+  BY_KEY[entry.key] = entry
+  if entry.default ~= nil then
+    WIIIUI.DEFAULTS[entry.key] = deepCopy(entry.default)
+  end
+  if entry.range then
+    WIIIUI.Settings.RANGES[entry.key] = entry.range
+  end
+end
+
+local function listOf(source)
+  if type(source) == "function" then
+    return source()
+  end
+  return source
+end
+
+-- A fresh copy for table defaults, so callers never alias DEFAULTS.
+function WIIIUI.Settings.Default(key)
+  return deepCopy(WIIIUI.DEFAULTS[key])
+end
+
+-- Returns the canonical value, or nil to reject. Unknown and legacy keys pass
+-- through unchanged (they are kept as-is).
+function WIIIUI.Settings.Validate(key, value)
+  local entry = BY_KEY[key]
+  if not entry or entry.default == nil then
+    return value
+  end
+  if value == nil then
+    return nil
+  end
+
+  if entry.values then
+    local list = listOf(entry.values)
+    if not list then
+      return value
+    end
+    for _, member in ipairs(list) do
+      if member == value then
+        return value
+      end
+    end
+    return nil
+  end
+
+  if type(value) ~= entry.type then
+    return nil
+  end
+  if entry.range then
+    -- NaN is the only value that is not equal to itself, and it is neither
+    -- below nor above a range, so a clamp would pass it through.
+    if value ~= value then
+      return nil
+    end
+    return math.max(entry.range[1], math.min(entry.range[2], value))
+  end
+  if entry.validate and not entry.validate(value) then
+    return nil
   end
   return value
 end
 
--- spec 0001 §Settings schema: weaponIconSelected1..3 legitimately hold either
--- a number or "none", with a different-typed default per slot -- the generic
--- type(current) ~= type(value) branch below would wipe a valid cross-type
--- saved value, so these keys validate against InfoIcons.OPTION_IDS instead
--- (spec 0006 Slice 07: the option list has one owner). Read at merge time:
--- ADDON_LOADED fires after every file has loaded.
-local function isWeaponIconKey(key)
-  return key:find("^weaponIconSelected%d$") ~= nil
-end
-
-local function optionSet()
-  local ids = WIIIUI.InfoIcons and WIIIUI.InfoIcons.OPTION_IDS
-  if not ids then
-    return nil
-  end
-  local set = {}
-  for _, id in ipairs(ids) do
-    set[id] = true
-  end
-  return set
-end
-
+-- Unknown keys are kept as-is; a missing, wrong-type or out-of-set key gets
+-- the default; a range key is clamped. Table defaults are deep-copied so
+-- callers never share the schema's tables.
 function WIIIUI.MergeDefaults(saved)
   local merged = {}
 
-  -- Unknown keys are kept as-is.
   for key, value in pairs(saved or {}) do
     merged[key] = value
   end
 
-  -- Missing keys are added; a wrong-type key is reset to the default.
-  -- Table defaults are deep-copied so callers never share DEFAULTS' tables.
-  -- Without InfoIcons loaded (a Core-only test; never in the client) there is
-  -- no option list, so a set value is kept as-is and only a missing one is
-  -- defaulted.
-  local validOptions = optionSet()
-  for key, value in pairs(WIIIUI.DEFAULTS) do
-    local current = merged[key]
-    if isWeaponIconKey(key) then
-      if current == nil or (validOptions and not validOptions[current]) then
-        merged[key] = value
+  for _, entry in ipairs(WIIIUI.SETTINGS) do
+    if entry.default ~= nil then
+      local value = WIIIUI.Settings.Validate(entry.key, merged[entry.key])
+      if value == nil then
+        value = deepCopy(entry.default)
       end
-    elseif current == nil or type(current) ~= type(value) then
-      merged[key] = deepCopy(value)
+      merged[entry.key] = value
     end
-  end
-
-  -- Custom-theme slots were dropped; any theme name Theme doesn't know
-  -- (customN, hand-edited) becomes the default. Theme.lua loads after this
-  -- file but MergeDefaults only runs at ADDON_LOADED.
-  if WIIIUI.Theme and WIIIUI.Theme.ResolveThemeName then
-    merged.theme = WIIIUI.Theme.ResolveThemeName(merged.theme)
-  end
-
-  for key, range in pairs(CLAMPS) do
-    merged[key] = clamp(merged[key], range[1], range[2])
   end
 
   return merged
