@@ -273,9 +273,8 @@ end
 -- shipped layout string places -- so the note now names the constant that
 -- backs it (WIIIUI.LAYOUT_BUILD, Blizzard.lua) instead of a bare "set in
 -- Edit Mode" with no pointer to where. Blizzard.lua isn't loaded by every
--- test fixture that builds this control table (config_test.lua's own, same
--- reasoning as the ZoneTextPos `available` field above), so this falls back
--- to a plain string there -- only a real client (or a test that loads
+-- test fixture that builds this control table (config_test.lua's own), so
+-- this falls back to a plain string there -- only a real client (or a test that loads
 -- Blizzard.lua too) sees the build number.
 local function editModeNoteSuffix()
   return " -- set in Edit Mode (WIIIUI's layout string, build " .. (WIIIUI.LAYOUT_BUILD or "not yet exported") .. ")"
@@ -481,8 +480,7 @@ end
 -- on its panel." Two plain buttons; ShowTab shows the General scroll frame
 -- or the Customize tab's own frame (WIIIUI.Customizer.editor, built and
 -- owned by Customizer.lua) and hides the other. Existence-checked on
--- WIIIUI.Customizer throughout, the same convention Config.lua already uses
--- for WIIIUI.Blizzard's ZoneTextPos `available` field -- config_test.lua
+-- WIIIUI.Customizer throughout -- config_test.lua
 -- loads Config.lua without Customizer.lua, so the Customize tab is built
 -- (and clickable) only once Customizer.lua is also loaded; clicking it
 -- before that is a harmless no-op (WIIIUI.Config.ShowTab's own guard).

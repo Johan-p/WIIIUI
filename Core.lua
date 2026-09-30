@@ -40,12 +40,6 @@ local function infoIconApply(slot)
   end
 end
 
--- spec 0001 §1.6 "ZoneTextPos ... depend on the spike": Blizzard.lua exposes
--- ZoneTextAvailable(); a fixture without it keeps the live cycle control.
-local function zoneTextAvailable()
-  return not WIIIUI.Blizzard or WIIIUI.Blizzard.ZoneTextAvailable()
-end
-
 local function xpColorIsValid(value)
   if type(value) ~= "table" or #value ~= 4 then
     return false
@@ -121,15 +115,11 @@ WIIIUI.SETTINGS = {
   checkbox("hideGride", false, "Hide Action Grid"),
   checkbox("StopAnimation", false, "Stop Portrait Animation"),
   checkbox("hideMicroButtons", true, "Hide Micro Menu"),
+  checkbox("showBlizzardMinimapCluster", false, "Show Blizzard's Minimap Corner"),
   checkbox("EnableCustomize", false, "Enable Customizer"),
   checkbox("ultraWide", false, "Ultra-Wide Mode"),
   checkbox("centerSlim", false, "Center Slim Mode"),
   checkbox("centerSlimNoInv", false, "Center Slim (No Inventory)"),
-  {
-    key = "ZoneTextPos", default = 1, values = { 1, 2, 3 },
-    valueLabels = { [1] = "Top", [2] = "Bottom", [3] = "Hidden" }, label = "Zone Text Position",
-    control = { kind = "cycle", available = zoneTextAvailable },
-  },
   infoIcon(1, 16),
   infoIcon(2, "none"),
   infoIcon(3, "none"),
@@ -150,6 +140,8 @@ WIIIUI.SETTINGS = {
   { key = "base_scale", legacy = true },
   { key = "MiniMapBattlefieldFrameX", legacy = true },
   { key = "MiniMapBattlefieldFrameY", legacy = true },
+  -- spec 0007 §5: WIIIUI's own zone text replaced the control.
+  { key = "ZoneTextPos", legacy = true },
 }
 
 WIIIUI.Settings = { RANGES = {} }

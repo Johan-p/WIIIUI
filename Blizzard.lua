@@ -7,23 +7,6 @@
 -- can't be parented to a Texture region; the anchor reference frame stays
 -- Console.lua's own left.minimapTexture, matching vanilla's exact
 -- CENTER-relative math (Theme.lua's MinimapGeometry).
---
--- MinimapCluster (Blizzard_Minimap/Mainline/Minimap.xml, forever branch:
--- "inherits=\"EditModeMinimapSystemTemplate, ResizeLayoutFrame\"") is the
--- Edit Mode system the Minimap widget lives inside -- never referenced here,
--- per spec 0001 §1.6 ("widget no, cluster yes") and R4 (placed only by the
--- shipped layout string, not yet built). Fetching that file directly
--- (2026-09-28) also confirms vanilla's flat MinimapZoneTextButton/
--- MiniMapMailFrame/MiniMapMailBorder globals no longer exist on Forever --
--- both are now parentKey children nested inside MinimapCluster's own tree
--- (ZoneTextButton, IndicatorFrame.MailFrame), with no global name of their
--- own; only MiniMapMailIcon (deeply nested) kept a global name. Reaching
--- through MinimapCluster to find them would violate the "never touch
--- MinimapCluster" rule above, so this file only ever existence-checks the
--- OLD vanilla global names -- which is expected to resolve to "absent" on a
--- real Forever client until a follow-up (layout string placement) lands.
--- That absence is exactly this slice's own graceful degrade, not an error;
--- the in-game pass (this slice's Notes) is what actually confirms it.
 local _, WIIIUI = ...
 
 WIIIUI.Blizzard = WIIIUI.Blizzard or {}
@@ -32,33 +15,6 @@ WIIIUI.Blizzard = WIIIUI.Blizzard or {}
 -- COGWHEEL_TEXTURE literal. Vanilla InitiateMiniMap (e17c352 WIIIUI.lua:4617),
 -- same path.
 local MASK_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\MinimapMask"
-
--- spec 0001 §1.6/§1.9 Q3 "depend on the spike": exposed so Config.lua's
--- existing ZoneTextPos control row (slice 06) can degrade to its "Set in
--- Edit Mode" note through the established `available` row field (spec 0001
--- §1.6: "available = fn (in-game-check result)"), instead of a new
--- mechanism.
-function WIIIUI.Blizzard.ZoneTextAvailable()
-  return _G.MinimapZoneTextButton ~= nil
-end
-
-function WIIIUI.Blizzard.MailIndicatorAvailable()
-  return _G.MiniMapMailFrame ~= nil
-end
-
--- MinimapZoneTextButton/MiniMapMailFrame are confirmed dead globals on both
--- Forever and retail (this file's header comment) -- ZoneTextAvailable()/
--- MailIndicatorAvailable() above always resolve false there today, so
--- there's nothing left to build behind them. The vanilla reparent/anchor
--- logic they used to gate (AlignZoneText, AlignMinimap's mail block,
--- e17c352 WIIIUI.lua:1828-1837, 1878-1889) is a follow-up's job, once that
--- follow-up decides how to reach the real nested ZoneTextButton/MailFrame
--- children inside MinimapCluster without violating R4 ("never reference
--- MinimapCluster") -- most likely through the shipped Edit Mode layout
--- string rather than a direct reparent. Vanilla's mail block also swapped
--- in a "no mail" texture and trimmed MiniMapMailIcon's TexCoord
--- (e17c352 WIIIUI.lua:1834-1837) -- cosmetic polish not ported here either,
--- for the same reason: no reachable mail frame to apply it to yet.
 
 -- Vanilla AlignMinimap's Minimap block (e17c352 WIIIUI.lua:1814-1823):
 -- ClearAllPoints, then CENTER-anchor to minimapFrame (Console.lua's
@@ -204,8 +160,72 @@ function WIIIUI.Blizzard.BuildMicroMenu()
   end
 end
 
+-- EditModeManagerFrameMixin:IsEditModeActive, forever 966519c
+-- Blizzard_EditMode/Shared/EditModeManager.lua:151.
+local function editModeActive()
+  local manager = _G.EditModeManagerFrame
+  return manager and manager.IsEditModeActive and manager:IsEditModeActive() or false
+end
+
+-- spec 0007 §2 R5 (reversible native hide), §4. MinimapCluster is an Edit Mode
+-- system other systems read the rect of (GetRightActionBarTopLimit; the layout
+-- string anchors the objective tracker to it), so it is hidden, never
+-- reparented. HideBase is the native hide kept by the Edit Mode template
+-- (EditModeSystemTemplates.lua:32-37, forever 966519c: only SetShown/Hide are
+-- replaced), so Hide() is never called; Show is native on this system, so
+-- ShowBase is preferred only if a future build provides it. The call set is
+-- closed: HideBase, ShowBase/Show and one OnShow HookScript (IsShown is
+-- allowed by R5 but never needed). Runs inside Layout, hence always through ApplyOrQueue.
+-- MinimapBackdrop is a plain frame (R3) drawn around WIIIUI's own minimap, so
+-- it stays hidden whatever the option says.
+function WIIIUI.Blizzard.BuildMinimapCluster()
+  local cluster = _G.MinimapCluster
+  local backdrop = _G.MinimapBackdrop
+
+  if backdrop then
+    backdrop:Hide()
+  end
+
+  if not cluster then
+    return
+  end
+
+  -- Hiding a selected Edit Mode system runs Blizzard's OnSystemHide tainted.
+  -- The ExitEditMode hook re-runs Layout, so the hide re-applies on exit
+  -- (spec 0007 §2 R5).
+  if not editModeActive() then
+    if wc3UI_Options.showBlizzardMinimapCluster then
+      if cluster.ShowBase then
+        cluster:ShowBase()
+      else
+        cluster:Show()
+      end
+    elseif cluster.HideBase then
+      cluster:HideBase()
+    end
+  end
+
+  -- Hooked once, flag on WIIIUI.Blizzard (R1: never a key on the frame).
+  if not WIIIUI.Blizzard.clusterHooked then
+    WIIIUI.Blizzard.clusterHooked = true
+
+    cluster:HookScript("OnShow", function()
+      if wc3UI_Options.showBlizzardMinimapCluster then
+        return
+      end
+
+      WIIIUI.ApplyOrQueue("minimapCluster", function()
+        -- Re-read at flush: the option may have flipped since the hook fired.
+        if not wc3UI_Options.showBlizzardMinimapCluster and not editModeActive() and cluster.HideBase then
+          cluster:HideBase()
+        end
+      end)
+    end)
+  end
+end
+
 -- spec 0001 §1.1 R4, §1.6: the Blizzard pieces WIIIUI keeps (chat, bags,
--- micro menu, buffs, cast bar, stance/pet bars, minimap cluster) are placed
+-- micro menu, buffs, cast bar, stance/pet bars) are placed
 -- only by an Edit Mode layout, never moved from code. This is the maintainer's
 -- own layout (exported with UI Scale 290, ultra-wide), offered through
 -- Config.lua's read-only "Copy layout string" box so they can import it
@@ -228,4 +248,5 @@ WIIIUI.LAYOUT_STRING = "4 0 59 0 0 0 7 7 UIParent -83.0 2.0 -1 ##$$%/&('%)$+#,$ 
 WIIIUI.LAYOUT_BUILD = "2026-09-30"
 
 WIIIUI.RegisterBuild("Blizzard.BuildMinimap", WIIIUI.Blizzard.BuildMinimap, { after = { "Console.BuildLeft" } })
+WIIIUI.RegisterBuild("Blizzard.BuildMinimapCluster", WIIIUI.Blizzard.BuildMinimapCluster, { after = { "Blizzard.BuildMinimap" } })
 WIIIUI.RegisterBuild("Blizzard.BuildMicroMenu", WIIIUI.Blizzard.BuildMicroMenu)
