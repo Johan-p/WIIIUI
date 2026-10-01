@@ -14,7 +14,7 @@ The original has not been updated in over a year and was written for vanilla. Th
 
 ## Screenshots
 
-*Taken on World of Warcraft: Forever at 1920×1080, UI Scale 290 with Ultra-Wide Mode on (the defaults), with WIIIUI's Edit Mode layout imported (see Getting started). Most show the config menu open.*
+*Taken on World of Warcraft: Forever at 1920×1080, UI Scale 290 with Ultra-Wide Mode on (the defaults), with WIIIUI's Edit Mode layout imported (see [Edit Mode layout](#edit-mode-layout-optional-one-time-setup)). Most show the config menu open.*
 
 **Human**
 ![Human theme](screenshots/human.webp)
@@ -75,8 +75,22 @@ The trailing `WIIIUI` sets the folder name. To update later, run `git pull` insi
   * **Center Slim (No Inventory)** hides the whole right-hand panel, chat area and inventory both.
   If both Center Slim boxes are ticked, Center Slim Mode wins.
 * **The extra slots share action bar page 2.** The 9 extra slots (3 by the minimap, 6 in the inventory) are action slots 13 to 21, which is page 2 of the main bar. If you page your main bar to page 2 (for example with Shift+2), you see the same actions, and changing them there changes the minimap and inventory slots too. This is intended.
-* **Import WIIIUI's Edit Mode layout.** WIIIUI ships a ready-made Edit Mode layout for the pieces Blizzard controls (chat, bags, micro menu, cast bar, buffs, stance and pet bars). To use it: open WIIIUI's config (the cogwheel in the bottom-right corner), click the "Copy layout string" box, press Ctrl+A then Ctrl+C, and close the config. Then open the Game Menu (Esc), choose Edit Mode, open the layout dropdown at the top, choose Import, paste the string and a name for the layout into the two boxes, and click the import button. If Import is greyed out, you already have the maximum number of layouts; delete one first. It was made at UI Scale 290 with Ultra-Wide Mode on, at 1920x1080, so on other setups some pieces may need a nudge in Edit Mode. Config rows that say "set in Edit Mode" refer to this layout.
+* **Optional: import WIIIUI's Edit Mode layout.** Until you do, Blizzard's own pieces (chat, bags, micro menu, buffs) sit where Blizzard puts them and can overlap the console. See [Edit Mode layout](#edit-mode-layout-optional-one-time-setup) below.
 * **Saved settings may not stick on some Forever beta builds.** WIIIUI works with default settings on every login, so if your choices are forgotten, that is why. Settings also cannot be saved if the game's saved-settings files are read-only, so check that too.
+
+## Edit Mode layout (optional, one-time setup)
+
+WIIIUI replaces the bottom of your screen, but Blizzard still owns chat, bags, the micro menu, the cast bar, buffs and the stance and pet bars. This layout places them around the WIIIUI console. Importing it is up to you, and you only do it once.
+
+1. Copy the string below (GitHub shows a copy button on the block). The same string is also in WIIIUI's config menu, in the "Copy layout string" box.
+2. In game, open the Game Menu (Esc) and choose **Edit Mode**.
+3. Open the layout dropdown at the top, choose **Import**, paste the string, give the layout a name, and click the import button. If Import is greyed out, you already have the maximum number of layouts; delete one first.
+
+```
+4 0 59 0 0 0 7 7 UIParent -83.0 2.0 -1 ##$$%/&('%)$+#,$ 0 1 0 8 2 MainActionBar 0.0 4.0 -1 ##$$%/&('%(#,$ 0 2 0 0 0 UIParent 318.7 -935.0 -1 ##$$%/&('%(#,$ 0 3 1 5 5 UIParent -5.0 -77.0 -1 #$$$%/&('%(#,$ 0 4 1 5 5 UIParent -5.0 -77.0 -1 #$$$%/&('%(#,$ 0 5 1 1 4 UIParent 0.0 0.0 -1 ##$$%/&('%(#,$ 0 6 1 1 4 UIParent 0.0 -50.0 -1 ##$$%/&('%(#,$ 0 7 1 1 4 UIParent 0.0 -100.0 -1 ##$$%/&('%(#,$ 0 10 0 1 1 UIParent -407.6 -872.0 -1 ##$$&-'% 0 11 1 7 7 UIParent 0.0 -4.0 -1 ##$$&('%,# 0 12 1 7 7 UIParent 0.0 -4.0 -1 ##$$&('% 1 -1 0 7 7 UIParent -200.5 224.0 -1 ##$#%# 2 -1 1 2 2 UIParent 0.0 0.0 -1 ##$#%(&( 3 0 0 0 0 UIParent 1380.0 -308.0 -1 $#3# 3 1 0 1 1 UIParent -356.0 -636.0 -1 %#3# 3 2 0 4 4 UIParent -330.0 -275.5 -1 %#&#3# 3 3 0 0 0 UIParent 1410.0 -322.0 -1 '#(#)#-=.+/#1$3$5#6(7-7$8(9( 3 4 0 0 0 UIParent 1412.0 -322.0 -1 ,#-=.+/#0#1#2(3#5#6(7-7$8(9( 3 5 0 2 2 UIParent -296.0 -2.0 -1 &#*$3# 3 6 1 5 5 UIParent 0.0 0.0 -1 -=.+/#4$5#6(7-7$8(9( 3 7 1 4 4 UIParent 0.0 0.0 -1 3# 4 -1 0 0 0 UIParent 861.0 -824.0 -1 # 5 -1 0 4 4 UIParent 17.0 -220.0 -1 # 6 0 0 1 1 UIParent -670.5 -2.0 -1 ##$#%#&C(()( 6 1 0 0 6 BuffFrame 0.0 -4.0 -1 ##$#%#'3(()(-$ 6 2 1 1 1 UIParent 0.0 -25.0 -1 ##$#%$&.(()(+#,-,$ 7 -1 1 7 7 UIParent 0.0 -4.0 -1 # 8 -1 0 7 7 UIParent 614.5 34.0 -1 #($m%$&P 9 -1 0 7 1 UIParent 6.0 -1.0 -1 # 10 -1 1 0 0 UIParent 16.0 -116.0 -1 # 11 -1 0 8 2 ChatFrame1 25.0 64.0 -1 # 12 -1 0 1 1 UIParent 828.0 -2.0 -1 #<$#%# 13 -1 0 5 3 ChatFrame1 -36.0 61.6 -1 ##$#%) 14 -1 0 2 0 MicroMenuContainer -3.8 0.2 -1 ##$#%& 15 0 0 8 2 SecondaryStatusTrackingBarContainer 0.0 4.0 -1 &# 15 1 0 4 4 UIParent -600.0 100.0 -1 &# 16 -1 0 0 0 UIParent 251.9 -842.0 -1 #( 17 -1 1 1 1 UIParent 0.0 -100.0 -1 ## 18 -1 1 5 5 UIParent 0.0 0.0 -1 #- 19 -1 1 7 7 UIParent 0.0 0.0 -1 ## 20 0 1 7 7 UIParent 0.0 310.0 -1 ##$/%$&('%(-($)#+$,$-$ 20 1 1 7 7 UIParent 0.0 240.0 -1 ##$*%$&('%(-($)#+$,$-$ 20 2 1 7 7 UIParent 0.0 370.0 -1 ##$$%$&('((-($)#+$,$-$ 20 3 1 7 7 UIParent 420.0 430.0 -1 #$$$%#&('((-($)#*#+$,$-$.-.$ 21 -1 1 7 7 UIParent -410.0 380.0 -1 ##%#&#'((()#*-*$+#,&-#.#/(0#1# 22 0 1 8 7 UIParent -457.0 336.0 -1 #$$$%#&('((#)U*$+%,$-#.#/U0% 22 1 1 1 1 UIParent 0.0 -40.0 -1 &('()U*#+% 22 2 1 1 1 UIParent 0.0 -90.0 -1 &('()U*#+% 22 3 1 1 1 UIParent 0.0 -130.0 -1 &('()U*#+% 23 -1 1 0 0 UIParent 0.0 0.0 -1 ##$#%$&7&%'7(%)U+$,$-$.(/U 24 -1 1 1 1 UIParent 0.0 -182.0 -1 # 25 -1 0 6 0 StanceBar 0.0 4.0 -1 # 26 0 0 8 6 MainActionBar 30.0 -2.0 -1 #$ 26 1 0 6 8 MainActionBar -30.0 -2.0 -1 #$ 27 -1 0 4 4 UIParent -735.5 -330.0 -1 #- 28 -1 0 4 4 UIParent 0.0 141.0 -1 #( 29 0 1 7 7 UIParent 0.0 450.0 -1 #($U%#&D&%'2($)$ 29 1 1 7 7 UIParent 0.0 425.0 -1 #($U%#&D&%'2($)$ 29 2 1 7 7 UIParent 0.0 400.0 -1 #($U%#&D&%'2($)$
+```
+
+It was made at UI Scale 290 with Ultra-Wide Mode on, at 1920×1080. On other screens some pieces may need a nudge in Edit Mode. Config rows that say "set in Edit Mode" refer to this layout.
 
 ## Support and feedback
 
