@@ -78,12 +78,6 @@ The trailing `WIIIUI` sets the folder name. To update later, run `git pull` insi
 * **Import WIIIUI's Edit Mode layout.** WIIIUI ships a ready-made Edit Mode layout for the pieces Blizzard controls (chat, bags, micro menu, cast bar, buffs, stance and pet bars). To use it: open WIIIUI's config (the cogwheel in the bottom-right corner), click the "Copy layout string" box, press Ctrl+A then Ctrl+C, and close the config. Then open the Game Menu (Esc), choose Edit Mode, open the layout dropdown at the top, choose Import, paste the string and a name for the layout into the two boxes, and click the import button. If Import is greyed out, you already have the maximum number of layouts; delete one first. It was made at UI Scale 290 with Ultra-Wide Mode on, at 1920x1080, so on other setups some pieces may need a nudge in Edit Mode. Config rows that say "set in Edit Mode" refer to this layout.
 * **Saved settings may not stick on some Forever beta builds.** WIIIUI works with default settings on every login, so if your choices are forgotten, that is why. Settings also cannot be saved if the game's saved-settings files are read-only, so check that too.
 
-## Tips and known issues
-
-* **Undead male portrait glitch:** Blizzard's animation for that portrait can look glitchy. Tick **Stop Portrait Animation** in the General tab to fix it.
-* **Settings not saving:** see the read-only-file and Forever beta notes above.
-* **Custom themes** are not supported (see Features).
-
 ## Support and feedback
 
 Found a problem or want a feature? Please open an issue: https://github.com/Johan-p/WIIIUI-Forever-Fork/issues
