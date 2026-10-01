@@ -99,7 +99,7 @@ addEntry("MinimapPieces.zone", "frame")
 addEntry("MinimapPieces.zone.text", "fontstring")
 addEntry("MinimapPieces.clock", "frame")
 addEntry("MinimapPieces.clock.text", "fontstring")
-addEntry("MinimapPieces.calendar", "frame")
+addEntry("MinimapPieces.calendar", "frame", { secure = true })
 
 WIIIUI.registry = registry
 WIIIUI.Customizer.byId = registryById
