@@ -1,6 +1,7 @@
 -- spec 0007 §3: WIIIUI's own pieces of the minimap cluster, drawn on the
--- console art in place of Blizzard's hidden cluster. Plain frames only; this
--- file never touches a Blizzard frame.
+-- console art in place of Blizzard's hidden cluster. Plain frames, except the
+-- calendar: a secure click-through to Blizzard's GameTimeFrame (spec 0007
+-- §Risks). No method is ever called on a Blizzard frame.
 local _, WIIIUI = ...
 
 WIIIUI.MinimapPieces = WIIIUI.MinimapPieces or {}
@@ -33,7 +34,7 @@ local function available(piece)
     return _G.C_Minimap ~= nil and not gameRuleActive("IngameTrackingDisabled")
   end
   if piece == "calendar" then
-    return _G.C_DateAndTime ~= nil and not gameRuleActive("IngameCalendarDisabled")
+    return _G.C_DateAndTime ~= nil and _G.GameTimeFrame ~= nil and not gameRuleActive("IngameCalendarDisabled")
   end
   return false
 end
@@ -447,28 +448,39 @@ local function showCalendarTooltip(self)
   GameTooltip:Show()
 end
 
--- ToggleCalendar load-on-demands Blizzard_Calendar from this call stack; the
--- taint question is an in-game check (spec 0007 §Risks).
-local function calendarClicked()
-  if _G.ToggleCalendar then
-    _G.ToggleCalendar()
-  end
-end
-
+-- ToggleCalendar ends in ShowUIPanel(CalendarFrame), which refuses in combat
+-- unless the call stack is secure (UIParentPanelManager.lua
+-- CheckProtectedFunctionsAllowed). So the button never calls it: a secure
+-- "click" action clicks Blizzard's own GameTimeFrame, whose OnClick
+-- (GameTimeFrame_OnClick) then runs ToggleCalendar from a secure stack
+-- (SecureTemplates.lua SECURE_ACTIONS.click; spec 0007 §Risks fallback).
 local function ensureCalendar(parent)
   if P.calendar then
     return P.calendar
   end
 
-  local calendar = CreateFrame("Button", nil, parent)
-  calendar:RegisterForClicks("AnyUp")
-  calendar:SetScript("OnClick", calendarClicked)
+  local calendar = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
+  -- Both edges: SecureActionButton_OnClick only acts on the one matching the
+  -- ActionButtonUseKeyDown CVar (SecureTemplates.lua), and an addon button
+  -- is treated as a key press, so registering one edge could swallow clicks.
+  calendar:RegisterForClicks("AnyUp", "AnyDown")
+  -- No SetScript("OnClick"): it would replace the template's secure handler.
   calendar:SetScript("OnEnter", showCalendarTooltip)
   calendar:SetScript("OnLeave", function()
     GameTooltip:Hide()
   end)
   P.calendar = calendar
   return calendar
+end
+
+-- Attributes are only writable out of combat; Build runs through ApplyOrQueue.
+-- Without GameTimeFrame the button just has no click action.
+local function bindCalendarClick(calendar)
+  local target = _G.GameTimeFrame
+  if target and calendar:GetAttribute("clickbutton") ~= target then
+    calendar:SetAttribute("type", "click")
+    calendar:SetAttribute("clickbutton", target)
+  end
 end
 
 -- GameTime_GetTime honours the player's local/realm and 24-hour settings
@@ -610,9 +622,12 @@ function P.Build()
   sizeClock(clock)
 
   local calendar = ensureCalendar(left)
+  -- The calendar is a protected child: `left` only changes through Layout/ApplyOrQueue.
   calendar:SetParent(left)
   WIIIUI.Layers.Apply(calendar, "minimap.piece")
-  place(calendar, minimapTexture, geometry.calendar)
+  -- A protected frame anchors to a frame, not a texture region.
+  place(calendar, WIIIUI.Console.AnchorFrame(minimapTexture), geometry.calendar)
+  bindCalendarClick(calendar)
   calendar:SetShown(available("calendar"))
   if calendar.dayText then
     applyPieceFont(calendar.dayText, CLOCK_FONT_SIZE)
