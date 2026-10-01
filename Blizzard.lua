@@ -176,14 +176,19 @@ end
 -- ShowBase is preferred only if a future build provides it. The call set is
 -- closed: HideBase, ShowBase/Show and one OnShow HookScript (IsShown is
 -- allowed by R5 but never needed). Runs inside Layout, hence always through ApplyOrQueue.
--- MinimapBackdrop is a plain frame (R3) drawn around WIIIUI's own minimap, so
--- it stays hidden whatever the option says.
+-- The compass textures (plain textures, R3; children of MinimapBackdrop) are
+-- faded instead of hiding the backdrop, which would also hide retail's
+-- expansion landing-page button (spec 0003 §2.1). The Underlay exists on
+-- Forever only. MinimapBackdrop is a child of Minimap, not of MinimapCluster,
+-- so it stays drawn when the cluster is HideBase'd, whatever the option says.
 function WIIIUI.Blizzard.BuildMinimapCluster()
   local cluster = _G.MinimapCluster
-  local backdrop = _G.MinimapBackdrop
 
-  if backdrop then
-    backdrop:Hide()
+  if _G.MinimapCompassTexture then
+    _G.MinimapCompassTexture:SetAlpha(0)
+  end
+  if _G.MinimapCompassTextureUnderlay then
+    _G.MinimapCompassTextureUnderlay:SetAlpha(0)
   end
 
   if not cluster then
@@ -367,15 +372,35 @@ end
 -- EditModeManager.lua on the forever branch).
 --
 -- To regenerate: in Edit Mode, Layout -> Share -> Export, paste the result
--- over LAYOUT_STRING below, and bump LAYOUT_BUILD (shown in the "Set in Edit
+-- over FOREVER_LAYOUT below, and bump FOREVER_LAYOUT_BUILD (shown in the "Set in Edit
 -- Mode" notes).
 --
 -- The string and build tag are player-facing (Config.lua shows both), so any
 -- wording around them stays passive and end-user-neutral: never instruct the
 -- reader to type or paste into the box (it is read-only and snaps any edit
 -- back), and never put an internal doc pointer in UI copy.
-WIIIUI.LAYOUT_STRING = "4 0 59 0 0 0 7 7 UIParent -83.0 2.0 -1 ##$$%/&('%)$+#,$ 0 1 0 8 2 MainActionBar 0.0 4.0 -1 ##$$%/&('%(#,$ 0 2 0 0 0 UIParent 318.7 -935.0 -1 ##$$%/&('%(#,$ 0 3 1 5 5 UIParent -5.0 -77.0 -1 #$$$%/&('%(#,$ 0 4 1 5 5 UIParent -5.0 -77.0 -1 #$$$%/&('%(#,$ 0 5 1 1 4 UIParent 0.0 0.0 -1 ##$$%/&('%(#,$ 0 6 1 1 4 UIParent 0.0 -50.0 -1 ##$$%/&('%(#,$ 0 7 1 1 4 UIParent 0.0 -100.0 -1 ##$$%/&('%(#,$ 0 10 0 1 1 UIParent -407.6 -872.0 -1 ##$$&-'% 0 11 1 7 7 UIParent 0.0 -4.0 -1 ##$$&('%,# 0 12 1 7 7 UIParent 0.0 -4.0 -1 ##$$&('% 1 -1 0 7 7 UIParent -200.5 224.0 -1 ##$#%# 2 -1 1 2 2 UIParent 0.0 0.0 -1 ##$#%(&( 3 0 0 0 0 UIParent 1380.0 -308.0 -1 $#3# 3 1 0 1 1 UIParent -356.0 -636.0 -1 %#3# 3 2 0 4 4 UIParent -330.0 -275.5 -1 %#&#3# 3 3 0 0 0 UIParent 1410.0 -322.0 -1 '#(#)#-=.+/#1$3$5#6(7-7$8(9( 3 4 0 0 0 UIParent 1412.0 -322.0 -1 ,#-=.+/#0#1#2(3#5#6(7-7$8(9( 3 5 0 2 2 UIParent -296.0 -2.0 -1 &#*$3# 3 6 1 5 5 UIParent 0.0 0.0 -1 -=.+/#4$5#6(7-7$8(9( 3 7 1 4 4 UIParent 0.0 0.0 -1 3# 4 -1 0 0 0 UIParent 861.0 -824.0 -1 # 5 -1 0 4 4 UIParent 17.0 -220.0 -1 # 6 0 0 1 1 UIParent -670.5 -2.0 -1 ##$#%#&C(()( 6 1 0 0 6 BuffFrame 0.0 -4.0 -1 ##$#%#'3(()(-$ 6 2 1 1 1 UIParent 0.0 -25.0 -1 ##$#%$&.(()(+#,-,$ 7 -1 1 7 7 UIParent 0.0 -4.0 -1 # 8 -1 0 7 7 UIParent 614.5 34.0 -1 #($m%$&P 9 -1 0 7 1 UIParent 6.0 -1.0 -1 # 10 -1 1 0 0 UIParent 16.0 -116.0 -1 # 11 -1 0 8 2 ChatFrame1 25.0 64.0 -1 # 12 -1 0 1 1 UIParent 828.0 -2.0 -1 #<$#%# 13 -1 0 5 3 ChatFrame1 -36.0 61.6 -1 ##$#%) 14 -1 0 2 0 MicroMenuContainer -3.8 0.2 -1 ##$#%& 15 0 0 8 2 SecondaryStatusTrackingBarContainer 0.0 4.0 -1 &# 15 1 0 4 4 UIParent -600.0 100.0 -1 &# 16 -1 0 0 0 UIParent 251.9 -842.0 -1 #( 17 -1 1 1 1 UIParent 0.0 -100.0 -1 ## 18 -1 1 5 5 UIParent 0.0 0.0 -1 #- 19 -1 1 7 7 UIParent 0.0 0.0 -1 ## 20 0 1 7 7 UIParent 0.0 310.0 -1 ##$/%$&('%(-($)#+$,$-$ 20 1 1 7 7 UIParent 0.0 240.0 -1 ##$*%$&('%(-($)#+$,$-$ 20 2 1 7 7 UIParent 0.0 370.0 -1 ##$$%$&('((-($)#+$,$-$ 20 3 1 7 7 UIParent 420.0 430.0 -1 #$$$%#&('((-($)#*#+$,$-$.-.$ 21 -1 1 7 7 UIParent -410.0 380.0 -1 ##%#&#'((()#*-*$+#,&-#.#/(0#1# 22 0 1 8 7 UIParent -457.0 336.0 -1 #$$$%#&('((#)U*$+%,$-#.#/U0% 22 1 1 1 1 UIParent 0.0 -40.0 -1 &('()U*#+% 22 2 1 1 1 UIParent 0.0 -90.0 -1 &('()U*#+% 22 3 1 1 1 UIParent 0.0 -130.0 -1 &('()U*#+% 23 -1 1 0 0 UIParent 0.0 0.0 -1 ##$#%$&7&%'7(%)U+$,$-$.(/U 24 -1 1 1 1 UIParent 0.0 -182.0 -1 # 25 -1 0 6 0 StanceBar 0.0 4.0 -1 # 26 0 0 8 6 MainActionBar 30.0 -2.0 -1 #$ 26 1 0 6 8 MainActionBar -30.0 -2.0 -1 #$ 27 -1 0 4 4 UIParent -735.5 -330.0 -1 #- 28 -1 0 4 4 UIParent 0.0 141.0 -1 #( 29 0 1 7 7 UIParent 0.0 450.0 -1 #($U%#&D&%'2($)$ 29 1 1 7 7 UIParent 0.0 425.0 -1 #($U%#&D&%'2($)$ 29 2 1 7 7 UIParent 0.0 400.0 -1 #($U%#&D&%'2($)$"
-WIIIUI.LAYOUT_BUILD = "2026-10-01"
+local FOREVER_LAYOUT = "4 0 59 0 0 0 7 7 UIParent -83.0 2.0 -1 ##$$%/&('%)$+#,$ 0 1 0 8 2 MainActionBar 0.0 4.0 -1 ##$$%/&('%(#,$ 0 2 0 0 0 UIParent 318.7 -935.0 -1 ##$$%/&('%(#,$ 0 3 1 5 5 UIParent -5.0 -77.0 -1 #$$$%/&('%(#,$ 0 4 1 5 5 UIParent -5.0 -77.0 -1 #$$$%/&('%(#,$ 0 5 1 1 4 UIParent 0.0 0.0 -1 ##$$%/&('%(#,$ 0 6 1 1 4 UIParent 0.0 -50.0 -1 ##$$%/&('%(#,$ 0 7 1 1 4 UIParent 0.0 -100.0 -1 ##$$%/&('%(#,$ 0 10 0 1 1 UIParent -407.6 -872.0 -1 ##$$&-'% 0 11 1 7 7 UIParent 0.0 -4.0 -1 ##$$&('%,# 0 12 1 7 7 UIParent 0.0 -4.0 -1 ##$$&('% 1 -1 0 7 7 UIParent -200.5 224.0 -1 ##$#%# 2 -1 1 2 2 UIParent 0.0 0.0 -1 ##$#%(&( 3 0 0 0 0 UIParent 1380.0 -308.0 -1 $#3# 3 1 0 1 1 UIParent -356.0 -636.0 -1 %#3# 3 2 0 4 4 UIParent -330.0 -275.5 -1 %#&#3# 3 3 0 0 0 UIParent 1410.0 -322.0 -1 '#(#)#-=.+/#1$3$5#6(7-7$8(9( 3 4 0 0 0 UIParent 1412.0 -322.0 -1 ,#-=.+/#0#1#2(3#5#6(7-7$8(9( 3 5 0 2 2 UIParent -296.0 -2.0 -1 &#*$3# 3 6 1 5 5 UIParent 0.0 0.0 -1 -=.+/#4$5#6(7-7$8(9( 3 7 1 4 4 UIParent 0.0 0.0 -1 3# 4 -1 0 0 0 UIParent 861.0 -824.0 -1 # 5 -1 0 4 4 UIParent 17.0 -220.0 -1 # 6 0 0 1 1 UIParent -670.5 -2.0 -1 ##$#%#&C(()( 6 1 0 0 6 BuffFrame 0.0 -4.0 -1 ##$#%#'3(()(-$ 6 2 1 1 1 UIParent 0.0 -25.0 -1 ##$#%$&.(()(+#,-,$ 7 -1 1 7 7 UIParent 0.0 -4.0 -1 # 8 -1 0 7 7 UIParent 614.5 34.0 -1 #($m%$&P 9 -1 0 7 1 UIParent 6.0 -1.0 -1 # 10 -1 1 0 0 UIParent 16.0 -116.0 -1 # 11 -1 0 8 2 ChatFrame1 25.0 64.0 -1 # 12 -1 0 1 1 UIParent 828.0 -2.0 -1 #<$#%# 13 -1 0 5 3 ChatFrame1 -36.0 61.6 -1 ##$#%) 14 -1 0 2 0 MicroMenuContainer -3.8 0.2 -1 ##$#%& 15 0 0 8 2 SecondaryStatusTrackingBarContainer 0.0 4.0 -1 &# 15 1 0 4 4 UIParent -600.0 100.0 -1 &# 16 -1 0 0 0 UIParent 251.9 -842.0 -1 #( 17 -1 1 1 1 UIParent 0.0 -100.0 -1 ## 18 -1 1 5 5 UIParent 0.0 0.0 -1 #- 19 -1 1 7 7 UIParent 0.0 0.0 -1 ## 20 0 1 7 7 UIParent 0.0 310.0 -1 ##$/%$&('%(-($)#+$,$-$ 20 1 1 7 7 UIParent 0.0 240.0 -1 ##$*%$&('%(-($)#+$,$-$ 20 2 1 7 7 UIParent 0.0 370.0 -1 ##$$%$&('((-($)#+$,$-$ 20 3 1 7 7 UIParent 420.0 430.0 -1 #$$$%#&('((-($)#*#+$,$-$.-.$ 21 -1 1 7 7 UIParent -410.0 380.0 -1 ##%#&#'((()#*-*$+#,&-#.#/(0#1# 22 0 1 8 7 UIParent -457.0 336.0 -1 #$$$%#&('((#)U*$+%,$-#.#/U0% 22 1 1 1 1 UIParent 0.0 -40.0 -1 &('()U*#+% 22 2 1 1 1 UIParent 0.0 -90.0 -1 &('()U*#+% 22 3 1 1 1 UIParent 0.0 -130.0 -1 &('()U*#+% 23 -1 1 0 0 UIParent 0.0 0.0 -1 ##$#%$&7&%'7(%)U+$,$-$.(/U 24 -1 1 1 1 UIParent 0.0 -182.0 -1 # 25 -1 0 6 0 StanceBar 0.0 4.0 -1 # 26 0 0 8 6 MainActionBar 30.0 -2.0 -1 #$ 26 1 0 6 8 MainActionBar -30.0 -2.0 -1 #$ 27 -1 0 4 4 UIParent -735.5 -330.0 -1 #- 28 -1 0 4 4 UIParent 0.0 141.0 -1 #( 29 0 1 7 7 UIParent 0.0 450.0 -1 #($U%#&D&%'2($)$ 29 1 1 7 7 UIParent 0.0 425.0 -1 #($U%#&D&%'2($)$ 29 2 1 7 7 UIParent 0.0 400.0 -1 #($U%#&D&%'2($)$"
+local FOREVER_LAYOUT_BUILD = "2026-10-01"
+
+-- Retail has no export yet (spec 0003 §2.3): nil makes Config show its
+-- "Not available in this build" / "not yet exported" fallbacks.
+local RETAIL_LAYOUT = nil
+local RETAIL_LAYOUT_BUILD = nil
+
+-- Resolved at call time so the client is never frozen at file scope.
+-- IsForever: no API says which client's export a string is.
+function WIIIUI.Blizzard.LayoutString()
+  return WIIIUI.Client.IsForever() and FOREVER_LAYOUT or RETAIL_LAYOUT
+end
+
+function WIIIUI.Blizzard.LayoutBuild()
+  return WIIIUI.Client.IsForever() and FOREVER_LAYOUT_BUILD or RETAIL_LAYOUT_BUILD
+end
+
+-- The Forever literal, kept readable for the README test.
+-- Forever values only: per-client readers go through LayoutString/LayoutBuild.
+WIIIUI.FOREVER_LAYOUT_STRING = FOREVER_LAYOUT
+WIIIUI.FOREVER_LAYOUT_BUILD = FOREVER_LAYOUT_BUILD
 
 WIIIUI.RegisterBuild("Blizzard.BuildMinimap", WIIIUI.Blizzard.BuildMinimap, { after = { "Console.BuildLeft" } })
 WIIIUI.RegisterBuild("Blizzard.BuildMinimapCluster", WIIIUI.Blizzard.BuildMinimapCluster, { after = { "Blizzard.BuildMinimap" } })

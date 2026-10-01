@@ -277,13 +277,14 @@ end
 -- spec 0001 §1.6: every "Set in Edit Mode" row (the fixed 6 plus any
 -- in-game-check failure) is, per the §1.6 per-piece table, a piece the
 -- shipped layout string places -- so the note now names the constant that
--- backs it (WIIIUI.LAYOUT_BUILD, Blizzard.lua) instead of a bare "set in
+-- backs it (WIIIUI.Blizzard.LayoutBuild(), Blizzard.lua) instead of a bare "set in
 -- Edit Mode" with no pointer to where. Blizzard.lua isn't loaded by every
 -- test fixture that builds this control table (config_test.lua's own), so
 -- this falls back to a plain string there -- only a real client (or a test that loads
 -- Blizzard.lua too) sees the build number.
 local function editModeNoteSuffix()
-  return " -- set in Edit Mode (WIIIUI's layout string, build " .. (WIIIUI.LAYOUT_BUILD or "not yet exported") .. ")"
+  local build = WIIIUI.Blizzard and WIIIUI.Blizzard.LayoutBuild and WIIIUI.Blizzard.LayoutBuild()
+  return " -- set in Edit Mode (WIIIUI's layout string, build " .. (build or "not yet exported") .. ")"
 end
 
 local function buildNote(panel, row, x, y)
@@ -537,11 +538,12 @@ local LAYOUT_STRING_BOX_WIDTH = 300
 local LAYOUT_STRING_BOX_HEIGHT = 20
 
 local function layoutStringValue()
-  -- Fallback wording for when Blizzard.lua isn't loaded (WIIIUI.LAYOUT_STRING
+  -- Fallback wording for when Blizzard.lua isn't loaded (WIIIUI.Blizzard.LayoutString
   -- nil): only test fixtures that build this control table without it reach
   -- it (config_test.lua). Player-facing: no internal doc pointer, no
   -- instruction to edit the read-only box it's displayed in.
-  return WIIIUI.LAYOUT_STRING or "Not available in this build -- check for an addon update."
+  local layout = WIIIUI.Blizzard and WIIIUI.Blizzard.LayoutString and WIIIUI.Blizzard.LayoutString()
+  return layout or "Not available in this build -- check for an addon update."
 end
 
 -- spec 0001 §1.6 "Copy layout string": a read-only EditBox with the layout

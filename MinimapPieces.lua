@@ -44,7 +44,13 @@ local function refreshMail()
   if not mail or not _G.HasNewMail then
     return
   end
-  local lit = _G.HasNewMail() and 1 or MAIL_GREY
+  -- pcall, not Secret.Read: a plain nil is the "no new mail" answer and must
+  -- grey the icon; only a throw or a secret leaves the colour as it was.
+  local ok, hasMail = pcall(_G.HasNewMail)
+  if not ok or WIIIUI.Secret.IsSecret(hasMail) then
+    return
+  end
+  local lit = hasMail and 1 or MAIL_GREY
   mail.icon:SetVertexColor(lit, lit, lit, 1)
 end
 
@@ -52,11 +58,16 @@ end
 -- same formatter. Only with mail waiting; the formatter is existence-checked
 -- and its own body (FormattingUtil.lua:181) is the fallback.
 local function showMailTooltip(self)
-  if not (_G.HasNewMail and _G.HasNewMail()) then
+  if not (_G.HasNewMail and WIIIUI.Secret.Read(_G.HasNewMail)) then
     return
   end
 
-  local senders = _G.GetLatestThreeSenders and { _G.GetLatestThreeSenders() } or {}
+  -- Read returns a lone nil on a throw or any secret sender: header only then,
+  -- and no sender is ever concatenated in our own code unless all are plain.
+  local senders = {}
+  if _G.GetLatestThreeSenders then
+    senders = { WIIIUI.Secret.Read(_G.GetLatestThreeSenders) }
+  end
   local header = #senders >= 1 and _G.HAVE_MAIL_FROM or _G.HAVE_MAIL
 
   -- ANCHOR_LEFT opens over the minimap widget; the piece sits too close to the
