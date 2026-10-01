@@ -213,10 +213,16 @@ local ROLE_ATLASES = {
 
 -- spec 0001 §Event -> widget wiring (Portrait row): UNIT_MODEL_CHANGED /
 -- PLAYER_ENTERING_WORLD -> "PlayerModel:SetUnit("player"), camera". SetUnit
--- resets the camera to the full-body default, so vanilla re-selected camera 0
--- after every SetUnit (ModifyPlayerPortrait, e17c352 WIIIUI.lua:1767, 1787).
--- Model:SetCamera(cameraIndex): SimpleModelAPIDocumentation.lua:413, forever
--- and live branches of Gethe/wow-ui-source.
+-- resets the framing to the full-body default, so it is re-applied after every
+-- SetUnit. Vanilla selected embedded camera 0 (ModifyPlayerPortrait, e17c352
+-- WIIIUI.lua:1767, 1787), but the HD models on Forever (dwarf, human female)
+-- have no usable camera 0 and SetCamera(0) silently leaves the full body.
+-- Blizzard frames heads with SetPortraitZoom, which uses the model's head
+-- data and works for every model (QuestNPCModelFrameMixin.lua:8,
+-- GuildNews.xml:241, Blizzard_SharedXML/Mainline/ModelFrames.lua:48, forever;
+-- methods in FrameAPICharacterModelBaseDocumentation.lua: SetCamDistanceScale
+-- :143, SetPortraitZoom :219, RefreshCamera :108; Model:SetPosition in
+-- SimpleModelAPIDocumentation.lua:645). Each call is existence-checked.
 --
 -- StopAnimation (vanilla ModifyPlayerPortrait, e17c352 WIIIUI.lua:1771-1783
 -- pinned sequence 3 from an OnUpdate): Model:SetSequenceTime(sequence,
@@ -232,6 +238,8 @@ local ROLE_ATLASES = {
 -- forever branch of Gethe/wow-ui-source) re-applies them. applyModelView is
 -- idempotent and never calls SetUnit, so it cannot loop.
 local FROZEN_SEQUENCE = 3
+-- Blizzard's head-framing value for SetPortraitZoom, tuned in-game; higher is tighter in Blizzard's usage.
+local PORTRAIT_ZOOM = 1
 
 function applyModelView()
   local model = WIIIUI.Portrait.model
@@ -239,7 +247,18 @@ function applyModelView()
     return
   end
 
-  model:SetCamera(0)
+  if model.SetCamDistanceScale then
+    model:SetCamDistanceScale(1)
+  end
+  if model.SetPortraitZoom then
+    model:SetPortraitZoom(PORTRAIT_ZOOM)
+  end
+  if model.SetPosition then
+    model:SetPosition(0, 0, 0)
+  end
+  if model.RefreshCamera then
+    model:RefreshCamera()
+  end
   if wc3UI_Options.StopAnimation then
     model:SetSequenceTime(FROZEN_SEQUENCE, 0)
     model:SetPaused(true)
