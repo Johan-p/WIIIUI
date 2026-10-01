@@ -133,6 +133,15 @@ end
 -- stays inside computeStats (unchanged below) -- when the icon should be
 -- hidden, the value resolveIcon returns here is never shown, so it doesn't
 -- need to encode that hide logic itself.
+-- spec 0003 §4: retail has no ranged slot; a bow or gun sits in the main hand.
+-- Feature-detected: slot 18 is read first, so Forever is unchanged.
+local function rangedMainHandTexture()
+  if GetInventoryItemTexture("player", RANGED_SLOT) == nil and IsRangedWeapon and IsRangedWeapon() then
+    return GetInventoryItemTexture("player", MAINHAND_SLOT)
+  end
+  return nil
+end
+
 local function resolveIcon(option)
   if option == MAINHAND_SLOT then
     return activeShapeshiftIcon() or GetInventoryItemTexture("player", MAINHAND_SLOT) or FIST_ICON
@@ -143,7 +152,7 @@ local function resolveIcon(option)
   end
 
   if option == RANGED_SLOT then
-    return GetInventoryItemTexture("player", RANGED_SLOT) or FIST_ICON
+    return GetInventoryItemTexture("player", RANGED_SLOT) or rangedMainHandTexture() or FIST_ICON
   end
 
   if option == AMMO_OPTION then
@@ -208,6 +217,18 @@ local function computeStats(option)
     local equipLoc = select(4, C_Item.GetItemInfoInstant(itemID))
 
     if equipLoc == SHIELD_EQUIP_LOC then
+      -- spec 0003 §4: no API tells whether retail has a block value to show, so
+      -- this is the one place the client check is the only option.
+      if not WIIIUI.Client.IsForever() then
+        local blockChance = GetBlockChance()
+        local chanceText = string.format("%.1f%%", blockChance)
+        return {
+          label = "Block:",
+          text = chanceText,
+          tooltip = { "|cffffd100Block Chance:|r " .. chanceText },
+        }
+      end
+
       local blockValue = GetShieldBlock()
       local blockChance = GetBlockChance()
       return {
@@ -236,7 +257,7 @@ local function computeStats(option)
   end
 
   if option == RANGED_SLOT then
-    local equipped = GetInventoryItemTexture("player", RANGED_SLOT)
+    local equipped = GetInventoryItemTexture("player", RANGED_SLOT) or rangedMainHandTexture()
 
     if not equipped then
       return { label = "Damage:", text = "N/A", tooltip = { "No ranged weapon equipped" } }
@@ -363,10 +384,13 @@ local function computeArmorStats()
     "|cffffd100Block:|r " .. string.format("%.1f%%", GetBlockChance()),
   }
 
-  for resistIndex = 1, 5 do
-    local _, _, effectiveResist = UnitResistance("player", resistIndex)
-    tooltip[#tooltip + 1] = "|cffffd100" .. (RESISTANCE_NAMES[resistIndex] or ("Resist " .. resistIndex))
-      .. ":|r " .. tostring(effectiveResist)
+  -- spec 0003 §4: live removed UnitResistance (Findings #2).
+  if _G.UnitResistance then
+    for resistIndex = 1, 5 do
+      local _, _, effectiveResist = UnitResistance("player", resistIndex)
+      tooltip[#tooltip + 1] = "|cffffd100" .. (RESISTANCE_NAMES[resistIndex] or ("Resist " .. resistIndex))
+        .. ":|r " .. tostring(effectiveResist)
+    end
   end
 
   -- spec 0001 §1.7: "latency select(3, GetNetStats())" -- GetNetStats
@@ -396,9 +420,10 @@ end
 -- console text shown when a stat read throws (spec 0001 §1.7: "shows its label
 -- with an empty value"); they differ ("Spell Power" vs "Spell:") because they
 -- are different surfaces. "none" has no provider functions: it hides outright.
-local function makeOption(id, menuLabel, staticLabel)
+local function makeOption(id, menuLabel, staticLabel, available)
   return {
     id = id,
+    available = available,
     menuLabel = menuLabel,
     staticLabel = staticLabel,
     icon = function() return resolveIcon(id) end,
@@ -413,7 +438,7 @@ local OPTIONS = {
   makeOption(RANGED_SLOT, "Ranged", "Damage:"),
   makeOption(AMMO_OPTION, "Ammo", "Ammo:"),
   makeOption(SPELLPOWER_OPTION, "Spell Power", "Spell:"),
-  makeOption(HEALING_OPTION, "Healing", "Healing:"),
+  makeOption(HEALING_OPTION, "Healing", "Healing:", WIIIUI.Client.IsForever),
   { id = "none", menuLabel = "None" },
 }
 
@@ -423,6 +448,17 @@ for index, entry in ipairs(OPTIONS) do
   OPTION_IDS[index] = entry.id
   OPTION_LABELS[entry.id] = entry.menuLabel
 end
+
+-- spec 0003 §4: retail drops Healing from the cycle but not from the valid
+-- set (OPTION_IDS), so a saved 98 survives the merge. Built at load: the build
+-- number is readable then, and Config reads this list once at its own load.
+local MENU_IDS = {}
+for _, entry in ipairs(OPTIONS) do
+  if entry.available == nil or entry.available() then
+    MENU_IDS[#MENU_IDS + 1] = entry.id
+  end
+end
+WIIIUI.InfoIcons.MENU_IDS = MENU_IDS
 
 WIIIUI.InfoIcons.OPTIONS = OPTIONS
 WIIIUI.InfoIcons.OPTION_IDS = OPTION_IDS
@@ -447,6 +483,10 @@ WIIIUI.InfoIcons.ARMOR = ARMOR
 -- reaching a build is still caught, not only ones that passed MergeDefaults.
 function WIIIUI.InfoIcons.ResolveOption(value, slotIndex)
   if OPTION_BY_ID[value] then
+    -- spec 0003 §4: a saved Healing shows spell power where Healing isn't offered.
+    if value == HEALING_OPTION and not WIIIUI.Client.IsForever() then
+      return SPELLPOWER_OPTION
+    end
     return value
   end
   return WIIIUI.DEFAULTS["weaponIconSelected" .. (slotIndex or 1)] or WIIIUI.DEFAULTS.weaponIconSelected1
@@ -699,6 +739,11 @@ WIIIUI.On("UPDATE_SHAPESHIFT_FORM", refreshAllSlots)
 -- passes no unit, so it appends to that event's handler list instead of
 -- erroring.
 WIIIUI.On("PLAYER_REGEN_ENABLED", refreshAllSlots)
+
+-- spec 0003 §6: on retail, encounter / keystone / battleground restrictions hold
+-- out of combat, so PLAYER_REGEN_ENABLED alone never un-blanks a stat.
+-- RestrictedActionsDocumentation.lua:97-106 (forever and live).
+WIIIUI.On("ADDON_RESTRICTION_STATE_CHANGED", refreshAllSlots)
 
 WIIIUI.RegisterBuild("InfoIcons.BuildWeaponIcons", WIIIUI.InfoIcons.BuildWeaponIcons, { after = { "Bars.BuildBars" } })
 WIIIUI.RegisterBuild("InfoIcons.BuildArmorIcon", WIIIUI.InfoIcons.BuildArmorIcon, { after = { "Bars.BuildBars" } })

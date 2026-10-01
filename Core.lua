@@ -26,6 +26,11 @@ local function infoIconIds()
   return WIIIUI.InfoIcons and WIIIUI.InfoIcons.OPTION_IDS
 end
 
+-- spec 0003 §4: the cycle offers fewer options than the valid set on retail.
+local function infoIconMenuIds()
+  return WIIIUI.InfoIcons and WIIIUI.InfoIcons.MENU_IDS
+end
+
 local function infoIconLabels()
   return WIIIUI.InfoIcons and WIIIUI.InfoIcons.OPTION_LABELS
 end
@@ -82,11 +87,18 @@ local function editModeNote(key, default, valueType, label)
   return { key = key, default = default, type = valueType, label = label, control = { kind = "note" } }
 end
 
+-- spec 0003 §4: the cycle button shows and advances from the resolved option.
+local function infoIconResolve(slot)
+  return function(value)
+    return WIIIUI.InfoIcons and WIIIUI.InfoIcons.ResolveOption(value, slot) or value
+  end
+end
+
 local function infoIcon(slot, default)
   return {
     key = "weaponIconSelected" .. slot, default = default,
     values = infoIconIds, valueLabels = infoIconLabels, label = "Info Icon " .. slot,
-    control = { kind = "cycle", apply = infoIconApply(slot) },
+    control = { kind = "cycle", apply = infoIconApply(slot), cycleValues = infoIconMenuIds, resolve = infoIconResolve(slot) },
   }
 end
 
