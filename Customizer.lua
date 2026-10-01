@@ -633,7 +633,8 @@ local function applyAnchor(id, obj, overrides)
     end
   end
 
-  local scale = WIIIUI.LayoutUnits() / WIIIUI.DEFAULTS.uiScale
+  -- Overrides are stored in 240-units (the original default), not in the current default's.
+  local scale = WIIIUI.LayoutUnits() / WIIIUI.CUSTOMIZER_BASE_UNITS
   local newX = overrides.PosX ~= nil and (overrides.PosX * scale) or x
   local newY = overrides.PosY ~= nil and (overrides.PosY * scale) or y
 
@@ -683,7 +684,7 @@ end
 -- API_ScriptRegion_GetSize), for the overridden dimension only, matching
 -- Revert()'s per-dimension SetWidth/SetHeight above.
 local function applySize(id, obj, overrides)
-  local scale = WIIIUI.LayoutUnits() / WIIIUI.DEFAULTS.uiScale
+  local scale = WIIIUI.LayoutUnits() / WIIIUI.CUSTOMIZER_BASE_UNITS
 
   if overrides.Width ~= nil then
     local w = obj:GetSize(true)

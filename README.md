@@ -14,19 +14,19 @@ The original has not been updated in over a year and was written for vanilla. Th
 
 ## Screenshots
 
-*These screenshots come from the original vanilla version. The art is the same, but the game around it looks different. Screenshots from Forever will follow.*
+*Taken on World of Warcraft: Forever at 1920×1080, UI Scale 290 with Ultra-Wide Mode on (the defaults), with WIIIUI's Edit Mode layout imported (see Getting started). Most show the config menu open.*
 
 **Human**
-![Human_theme](https://user-images.githubusercontent.com/97316608/149590970-9f816046-1437-49f3-a054-57f0091d1da6.png)
+![Human theme](screenshots/human.webp)
 
 **Orc**
-![Orc_theme](https://user-images.githubusercontent.com/97316608/149590980-62941102-2bcf-4d16-b171-d282a12b2785.png)
+![Orc theme](screenshots/orc.webp)
 
 **Undead**
-![Undead_theme](https://user-images.githubusercontent.com/97316608/149590984-d022bb4e-a535-4fcb-a750-44d649bb1022.png)
+![Undead theme](screenshots/undead.webp)
 
 **Night Elf**
-![Night_elf_theme](https://user-images.githubusercontent.com/97316608/149590975-f7f840c8-c469-4cee-89cb-270efd60a959.png)
+![Night Elf theme](screenshots/nightelf.webp)
 
 ## Features
 
@@ -36,7 +36,7 @@ The original has not been updated in over a year and was written for vanilla. Th
 * Health and power display, an experience bar, and a low-health warning.
 * **Druid resource bar:** for druids, an extra bar keeps your mana visible while the middle bar shows your current form's resource (rage or energy). Switch it with the **Druid resource bar** checkbox (shown for druids only).
 * **Minimap pieces** in the console art: a mail icon (lights up when you have mail; hover it to see the senders), a tracking button in the round slot (click it for the tracking menu), the zone name above the minimap, a clock (click it for the time manager) and a calendar button. Blizzard's own minimap corner at the top right is hidden; the **Show Blizzard's Minimap Corner** checkbox brings it back.
-* **UI Scale** sets the overall size of the console, from 240 (the default) to 300. Above 270 the text grows along with the console.
+* **UI Scale** sets the overall size of the console, from 240 to 300 (290 by default). Above 270 the text grows along with the console.
 * Icons that show information about your character, such as weapon damage and armor.
 * Layout options (three checkboxes in the General tab, see below). Changing these no longer needs a reload.
 * A Customize tab in the config menu to adjust the position, size, transparency and look of individual parts of the UI. It only takes effect while **Enable Customizer** (a checkbox on the General tab) is ticked.
@@ -70,7 +70,7 @@ The trailing `WIIIUI` sets the folder name. To update later, run `git pull` insi
 * **Open the config menu:** move your mouse into the bottom-right corner of the screen. A cogwheel appears; click it. There are no slash commands. The menu has a General tab and a Customize tab, and a Reload UI button.
 * **Some options live in Edit Mode.** On current game clients, Blizzard controls where things like the buff icons, the cast bar, the bags and the shapeshift bar sit. In the config menu those options show a "set in Edit Mode" note instead of a control. Move those pieces with the game's own Edit Mode.
 * **Layout modes.** Three checkboxes in the General tab:
-  * **Ultra-Wide Mode** shifts the chat panel's edges to suit very wide screens.
+  * **Ultra-Wide Mode** shifts the chat panel's edges to suit very wide screens. It is on by default.
   * **Center Slim Mode** hides the chat area but keeps the inventory panel.
   * **Center Slim (No Inventory)** hides the whole right-hand panel, chat area and inventory both.
   If both Center Slim boxes are ticked, Center Slim Mode wins.

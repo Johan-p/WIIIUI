@@ -96,10 +96,14 @@ end
 -- edge to edge in ultra-wide: the headless fit touches at ~297, and the in-game
 -- walk (2026-09-30) saw 290 clean and within ~20 px of both edges.
 WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_TUNED_MAX, WIIIUI.UI_SCALE_MAX = 240, 270, 300
+-- The maintainer's own setup at 1920x1080 (decision 2026-10-01); also the scale the shipped layout string was exported at.
+WIIIUI.UI_SCALE_DEFAULT = 290
+-- The unit edit_theme_settings overrides are stored in. Never change it: that would rescale every saved override.
+WIIIUI.CUSTOMIZER_BASE_UNITS = 240
 
 WIIIUI.SETTINGS = {
   { key = "theme", default = "orc", values = themeNames, label = "Theme", control = { kind = "theme" } },
-  range("uiScale", WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_MAX, "UI Scale", true),
+  range("uiScale", WIIIUI.UI_SCALE_DEFAULT, WIIIUI.UI_SCALE_MIN, WIIIUI.UI_SCALE_MAX, "UI Scale", true),
   range("moveChatAreaUp", 10, 0, 150, "Chat Area Height"),
   range("portraitScale", 0, 0, 35, "Portrait Scale"),
   range("PortraitAlignmentX", 100, 0, 200, "Portrait X"),
@@ -114,10 +118,10 @@ WIIIUI.SETTINGS = {
   },
   checkbox("hideGride", false, "Hide Action Grid"),
   checkbox("StopAnimation", false, "Stop Portrait Animation"),
-  checkbox("hideMicroButtons", true, "Hide Micro Menu"),
+  checkbox("hideMicroButtons", false, "Hide Micro Menu"),
   checkbox("showBlizzardMinimapCluster", false, "Show Blizzard's Minimap Corner"),
   checkbox("EnableCustomize", false, "Enable Customizer"),
-  checkbox("ultraWide", false, "Ultra-Wide Mode"),
+  checkbox("ultraWide", true, "Ultra-Wide Mode"),
   checkbox("centerSlim", false, "Center Slim Mode"),
   checkbox("centerSlimNoInv", false, "Center Slim (No Inventory)"),
   infoIcon(1, 16),
