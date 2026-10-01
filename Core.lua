@@ -281,6 +281,18 @@ function WIIIUI.Flush()
   end
 end
 
+-- spec 0003 §3: the one client seam. Only Forever and retail exist, so "not
+-- Forever" is retail and there is no IsRetail. A call site may use it only
+-- when no API or frame exists to feature-detect, and says why.
+WIIIUI.Client = {}
+
+-- Heuristic, not a project-ID check: WOW_PROJECT_ID is MAINLINE on Forever
+-- (CLAUDE.md "Forever detection"). Read at call time so the stub can flip it.
+-- GetBuildInfo: BuildDocumentation.lua, forever and live (tocversion is the 4th return).
+function WIIIUI.Client.IsForever()
+  return select(4, GetBuildInfo()) < 20000
+end
+
 -- spec 0006 / Amendments item 2: the one owner of secret-value reads.
 -- issecretvalue (FrameScriptDocumentation.lua, forever branch) is called only
 -- in this table; a decision on a possibly-secret value goes through Read.
