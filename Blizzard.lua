@@ -87,7 +87,7 @@ end
 --
 -- The hooked-once guard lives on WIIIUI.Blizzard, never on MicroMenu itself
 -- -- CLAUDE.md R1: "Never write a Lua key onto a Blizzard frame or table."
--- Restore branch (ui-reviewer finding, gate iteration 2): every other
+-- Restore branch: every other
 -- General-tab boolean row restores on uncheck via WIIIUI.Layout() re-running
 -- through ApplyOrQueue; this one silently didn't, since the `if` above has
 -- no `else`. MicroMenuMixin:ResetMicroMenuPosition (the obvious "put it
@@ -151,7 +151,7 @@ function WIIIUI.Blizzard.BuildMicroMenu()
         -- (Core.lua:127-148) runs queued keys in queue order, so a later
         -- "layout" entry queued before this one already restored the menu
         -- if the option flipped off in between -- this must be a no-op
-        -- then, not re-hide it (security-specialist finding, slice 16).
+        -- then, not re-hide it.
         if wc3UI_Options.hideMicroButtons then
           MicroMenu:SetParent(WIIIUI.hider)
         end

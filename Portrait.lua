@@ -141,7 +141,7 @@ local ICON_DEFS = {
     -- x 7-row, 42-frame sprite sheet that Blizzard animates with a FlipBook
     -- (duration 1.5, frame width/height 0, group looping REPEAT). Drawn
     -- statically it shows all 42 frames at once, so updateResting plays the
-    -- same animation while resting (feature 0001 fix5).
+    -- same animation while resting.
     key = "restIcon", offsetX = -0.188235, offsetY = 0.32941, sizeFraction = ICON_SIZE_REST,
     atlas = "UI-HUD-UnitFrame-Player-Rest-Flipbook",
     flipBook = { rows = 7, columns = 6, frames = 42, duration = 1.5 },
@@ -563,7 +563,7 @@ end
 
 -- Vanilla LowHPWarning (e17c352 WIIIUI.lua:3875-3939): the low-HP flash
 -- lives on the portrait art, ported forward per spec 0001 §1.2 and moved here
--- from Bars.lua (spec 0006 Slice 04) so the overlay is built beside the model
+-- from Bars.lua (spec 0006) so the overlay is built beside the model
 -- it sits behind. white_background.tga already ships in art/other/ (the same
 -- file vanilla toggled between white_background/black_background -- this
 -- port uses SetVertexColor for the fixed red tint instead, so only one of the
@@ -574,7 +574,7 @@ local LOW_HP_PULSE_DURATION = 1
 -- spec 0001 §1.2: "Low-HP pulse ... overlay is a frame holding the red
 -- portrait-background texture. Its child texture runs a looping
 -- AnimationGroup Alpha 0<->1 (1 s each way, the vanilla timing)." The pulse
--- covers exactly the model window, one frame level below it (fix6 B4).
+-- covers exactly the model window, one frame level below it.
 -- Building the animation is plain non-secret widget setup (no unit value
 -- involved), so unlike the curve/SetAlpha calls below it isn't wrapped in
 -- a pcall.
@@ -645,7 +645,7 @@ local function updateLowHpPulse()
   end
 
   -- A corpse's health percent is 0, which the step curve maps to "warn":
-  -- the pulse must stay off while dead or a ghost (fix6 B4).
+  -- the pulse must stay off while dead or a ghost.
   -- UnitIsDeadOrGhost is not secret (UnitDocumentation.lua, forever).
   if UnitIsDeadOrGhost("player") then
     overlay:Hide()
@@ -712,7 +712,7 @@ function WIIIUI.Portrait.BuildPortrait()
   buildHitText(button, uiScale)
   buildIcons(button, uiScale)
 
-  -- Draw order over the left art (spec 0001 fix6 B4/B5): the low-HP overlay
+  -- Draw order over the left art: the low-HP overlay
   -- sits one level above the art, the model one above the overlay and the
   -- button above the model, so the pulse shows through behind the model.
   -- Levels are relative to the art frame, never absolute.

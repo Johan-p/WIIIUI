@@ -14,7 +14,7 @@ WIIIUI.Buttons.rows = WIIIUI.Buttons.rows or {}
 WIIIUI.EXTRA_SLOT_BASE = 13
 local EXTRA_SLOT_COUNT = 9
 
--- LibActionButton-1.0 (spec 0001 §1.4, vendored in libs/ by slice 11, loaded
+-- LibActionButton-1.0 (spec 0001 §1.4, vendored in libs/, loaded
 -- before this file in the TOC).
 local LAB = LibStub("LibActionButton-1.0")
 
@@ -82,7 +82,7 @@ WIIIUI.Buttons.RUNTIME_PAGES = RUNTIME_PAGES
 -- form, distinct from the permanent stances/forms bonusbar:1-4) all route to
 -- the runtime-resolved "possess" state; bar:2-6 are the vanilla Shift-paged
 -- bars. The exact ordering needs in-game verification (Prowl, stances,
--- vehicle) -- slice 13 Notes.
+-- vehicle).
 -- classToken comes from WIIIUI.PlayerClassToken (UnitClass carries
 -- SecretWhenUnitIdentityRestricted/MayReturnNothing,
 -- https://warcraft.wiki.gg/wiki/API_UnitClass): a secret, missing or
@@ -120,7 +120,7 @@ WIIIUI.Buttons.PageDriver = pageDriver
 -- Blizzard_DeprecatedActionBar/Deprecated_ActionBar.lua wrappers (forever
 -- branch) -- plain globals, matching what a macro-conditional/secure-snippet
 -- environment can call; whether they're actually whitelisted there is an
--- in-game check (slice 13 Notes), not something this file can prove.
+-- in-game check, not something this file can prove.
 local ONSTATE_PAGE_SNIPPET = [[
   local page = newstate
   if newstate == "possess" then
@@ -182,7 +182,7 @@ end
 -- re-applies 52x51 to the highlight/checked textures on every update
 -- (LibActionButton-1.0.lua:1848-1857, hideElements.border). At WIIIUI's
 -- ~27-unit cells that art overhangs down and right, so every region is pinned
--- to the button rect (feature 0001 fix3, D3). Vanilla hid the frame art
+-- to the button rect. Vanilla hid the frame art
 -- entirely (NormalTexture width -1, e17c352 WIIIUI.lua:2611-2612) and let the
 -- grid art show through empty slots, so those three are drawn at alpha 0.
 local FIT_KEYS = {
@@ -251,7 +251,7 @@ end
 -- this port's WIIIUI.Console.grid), one row up by originY - 1. Every button,
 -- column 1 included, anchors to the grid at its own art-derived column offset
 -- (Theme.ActionButtonGeometry), not chained off its neighbour, so a pitch
--- error cannot accumulate (fix4); vanilla's magic origin
+-- error cannot accumulate; vanilla's magic origin
 -- (uiScale*0.037037 - 6) is gone with MainMenuBarArtFrame (retired, R2). Exact
 -- placement is a tester visual check (CLAUDE.md "the look is the specification").
 local function anchorRow(buttons, originY, uiScale, geometry, grid)
@@ -275,14 +275,14 @@ end
 -- TL/TR/ML/MR/BL/BR)." Fixed like GridM/GridT: the one action under every
 -- page, see applyFixedState.
 --
--- spec 0001 slice 19b: anchoring via WIIIUI.Theme.ExtraSlotGeometry, every
+-- spec 0001: anchoring via WIIIUI.Theme.ExtraSlotGeometry, every
 -- BuildButtons() call (not just build-once, since size/position scale with
 -- uiScale/theme) -- same split as anchorRow's own "create once, anchor
 -- every call" convention above. Minimap slots (kind "minimap") anchor to
 -- Console.left.minimapTexture's companion Frame; inventory slots (kind
 -- "inventory") anchor to Console.right.rightPartMiddle's -- never to the
 -- live Minimap widget itself
--- (spec 0001 slice 19b: an Edit Mode system's implicit-protection rule,
+-- (spec 0001: an Edit Mode system's implicit-protection rule,
 -- warcraft.wiki.gg Patch_2.0.1/API_changes -- "the parent of a protected
 -- frame is implicitly protected also, as are any frames which it is
 -- anchored to" -- and API_ScriptRegion_IsProtected).
@@ -318,7 +318,7 @@ local function anchorExtras(extras, uiScale, theme)
   end
 end
 
--- spec 0001 slice 19b gate-fix (ui-reviewer High finding): the 6 inventory
+-- The 6 inventory
 -- extras (Extra4..9) are children of `header` (a SecureHandlerStateTemplate),
 -- not of Console.right, so Console.lua's applyLayoutModes calling
 -- right:Hide() under centerSlimNoInv never cascades to them -- unlike
@@ -425,7 +425,7 @@ end
 -- spec 0001 §Buttons and paging "Retire (R2)": MainActionBar,
 -- MultiBarBottomLeft, MultiBarBottomRight retire through the same
 -- WIIIUI.Retire(frame, unregister) seam PlayerFrame already uses
--- (Core.lua, slice 07) -- CLAUDE.md "Tech stack quirks": "resolve
+-- (Core.lua) -- CLAUDE.md "Tech stack quirks": "resolve
 -- _G.MainActionBar or _G.MainMenuBar at PLAYER_LOGIN", since the frame name
 -- differs between clients.
 local BAR_FRAME_RESOLVERS = {

@@ -9,7 +9,7 @@
 -- is the specification". Per-row widget layout inside the panel is new (the
 -- vanilla XML positioned each control by hand; the control table drives a
 -- plain top-down list here instead), so it is not pixel-matched to vanilla --
--- menu usability is confirmed in-game (this slice's Notes, tester).
+-- menu usability is confirmed in-game (tester).
 local _, WIIIUI = ...
 
 WIIIUI.Config = WIIIUI.Config or {}
@@ -22,7 +22,7 @@ WIIIUI.Config.labels = WIIIUI.Config.labels or {}
 -- is not).
 local COGWHEEL_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\cogwheel"
 
--- spec 0006 Slice 09: every row is derived from an entry of WIIIUI.SETTINGS
+-- spec 0006: every row is derived from an entry of WIIIUI.SETTINGS
 -- (Core.lua) that has a `control`; the schema owns key, label, range and value
 -- lists, so nothing here restates them. The 6 "Set in Edit Mode" rows never
 -- render a control (spec 0001 §1.6/§1.9 Q3); their keys stay readable and
@@ -100,7 +100,7 @@ end
 -- spec 0001 §1.6: "each control-table row ... carries editMode = true
 -- (static) or available = fn (in-game-check result); the menu renders such a
 -- row as its label plus the note, never as a live control." Neither field
--- changes at runtime for any row this slice ships, so BuildConfig below
+-- changes at runtime for any row, so BuildConfig below
 -- decides note-vs-control once per row, not on every call.
 local function isNoteRow(row)
   return row.editMode or (row.available and not row.available())
@@ -140,7 +140,7 @@ local CONTENT_WIDTH = 600
 local CONTENT_BOTTOM_PADDING = 20
 local RELOAD_BUTTON_HEIGHT = 22
 
--- ui-reviewer finding (slice 17 gate iteration 1): a note row's label plus
+-- A note row's label plus
 -- editModeNoteSuffix()'s build-name suffix has no width/wrap guard, so the
 -- longest existing label ("Right Multi-Bar Orientation") plus the suffix
 -- risks exceeding the scroll content's clipped viewport and getting cut off
@@ -182,8 +182,8 @@ local function buildEditbox(panel, row, x, y)
     eb:SetSize(60, 20)
     -- EditBox:SetNumeric (warcraft.wiki.gg API_EditBox_SetNumeric) strips
     -- non-digit input, including a minus sign, so it's only safe on rows
-    -- whose range never goes negative -- every numeric row this slice ships
-    -- has min >= 0 (ui-reviewer finding, slice 06 gate iteration 1).
+    -- whose range never goes negative -- every numeric row
+    -- has min >= 0.
     if row.min == nil or row.min >= 0 then
       eb:SetNumeric(true)
     end
@@ -287,10 +287,9 @@ local function buildNote(panel, row, x, y)
     -- GameFontDisableSmall (Gethe/wow-ui-source forever branch,
     -- Blizzard_Fonts_Shared/Shared/FontStyles.xml) dims note rows so they
     -- read apart from real controls' GameFontHighlightSmall labels without
-    -- relying on the suffix text alone (ui-reviewer finding, slice 06 gate
-    -- iteration 1).
+    -- relying on the suffix text alone.
     note:SetFontObject(GameFontDisableSmall)
-    -- Width/wrap guard (ui-reviewer finding, slice 17 gate iteration 2): no
+    -- Width/wrap guard: no
     -- SetHeight call is ever made on this FontString, so its height stays
     -- the auto-sized value the region computes from its content -- a
     -- FontString's SetHeight/GetHeight/SetWidth/GetWidth "compute what
@@ -298,7 +297,7 @@ local function buildNote(panel, row, x, y)
     -- direction" rather than working with a fixed painted area
     -- (wowpedia/addonstudio.org mirror, WoW:UIOBJECT_FontString), so
     -- GetHeight() below reports the true post-wrap height once width +
-    -- word-wrap are set. GetStringHeight() (the previous gate-fix's choice)
+    -- word-wrap are set. GetStringHeight()
     -- is documented to return the height "without wrapping" -- it only
     -- accounts for manually-set "\n" breaks, never automatic word-wrap
     -- (warcraft.wiki.gg API_FontString_GetStringHeight) -- so it can't be
@@ -335,7 +334,7 @@ WIIIUI.Config.BUILDERS = {
 -- Blizzard_SharedXML/SecureScrollTemplates.xml) -- SCROLL_INSET_RIGHT leaves
 -- enough panel margin that the scrollbar doesn't sit on the panel's border.
 -- Bumped from vanilla's own 50 to leave room below the panel title for the
--- General/Customize tab buttons ensureTabs adds (slice 20).
+-- General/Customize tab buttons ensureTabs adds.
 local SCROLL_INSET_TOP = 74
 local SCROLL_INSET_BOTTOM = 16
 local SCROLL_INSET_LEFT = 16
@@ -366,7 +365,7 @@ local function ensureHover()
 
   -- The cogwheel must not carry these: on modern clients a mouse script
   -- enables the frame's mouse, so the shown cogwheel would take focus from
-  -- this frame, whose OnLeave then hides it again (feature 0001 fix3, D1).
+  -- this frame, whose OnLeave then hides it again.
   hover:SetScript("OnMouseDown", function()
     WIIIUI.Config.cogwheel:SetBackdropColor(0.75, 0.75, 0.75, 1)
     if WIIIUI.Config.panel:IsShown() then
@@ -412,8 +411,7 @@ end
 -- Vanilla WIIIUI_menu (e17c352 WIIIUI.xml:147-160): 650x600, anchored LEFT
 -- of UIParent at (200,0), tooltip-background + dialog-border backdrop.
 -- Vanilla's General/Customize tab buttons: ensureTabs, below, builds them
--- (spec 0001 §Customizer, slice 20's own "Files slice 20 touches besides
--- Customizer.lua" list) -- General is this file's own scroll-content rows;
+-- (spec 0001 §Customizer) -- General is this file's own scroll-content rows;
 -- Customize is a frame Customizer.lua owns, parented to this panel.
 local function ensurePanel()
   local panel = WIIIUI.Config.panel
@@ -449,7 +447,7 @@ local function ensurePanel()
   return panel
 end
 
--- ui-reviewer finding (slice 06 gate iteration 1): the panel's fixed 650x600
+-- The panel's fixed 650x600
 -- size can't fit all 25 control-table rows + reload button (content ran
 -- ~190px past the bottom edge with no scroll frame). Rows live in this
 -- scroll child instead of directly on the panel; the title bar and close

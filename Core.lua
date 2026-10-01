@@ -1,4 +1,4 @@
--- spec 0001 §A.3-A.4, §Settings schema; spec 0006 Slice 09: WIIIUI namespace
+-- spec 0001 §A.3-A.4, §Settings schema; spec 0006: WIIIUI namespace
 -- and the one settings schema.
 local ADDON, WIIIUI = ...
 _G.WIIIUI = WIIIUI
@@ -246,7 +246,7 @@ end
 -- state; nothing outside ApplyOrQueue/Flush reads or writes them.
 local pending, order = {}, {}
 
--- spec 0006 §Phase 2 Slice 04: the one error-report seam. geterrorhandler is
+-- spec 0006 §Phase 2: the one error-report seam. geterrorhandler is
 -- Blizzard's own route to the Lua-error popup (API_geterrorhandler;
 -- Blizzard_SharedXMLBase/ErrorUtil.lua:3,18-19 on forever). Used as the
 -- xpcall message handler so the origin stack survives.
@@ -277,7 +277,7 @@ function WIIIUI.Flush()
   end
 end
 
--- spec 0006 Slice 06 / Amendments item 2: the one owner of secret-value reads.
+-- spec 0006 / Amendments item 2: the one owner of secret-value reads.
 -- issecretvalue (FrameScriptDocumentation.lua, forever branch) is called only
 -- in this table; a decision on a possibly-secret value goes through Read.
 WIIIUI.Secret = {}
@@ -421,7 +421,7 @@ function WIIIUI.On(event, fn, unit)
   handlers[event][#handlers[event] + 1] = fn
 end
 
--- spec 0006 §Phase 2 Slice 04: each module registers its own Build* step at
+-- spec 0006 §Phase 2: each module registers its own Build* step at
 -- the end of its file, so the build order is TOC order and Core names no
 -- module. Steps are xpcalled in Layout() so one failing region doesn't blank
 -- the rest of the console (or the cogwheel).
@@ -461,8 +461,7 @@ end)
 
 -- spec 0001 §A.3: "Retire(frame, unregister)" -- the one R2 implementation
 -- for a Blizzard system WIIIUI replaces outright, parameterized by frame so
--- a later R2 target (action bars, slice 12; spec 0004 §3: "12 retires the
--- action bars through WIIIUI.Retire, so it uses 07's seam") reuses this same
+-- a later R2 target (the action bars, spec 0004 §3) reuses this same
 -- sequence instead of duplicating it. unregister stays a parameter rather
 -- than being hardcoded true, though spec 0001 §1.1 "Unregister set" makes
 -- it the default on all four current R2 frames (MainActionBar,
@@ -560,8 +559,7 @@ end
 -- vanilla Bindings.xml (e17c352) binds CustomKeyBindings(9/8/7/6/4/5) to
 -- Top Left / Top Right / Middle Left / Middle Right / Bottom Left / Bottom
 -- Right respectively -- inverted here to give each Extra(4..9) its label
--- directly. Cross-checked against Theme.lua's INVENTORY_SLOT_GRID (ui-reviewer
--- finding, slice 19b gate-fix). "_G["BINDING_NAME_" .. command]" convention,
+-- directly. Cross-checked against Theme.lua's INVENTORY_SLOT_GRID. "_G["BINDING_NAME_" .. command]" convention,
 -- warcraft.wiki.gg Bindings.xml.
 BINDING_HEADER_WIIIUI = "Warcraft III - UI"
 _G["BINDING_NAME_CLICK WIIIUI_Extra1:LeftButton"] = "Top Minimap Button"

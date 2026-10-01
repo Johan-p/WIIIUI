@@ -5,14 +5,14 @@ local _, WIIIUI = ...
 
 WIIIUI.Theme = {}
 
--- The one theme list, in menu order (spec 0006 Slice 09): the settings schema
+-- The one theme list, in menu order (spec 0006): the settings schema
 -- validates against it and Config builds one button per name.
 WIIIUI.Theme.NAMES = { "human", "orc", "undead", "nightelf" }
 
 -- The fork dropped upstream's custom1-custom8 slots (docs/decisions.md,
 -- 2026-09-30); a save that still holds one resolves to the default theme.
 
--- The one owner of draw order (spec 0006 slice 05). `relative` levels are
+-- The one owner of draw order (spec 0006). `relative` levels are
 -- offsets from Console.left's own frame level: the console art shares its
 -- strata with the bars and portrait, so they must clear it explicitly. A slot
 -- with no strata leaves the frame's own (inherited) strata alone.
@@ -109,7 +109,7 @@ end
 -- Vanilla AlignMinimap (e17c352 WIIIUI.lua ~1807-1826): minimapFrame is uiScale
 -- square; Minimap itself is 0.55 of that, offset from the frame center. Only
 -- the unconditional math is ported here; theme/uiScale-threshold branches
--- (e.g. the mail-icon extraAlign stepping) are out of scope for this slice.
+-- (e.g. the mail-icon extraAlign stepping) are out of scope.
 function WIIIUI.Theme.MinimapGeometry(uiScale)
   return {
     frameSize = uiScale,
@@ -167,7 +167,7 @@ end
 -- WIIIUI.lua ~2795-2799, the tail of that function): extensionBackground is
 -- uiScale*2.1 wide, uiScale*0.5 tall, anchored BOTTOMLEFT of the portrait's
 -- BOTTOMRIGHT. The ext1/ext2/ext3 branchy positioning above it stays out of
--- scope for this slice.
+-- scope.
 function WIIIUI.Theme.ExtensionBackgroundGeometry(uiScale)
   return {
     width = uiScale * 2.1,
@@ -279,7 +279,7 @@ end
 -- below 250, -3 from 250-259, -6 above 259. The Show/Hide toggles guarding
 -- filler visibility (e17c352 WIIIUI.lua:3515-3560) and the undead-only
 -- re-aligner (e17c352 WIIIUI.lua:3562+) that resizes/repositions these same
--- textures per exact uiScale value are this slice's documented deferral, not
+-- textures per exact uiScale value are a documented deferral, not
 -- built here.
 function WIIIUI.Theme.RightFillerGeometry(uiScale, moveChatAreaUp)
   local alignExtraHorizontal = 0
@@ -371,7 +371,7 @@ end
 --
 -- Column spacing is NOT vanilla's uiScale*0.159259 chain (WIIIUI.lua:2632,
 -- 2637): that pitch is 0.6 units/cell wider than the art's cell pitch and the
--- buttons drifted off the last columns (fix4). Vanilla hid the drift with
+-- buttons drifted off the last columns. Vanilla hid the drift with
 -- per-index nudges (WIIIUI.lua:2540-2574: -3 at 4, +2 at 5, +1 at 10, +1 at
 -- 12) tuned by eye at uiScale 240-260; they are replaced by columnOffsetX,
 -- each column's centre taken from the grid art itself so it holds at every
@@ -424,7 +424,7 @@ end
 -- the same texture) at uiScale*0.23, uiScale*0.3. Vanilla builds the bar
 -- from three endcap-plus-middle textures scaled by xpScaling=0.375; this
 -- port's XP bar is one plain StatusBar (Bars.lua's health/power bar
--- convention, no left/right endcap art). Finding 2 (ui-reviewer, gate-fix):
+-- convention, no left/right endcap art).
 -- width is the real vanilla fill-texture max width, xpProgBarMax =
 -- uiScale*0.6814 (e17c352 WIIIUI.lua:3828, 4539) -- the COMBINED width of
 -- left+middle+right endcap segments (uiScale*0.375*(0.05924+1.70+0.05924)),
@@ -466,7 +466,7 @@ end
 -- xpBarLeft (the bar's own left endcap) anchored from, so InfoIcons.lua
 -- anchors weapon icons to that same StatusBar instead of a separate
 -- xpBarLeft frame. Size reuses XPBarGeometry's total width, which is
--- already the combined left+middle+right span (Finding 2 above). Label/value
+-- already the combined left+middle+right span (see above). Label/value
 -- text offsets port weaponDamageText/weaponNumbersText's own anchors
 -- (BOTTOMLEFT to the icon frame's TOPLEFT); extraSpace/the uiScale<=210
 -- nudge are the exact vanilla thresholds, kept even though the uiScale range
@@ -491,7 +491,7 @@ function WIIIUI.Theme.WeaponIconGeometry(uiScale, slotIndex)
     labelOffsetY = uiScale * -0.065,
     valueOffsetX = uiScale * labelOffsetXFraction,
     valueOffsetY = uiScale * -0.1667 - extraSpace + lowScaleNudge,
-    -- ui-reviewer Finding 3 (slice 18 gate-fix): label/value FontStrings had
+    -- Label/value FontStrings had
     -- no SetWidth, so a long value (e.g. a high main-hand damage range) could
     -- visually run into slot 2/3's icon, which sits only
     -- WEAPON_ICON_SLOT_OFFSETS[2].x * uiScale to the right of slot 1's icon
@@ -549,7 +549,7 @@ local MINIMAP_SLOT_NUDGES = {
 -- BOTTOMLEFT to Minimap's own BOTTOMRIGHT at (uiScale*0.01851 + addWidth,
 -- uiScale*0.455555 - (number-1)*(uiScale*0.08518) - floor(number*0.34) +
 -- addHeight). Ported relative to `minimapTexture`'s CENTER instead of the
--- live Minimap widget (spec 0001 slice 19b: "never anchor to Blizzard's
+-- live Minimap widget (spec 0001: "never anchor to Blizzard's
 -- Minimap widget itself" -- a secure button anchored to it would make
 -- Minimap implicitly protected in combat, warcraft.wiki.gg
 -- Patch_2.0.1/API_changes + API_ScriptRegion_IsProtected)
@@ -596,7 +596,7 @@ local INVENTORY_SLOT_GRID = {
 -- row*(uiScale*0.148)); that frame is itself a 1x1-pixel frame (e17c352
 -- WIIIUI.xml:3313-3314) anchored BOTTOMLEFT to rightPart_middle at
 -- (uiScale*0.02, uiScale*0.016). Ported directly onto rightPartMiddle per
--- spec 0001 slice 19b ("Inventory six: anchor to Console.right.
+-- spec 0001 ("Inventory six: anchor to Console.right.
 -- rightPartMiddle"), folding in both offsets plus the 1x1 frame's own
 -- half-pixel CENTER-vs-BOTTOMLEFT difference (0.5, 0.5).
 local function inventorySlotGeometry(uiScale, inventoryNumber)
@@ -614,7 +614,7 @@ local function inventorySlotGeometry(uiScale, inventoryNumber)
   }
 end
 
--- spec 0001 slice 19b: one geometry entry point for the 9 extra slots
+-- spec 0001: one geometry entry point for the 9 extra slots
 -- (WIIIUI_Extra1..9 -- Buttons.lua's EXTRA_SLOT_BASE order, minimap 1-3 then
 -- inventory 1-6, matching vanilla Bindings.xml's own ordering and Core.lua's
 -- BINDING_NAME_CLICK strings). Returns nil for an out-of-range index.

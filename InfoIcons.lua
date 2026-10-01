@@ -1,5 +1,5 @@
 -- spec 0001 §Module split "InfoIcons.lua": "3 weapon icons + armor icon,
--- locale-independent stat APIs, tooltips" (armor icon is slice 19, F2).
+-- locale-independent stat APIs, tooltips".
 -- Ported from vanilla AlignWeaponFrame/SetWeaponIcon (e17c352 WIIIUI.lua:
 -- 2258-2405, 1692-1734). Vanilla's tooltip-scanning stat calculators
 -- (GetBlockValue/GetSpellpowerValue/GetHealingpowerValue, e17c352 WIIIUI.lua:
@@ -117,8 +117,7 @@ local function formatRange(low, high)
   return math.floor(low) .. " - " .. math.ceil(high)
 end
 
--- security-specialist Finding (slice 19 gate-fix, generalized beyond the
--- mainhand-only special case): every option previously resolved its icon
+-- Every option previously resolved its icon
 -- texture inside computeStats, entirely inside the single pcall that
 -- also does the SecretWhenUnitStatsRestricted arithmetic below -- a throw
 -- there aborted before the icon was ever returned, leaving the icon stale
@@ -267,7 +266,7 @@ local function computeStats(option)
 
     local ammoSlot = C_PaperDollInfo.GetInventorySlotInfo(AMMO_SLOT_NAME)
 
-    -- security-specialist Finding 2 (slice 18 gate-fix): on retail there is
+    -- On retail there is
     -- no ammo slot, so GetInventorySlotInfo("AmmoSlot") returns nil
     -- (C_PaperDollInfo.GetInventorySlotInfo, warcraft.wiki.gg -- invSlot may
     -- be nil for a slot the client doesn't have). RefreshSlot already treats
@@ -391,8 +390,7 @@ end
 
 -- Vanilla weaponIconSelected values (e17c352 WIIIUI.lua:2267,2271,2275,
 -- 1696-1719): 16 main hand, 17 offhand/block, 18 ranged, 0 ammo, 98 healing,
--- 99 spell power, "none" hidden. The one owner of the option list (spec 0006
--- Slice 07): Core's merge validates against OPTION_IDS and Config's rows cycle
+-- 99 spell power, "none" hidden. The one owner of the option list (spec 0006): Core's merge validates against OPTION_IDS and Config's rows cycle
 -- OPTION_IDS/OPTION_LABELS. Order is the config menu's (vanilla WIIIUI.xml:
 -- 1132-1222 button order). menuLabel is the Config text, staticLabel the
 -- console text shown when a stat read throws (spec 0001 §1.7: "shows its label
@@ -506,7 +504,7 @@ local function ensureIconWidgets(slotIndex)
 end
 
 -- spec 0001 §1.7's guard seam, shared by the weapon slots and the armor icon
--- (spec 0006 Slice 07). The icon is resolved in its own pcall, outside the
+-- (spec 0006). The icon is resolved in its own pcall, outside the
 -- stats pcall: the SecretWhenUnitStatsRestricted reads in provider.stats can
 -- throw, and a throw there must not leave the icon stale on an old form/item.
 -- A stats result of nil, ok (the ammo slot's UnitHasRelicSlot / no-ammo-slot
@@ -656,7 +654,7 @@ local function refreshAllSlots()
   WIIIUI.InfoIcons.RefreshArmor()
 end
 
--- security-specialist/ui-reviewer Finding 1 (slice 18 gate-fix): the
+-- The
 -- architect spec's own Event -> widget wiring table (0001-forever-support.md
 -- "info icons" row) assigns this file the full list below, not just
 -- vanilla's three (UNIT_ATTACK_POWER/UNIT_RANGED_ATTACK_POWER/
@@ -671,8 +669,7 @@ end
 --   equipmentSlot/hasCurrent, no unit token) -- RegisterEvent, no unit
 --   filter, since none of these fire per-unit.
 -- UPDATE_SHAPESHIFT_FORM drives both the base-damage/stat refresh (the
--- numbers shown can go stale across a stance/form change) and, as of slice
--- 19, activeShapeshiftIcon()'s own form-icon overlay (vanilla's
+-- numbers shown can go stale across a stance/form change) and also activeShapeshiftIcon()'s own form-icon overlay (vanilla's
 -- CheckIfInForm) via the same refreshAllSlots call -- no separate event
 -- needed for the icon swap. Vanilla's other three (LEARNED_SPELL_IN_TAB/
 -- SPELLS_CHANGED/CHARACTER_POINTS_CHANGED) drove that same form-icon
@@ -693,7 +690,6 @@ WIIIUI.On("SPELL_POWER_CHANGED", refreshAllSlots)
 WIIIUI.On("PLAYER_EQUIPMENT_CHANGED", refreshAllSlots)
 WIIIUI.On("UPDATE_SHAPESHIFT_FORM", refreshAllSlots)
 
--- security-specialist's own suggestion (Finding 1, cheap and related):
 -- SecretWhenUnitStatsRestricted values (spec 0001 §1.7) may only recover
 -- once combat/encounter restrictions lift, so a stat that failed a pcall mid-
 -- combat and degraded to a blank value needs a refresh once combat ends.

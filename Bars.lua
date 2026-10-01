@@ -22,8 +22,7 @@ WIIIUI.Bars = WIIIUI.Bars or {}
 -- CLAUDE.md status header).
 local BAR_TEXTURE = "Interface\\Buttons\\WHITE8X8"
 
--- Finding 3 (ui-reviewer, gate-fix): unlike the health/power bars above,
--- WIIIUI's own themed XP art already ships in art/other/ (xp1/xp2/xp3.tga,
+-- Unlike the health/power bars above, WIIIUI's own themed XP art already ships in art/other/ (xp1/xp2/xp3.tga,
 -- xpProgressBar.tga) -- vanilla's XP bar was always WIIIUI's own art, not
 -- borrowed from Blizzard, and CLAUDE.md's "the look is the specification"
 -- says not to minimise it. Staying inside the plain-StatusBar convention
@@ -31,9 +30,8 @@ local BAR_TEXTURE = "Interface\\Buttons\\WHITE8X8"
 -- uses xpProgressBar.tga instead of WHITE8X8.
 local XP_BAR_TEXTURE = "Interface\\Addons\\WIIIUI\\art\\other\\xpProgressBar"
 
--- Regression fix (gate-fix iteration 2): xpProgressBar.tga is a grayscale
--- bevel/gloss mask, not pre-coloured art (ui-reviewer decoded the pixel
--- data), so the texture swap above needs the same fixed purple tint vanilla
+-- xpProgressBar.tga is a grayscale bevel/gloss mask, not pre-coloured art,
+-- so the texture swap above needs the same fixed purple tint vanilla
 -- AlignXPBar applied on top of its own art (e17c352 WIIIUI.lua:2129,
 -- "xpProgBar:SetVertexColor(0.5, 0, 0.5, 1)") -- both together, not either
 -- alone. The rested overlay's colour stays user-configurable via
@@ -296,8 +294,7 @@ local function buildXPBar(anchor, uiScale)
 
   local geometry = WIIIUI.Theme.XPBarGeometry(uiScale)
 
-  -- MergeDefaults resets a malformed colour to the default (spec 0006 Slice
-  -- 09), so the saved table always holds 4 numbers here.
+  -- MergeDefaults resets a malformed colour to the default (spec 0006), so the saved table always holds 4 numbers here.
   local restColor = wc3UI_Options.xpRestedXpColor
   rested:SetStatusBarColor(restColor[1], restColor[2], restColor[3], restColor[4])
 
@@ -332,7 +329,7 @@ local function updateXP()
     local maxXP = UnitXPMax("player")
     local curXP = UnitXP("player")
 
-    -- Finding 4 (ui-reviewer, gate-fix): at max level UnitXPMax returns 0;
+    -- At max level UnitXPMax returns 0;
     -- this re-derives a full-bar result for that case (maxXP/curXP both 1,
     -- so the StatusBar's own min/max/value math reads "full") rather than
     -- porting vanilla's own guard, which tested UnitXP()==0 plus a
@@ -403,7 +400,7 @@ function WIIIUI.Bars.BuildBars()
 
     local geometry = WIIIUI.Theme.BarGeometry(uiScale, slotIndex, slotCount, lift)
 
-    -- Same strata as the left console art, so the level must clear it (fix6 B5).
+    -- Same strata as the left console art, so the level must clear it.
     WIIIUI.Layers.Apply(bar, "bars")
     bar:SetSize(geometry.width, geometry.height)
     bar:ClearAllPoints()

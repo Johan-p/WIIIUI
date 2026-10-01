@@ -3,13 +3,13 @@
 -- area). BuildRight now covers the inventory-art pair (rightPart_middle/
 -- rightPart_left), the shared background, the lid and the chat-area top/
 -- middle/bottom pieces; the 6 extension filler textures are a later
--- iteration of the same slice. The extension1/2/3 overlays on the left
--- frame stay out of scope (slice 04's own deferral, unchanged).
+-- piece of work. The extension1/2/3 overlays on the left frame stay out of
+-- scope for now.
 local _, WIIIUI = ...
 
 WIIIUI.Console = WIIIUI.Console or {}
 
--- Declared art (spec 0006 slice 10). Each region's art is an ordered piece
+-- Declared art (spec 0006). Each region's art is an ordered piece
 -- table; BuildArt below creates, sizes, textures and anchors every piece on
 -- every Layout call. Field conventions:
 --   key    parent[key] holds the texture (the Customizer's Console.<region>.<key>)
@@ -404,8 +404,8 @@ end
 -- works across parents regardless of who created it). Both are built here as
 -- children of this frame instead of split across left/right, so the whole
 -- "right region" (this pair, the still-to-come lid/chat-area pieces and
--- fillers) lives behind one WIIIUI.Console.right table for slice 05 to
--- Hide()/Show().
+-- fillers) lives behind one WIIIUI.Console.right table so it can be
+-- hidden and shown as one.
 --
 -- Per-theme x-offset fraction for the ultraWide/centerSlim/centerSlimNoInv
 -- chat-top re-anchor in applyLayoutModes below (vanilla AlignUltraWide,
@@ -425,7 +425,7 @@ local ULTRA_WIDE_CHAT_TOP_OFFSET_X_DEFAULT = -0.725833
 -- other theme uses the uiScale-scaled default (-uiScale*0.0625).
 local ULTRA_WIDE_CHAT_MIDDLE_OFFSET_X_NIGHTELF = -37
 
--- The one place the three layout flags are read (spec 0006 slice 10).
+-- The one place the three layout flags are read (spec 0006).
 -- Vanilla AlignUltraWide checks centerSlim first with an elseif, so
 -- centerSlim wins over centerSlimNoInv, which wins over ultraWide.
 function WIIIUI.Console.LayoutMode()
@@ -503,7 +503,7 @@ local function applyLayoutModes(right, left, rawTheme, uiScale, backgroundGeomet
   -- which re-anchors the textures on every Layout) needs an explicit revert
   -- in the false branch. The action-slot-button
   -- repositioning/resize inside vanilla's other two elseif branches
-  -- (e17c352 WIIIUI.lua:4697-4762) still doesn't exist until slice D and
+  -- (e17c352 WIIIUI.lua:4697-4762) still isn't built and
   -- stays deferred.
   if mode ~= "normal" then
     local topOffsetX = uiScale * (ULTRA_WIDE_CHAT_TOP_OFFSET_X_THEMES[theme] or ULTRA_WIDE_CHAT_TOP_OFFSET_X_DEFAULT)
@@ -511,7 +511,7 @@ local function applyLayoutModes(right, left, rawTheme, uiScale, backgroundGeomet
 
     -- Vanilla anchored these to the chat-area background's TOPRIGHT/
     -- BOTTOMRIGHT (e17c352 WIIIUI.lua:4680-4691). The background texture is
-    -- gone (feature 0001 fix5: Blizzard's chat has its own background
+    -- gone (Blizzard's chat has its own background
     -- option), so the same corners are reached from rightPartLeft's
     -- BOTTOMRIGHT: the background sat at (offsetX, offsetY) from it with
     -- (width, height).
@@ -543,7 +543,7 @@ local function applyLayoutModes(right, left, rawTheme, uiScale, backgroundGeomet
       -- BuildRight's own anchor graph). Measuring the reference edge against
       -- `left`'s prior (possibly already re-centered) position feeds this
       -- call's own output back into the next call's input and drifts off
-      -- true center (security-specialist finding, slice 05 gate). Resetting
+      -- true center. Resetting
       -- `left` to its known default anchor before measuring makes the whole
       -- graph re-resolve relative to that fixed baseline first -- WoW
       -- resolves GetLeft/GetRight synchronously after SetPoint, no frame
@@ -564,7 +564,7 @@ local function applyLayoutModes(right, left, rawTheme, uiScale, backgroundGeomet
       -- so centerSlim's reference wins when both flags are set, matching the
       -- Hide/Show precedence above. Vanilla's own resize of rightPart_middle
       -- under centerSlim (lines 4738-4762) stays deferred (real-action-
-      -- button territory, slice D); this only selects which frame's edge is
+      -- button territory); this only selects which frame's edge is
       -- read, at its current (un-resized) width.
       local referenceFrame = right.rightPartLeft
       local referenceExtra = backgroundGeometry.offsetX + backgroundGeometry.width
@@ -597,9 +597,8 @@ local function applyLayoutModes(right, left, rawTheme, uiScale, backgroundGeomet
       local textureLeft = minimapTexture and minimapTexture:GetLeft()
       local uiParentRight = UIParent:GetRight()
 
-      -- GetRight()/GetLeft() can return nil before a region's rect resolves
-      -- (security-specialist finding, slice 05 gate) -- skip the re-centre
-      -- and leave `left` at the default anchor just set above rather than
+      -- GetRight()/GetLeft() can return nil before a region's rect resolves:
+      -- skip the re-centre and leave `left` at the default anchor just set above rather than
       -- computing arithmetic on nil.
       if referenceEdge and textureLeft and uiParentRight then
         anchorLeft(left, uiScale, (uiParentRight - referenceEdge) / 2 - textureLeft)
@@ -622,7 +621,7 @@ function WIIIUI.Console.BuildRight()
     -- chat-area background. Vanilla raised chat to DIALOG above a HIGH frame
     -- (e17c352 WIIIUI.xml:3120); here chat is an Edit Mode system placed by
     -- the layout string and stays at its own LOW strata (R4), so the art
-    -- goes below LOW and chat draws over all of it (feature 0001 fix3, D2).
+    -- goes below LOW and chat draws over all of it.
     -- Interactive pieces (extras, portrait, cogwheel) are not children of
     -- this frame.
     WIIIUI.Layers.Apply(right, "console.right")
@@ -633,8 +632,8 @@ function WIIIUI.Console.BuildRight()
   local uiScale = WIIIUI.LayoutUnits()
   local geometry = WIIIUI.Theme.RightPartGeometry(uiScale, theme)
   -- Vanilla WIIIUI_rightpartBackground (e17c352 WIIIUI.xml:3131) was an
-  -- opaque black texture behind the chat; it is not drawn any more (feature
-  -- 0001 fix5: Blizzard's chat frame has its own background option). Its
+  -- opaque black texture behind the chat; it is not drawn any more (Blizzard's
+  -- chat frame has its own background option). Its
   -- geometry survives as the reference the ultra-wide chat textures and the
   -- centering measure from (applyLayoutModes). rightPartWidth defaults to
   -- uiScale*2.2 when unset (e17c352 WIIIUI.lua:4545-4546) and is excluded
