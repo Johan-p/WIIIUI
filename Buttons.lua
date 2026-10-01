@@ -60,6 +60,11 @@ local PAGES = {
   { cond = "[bonusbar:2]", page = 8, group = "bonus" },
   { cond = "[bonusbar:3]", page = 9, group = "bonus" },
   { cond = "[bonusbar:4]", page = 10, group = "bonus" },
+  -- Skyriding (retail dragonriding) bar, spec 0003 §5: "When Possessing a
+  -- Target: 5" per https://warcraft.wiki.gg/wiki/API_GetBonusBarOffset;
+  -- skyriding using bonus bar 5 is community-reported, retail checklist R2.
+  -- Page 11 -> slots 121-132; Forever possession already resolves to 11.
+  { cond = "[bonusbar:5]", page = 11, group = "bonus" },
   { cond = "", page = 1, group = "default" },
 }
 
