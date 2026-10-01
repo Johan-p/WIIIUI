@@ -67,6 +67,7 @@ local function makeRow(entry)
     available = control.available,
     shown = control.shown,
     apply = control.apply,
+    resolve = control.resolve,
   }
   if control.kind == "note" then
     row.editMode = true
@@ -84,7 +85,7 @@ local function makeRow(entry)
     -- The info-icon lists come from InfoIcons.lua; if that file didn't load they
     -- resolve to nil, and the row degrades to an inert cycle rather than
     -- failing the whole menu. The schema test pins that every entry supplies them.
-    row.values = listOf(entry.values) or {}
+    row.values = listOf(control.cycleValues or entry.values) or {}
     row.valueLabels = listOf(entry.valueLabels) or {}
   end
   return row
@@ -206,8 +207,13 @@ local function buildEditbox(panel, row, x, y)
   return ROW_HEIGHT
 end
 
-local function cycleButtonText(row)
+local function cycleValue(row)
   local value = row.get()
+  return row.resolve and row.resolve(value) or value
+end
+
+local function cycleButtonText(row)
+  local value = cycleValue(row)
   return row.label .. ": " .. (row.valueLabels[value] or tostring(value))
 end
 
@@ -217,7 +223,7 @@ local function buildCycle(panel, row, x, y)
     btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     btn:SetSize(200, 22)
     btn:SetScript("OnClick", function()
-      local values, current, nextIndex = row.values, row.get(), 1
+      local values, current, nextIndex = row.values, cycleValue(row), 1
       for i, value in ipairs(values) do
         if value == current then
           nextIndex = (i % #values) + 1
