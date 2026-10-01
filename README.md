@@ -92,6 +92,17 @@ WIIIUI replaces the bottom of your screen, but Blizzard still owns chat, bags, t
 
 It was made at UI Scale 290 with Ultra-Wide Mode on, at 1920×1080. On other screens some pieces may need a nudge in Edit Mode. Config rows that say "set in Edit Mode" refer to this layout.
 
+## Known issues
+
+**Class resources on retail (combo points, runes, holy power, soul shards, chi, arcane charges, essence).** WIIIUI moves Blizzard's class-resource display above the portrait. Two of Blizzard's own settings can get in the way:
+
+* If your **Pet Frame** is still in its default spot (attached under the player frame), WIIIUI leaves the class resources hidden instead of moving them, so that it does not break Blizzard's pet frame.
+* If the **Cast Bar** is set to **Lock to Player Frame** in Edit Mode, the same applies.
+
+**What to do:** open Edit Mode (Esc, then Edit Mode), click the Pet Frame and drag it anywhere, so it is no longer in its default spot. Then click the Cast Bar and untick **Lock to Player Frame**. Save the layout and type `/reload`. WIIIUI's own retail Edit Mode layout, once available, will do both of these for you.
+
+If you ever see "Interface action failed because of an AddOn" after entering a vehicle or when clicking a totem, do the two steps above, `/reload`, and please report it on the issues page below.
+
 ## Support and feedback
 
 Found a problem or want a feature? Please open an issue: https://github.com/Johan-p/WIIIUI-Forever-Fork/issues

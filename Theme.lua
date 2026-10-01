@@ -27,6 +27,7 @@ WIIIUI.Layers = {
     ["portrait.overlay"] = { strata = "LOW", relative = 1 },
     ["portrait.model"] = { strata = "LOW", relative = 2 },
     ["portrait.button"] = { strata = "LOW", relative = 3 },
+    ["classresources"] = { strata = "LOW", relative = 3 },
     bars = { strata = "LOW", relative = 4 },
     ["xp.rested"] = { strata = "LOW", relative = 4 },
     ["xp.fill"] = { strata = "LOW", relative = 5 },
@@ -363,6 +364,21 @@ WIIIUI.Theme.DRUID_LIFT_PX = { human = 30, orc = 26, undead = 29, nightelf = 28 
 function WIIIUI.Theme.DruidLift(uiScale, theme)
   -- A theme missing a lift entry degrades to no lift rather than erroring.
   return uiScale * (WIIIUI.Theme.DRUID_LIFT_PX[WIIIUI.Theme.GeometryTheme(theme)] or 0) / 512
+end
+
+-- spec 0003 §2.5: where the moved class-resource container sits, as an offset
+-- from the portrait art's top edge (Blizzard.lua anchors BOTTOM to TOP). The
+-- druid lift is deliberately absent: it shortens the model window from the
+-- bottom, so the portrait's top edge is the same for 2 and 3 slots (review).
+-- The 0.04 fraction is a guess, tuned in-game (retail checklist R1).
+-- Tune in-game so the bars centre on the 3D model window (retail checklist R1.5).
+WIIIUI.Theme.CLASS_RESOURCE_OFFSET_X = 0
+
+function WIIIUI.Theme.ClassResourceGeometry(units)
+  return {
+    offsetX = WIIIUI.Theme.CLASS_RESOURCE_OFFSET_X,
+    offsetY = units * 0.04,
+  }
 end
 
 function WIIIUI.Theme.LeftArtFile(base, slotCount)

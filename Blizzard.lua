@@ -224,6 +224,136 @@ function WIIIUI.Blizzard.BuildMinimapCluster()
   end
 end
 
+-- spec 0003 §2.5 (Option A), R3. Retail's class resources (combo points, holy
+-- power, runes, shards, chi, arcane charges, essence) live in
+-- PlayerBottomManagedFrameContainer, a plain VerticalLayoutFrame (not an Edit
+-- Mode system; live Blizzard_UnitFrame/Shared/PlayerFrameTemplates.xml:12,
+-- Mainline/PlayerFrame.xml:467) parented to the PlayerFrame R2 retires, so it
+-- is invisible today. The bars reparent themselves into it
+-- (ManagedFrameSystem.lua), so only the container is moved: parented to a
+-- WIIIUI anchor above the portrait, never touching the bars.
+-- Blizzard re-anchors it from PlayerFrame_ToVehicleArt/ToPlayerArt
+-- (PlayerFrame.lua:649, 755); the SetPoint post-hook queues a re-anchor
+-- through ApplyOrQueue, guarded against its own call by `reanchoring`. The
+-- hooked-once flag lives on WIIIUI.Blizzard, never on the container (R1).
+-- Forever loads none of the eight frames (Blizzard_UnitFrame.toc excludes
+-- them on camelot), so the gate makes this a no-op there.
+-- If this taints or fights Blizzard in-game (checklist R1), delete it and
+-- ship Option B (Personal Resource Display via the layout string).
+local CLASS_RESOURCE_FRAMES = {
+  "RogueComboPointBarFrame", "DruidComboPointBarFrame", "PaladinPowerBarFrame", "RuneFrame",
+  "WarlockPowerFrame", "MonkHarmonyBarFrame", "MageArcaneChargesFrame", "EssencePlayerFrame",
+}
+
+local reanchoring = false
+
+local function classResourceContainer()
+  local container = _G.PlayerBottomManagedFrameContainer
+  if not container then
+    return nil
+  end
+
+  for _, name in ipairs(CLASS_RESOURCE_FRAMES) do
+    if _G[name] then
+      return container
+    end
+  end
+  return nil
+end
+
+-- The first SetParent moves the container from the hidden PlayerFrame to a
+-- visible parent, firing its OnShow -> Layout() from WIIIUI's stack. That
+-- cascade calls ClearAllPoints/SetPoint on every shown child (a docked
+-- PetFrame is an Edit Mode system), runs PlayerFrame_AdjustAttachments (moves
+-- PlayerCastingBarFrame when attached) and writes into Blizzard tables
+-- (spec 0003 §2.5). The read-only checks prevent the reparent from moving a
+-- docked PetFrame or a player-locked cast bar: while either holds, the
+-- transition is skipped with no write and the next Layout() retries. They do
+-- not make it safe: the reparent still registers the shown class bar in
+-- Blizzard's showingFrames table from WIIIUI's stack (latent taint read when
+-- Blizzard later hides the bar). Accepted Medium risk, docs/decisions.md
+-- 2026-10-01 "Accepted risk: 0003 class-resource container move"; fallback is
+-- Option B (slice 04b).
+local function transitionUnsafe(container, anchor)
+  if container:GetParent() == anchor then
+    return false
+  end
+
+  local pet = _G.PetFrame
+  if pet and pet:GetParent() == container then
+    return true
+  end
+
+  local castBar = _G.PlayerCastingBarFrame
+  return castBar ~= nil and castBar.attachedToPlayerFrame and true or false
+end
+
+local function traceback(err)
+  return tostring(err) .. "\n" .. (debugstack(2) or "")
+end
+
+local function reanchor()
+  local container = classResourceContainer()
+  local anchor = WIIIUI.Blizzard.classResourceAnchor
+  if not container or not anchor then
+    return
+  end
+
+  if transitionUnsafe(container, anchor) then
+    return
+  end
+
+  reanchoring = true
+  local ok, err = xpcall(function()
+    container:SetParent(anchor)
+    container:ClearAllPoints()
+    container:SetPoint("BOTTOM", anchor, "BOTTOM")
+  end, traceback)
+  reanchoring = false
+  if not ok then
+    error(err, 0)
+  end
+end
+
+function WIIIUI.Blizzard.BuildClassResources()
+  local container = classResourceContainer()
+  if not container then
+    return
+  end
+
+  local left = WIIIUI.Console.left
+  local portraitAnchor = left and left.portraitTexture and WIIIUI.Console.AnchorFrame(left.portraitTexture)
+  if not portraitAnchor then
+    return
+  end
+
+  local anchor = WIIIUI.Blizzard.classResourceAnchor
+  if not anchor then
+    anchor = CreateFrame("Frame", nil, left)
+    anchor:SetSize(1, 1)
+    WIIIUI.Blizzard.classResourceAnchor = anchor
+  end
+
+  local geometry = WIIIUI.Theme.ClassResourceGeometry(WIIIUI.LayoutUnits())
+  anchor:ClearAllPoints()
+  anchor:SetPoint("BOTTOM", portraitAnchor, "TOP", geometry.offsetX, geometry.offsetY)
+  WIIIUI.Layers.Apply(anchor, "classresources")
+
+  reanchor()
+
+  if not WIIIUI.Blizzard.classResourcesHooked then
+    WIIIUI.Blizzard.classResourcesHooked = true
+
+    hooksecurefunc(container, "SetPoint", function()
+      if reanchoring then
+        return
+      end
+
+      WIIIUI.ApplyOrQueue("classResources", reanchor)
+    end)
+  end
+end
+
 -- spec 0001 §1.1 R4, §1.6: the Blizzard pieces WIIIUI keeps (chat, bags,
 -- micro menu, buffs, cast bar, stance/pet bars) are placed
 -- only by an Edit Mode layout, never moved from code. This is the maintainer's
@@ -250,3 +380,4 @@ WIIIUI.LAYOUT_BUILD = "2026-10-01"
 WIIIUI.RegisterBuild("Blizzard.BuildMinimap", WIIIUI.Blizzard.BuildMinimap, { after = { "Console.BuildLeft" } })
 WIIIUI.RegisterBuild("Blizzard.BuildMinimapCluster", WIIIUI.Blizzard.BuildMinimapCluster, { after = { "Blizzard.BuildMinimap" } })
 WIIIUI.RegisterBuild("Blizzard.BuildMicroMenu", WIIIUI.Blizzard.BuildMicroMenu)
+WIIIUI.RegisterBuild("Blizzard.BuildClassResources", WIIIUI.Blizzard.BuildClassResources, { after = { "Portrait.BuildPortrait" } })
