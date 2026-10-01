@@ -7,7 +7,7 @@ WIIIUI.Theme = {}
 
 -- The one theme list, in menu order (spec 0006): the settings schema
 -- validates against it and Config builds one button per name.
-WIIIUI.Theme.NAMES = { "human", "orc", "undead", "nightelf" }
+WIIIUI.Theme.NAMES = { "human", "orc", "undead", "nightelf", "synthwave" }
 
 -- The fork dropped upstream's custom1-custom8 slots (docs/decisions.md,
 -- 2026-09-30); a save that still holds one resolves to the default theme.
@@ -101,6 +101,17 @@ function WIIIUI.Theme.ResolveThemeName(theme)
   return "orc"
 end
 
+-- Brief 0009: a theme listed here draws its own art but is cut to another
+-- theme's shapes, so every per-theme geometry lookup (Theme.lua's nudge
+-- tables and Console's layout-mode offsets) goes through GeometryTheme.
+-- Texture paths never do; they use ResolveThemeName.
+WIIIUI.Theme.GEOMETRY_BASE = { synthwave = "human" }
+
+function WIIIUI.Theme.GeometryTheme(theme)
+  local resolved = WIIIUI.Theme.ResolveThemeName(theme)
+  return WIIIUI.Theme.GEOMETRY_BASE[resolved] or resolved
+end
+
 function WIIIUI.Theme.TexturePath(theme, folder, file)
   local resolved = WIIIUI.Theme.ResolveThemeName(theme)
   return "Interface\\Addons\\WIIIUI\\art\\" .. resolved .. "\\" .. folder .. "\\" .. file
@@ -187,7 +198,7 @@ end
 -- WIIIUI.lua:3446-3456) subtract from both offsets; nightelf has no branch
 -- in vanilla and any other theme name resolves like TexturePath does (bogus
 -- -> orc), so both fall through to the orc/default nudge via
--- ResolveThemeName.
+-- GeometryTheme.
 local RIGHT_PART_NUDGES = {
   human = { middle = 2, left = 2 },
   orc = { middle = 1, left = 1 },
@@ -222,7 +233,7 @@ local RIGHT_LID_SHIFT_WIDTH_THEMES = {
 }
 
 function WIIIUI.Theme.RightLidGeometry(uiScale, theme, moveChatAreaUp)
-  local resolved = WIIIUI.Theme.ResolveThemeName(theme)
+  local resolved = WIIIUI.Theme.GeometryTheme(theme)
   local shiftWidth = RIGHT_LID_SHIFT_WIDTH_THEMES[resolved] and uiScale * 0.0185185 or 0
 
   return {
@@ -246,7 +257,7 @@ local CHAT_AREA_EXTRA_HEIGHT_THEMES = {
 }
 
 function WIIIUI.Theme.ChatAreaGeometry(uiScale, theme, moveChatAreaUp)
-  local resolved = WIIIUI.Theme.ResolveThemeName(theme)
+  local resolved = WIIIUI.Theme.GeometryTheme(theme)
   local extraHeight = CHAT_AREA_EXTRA_HEIGHT_THEMES[resolved] and uiScale * 0.022222 or 0
   local middleHeight = uiScale - uiScale * 0.5 + moveChatAreaUp + extraHeight
 
@@ -351,7 +362,7 @@ WIIIUI.Theme.DRUID_LIFT_PX = { human = 30, orc = 26, undead = 29, nightelf = 28 
 
 function WIIIUI.Theme.DruidLift(uiScale, theme)
   -- A theme missing a lift entry degrades to no lift rather than erroring.
-  return uiScale * (WIIIUI.Theme.DRUID_LIFT_PX[WIIIUI.Theme.ResolveThemeName(theme)] or 0) / 512
+  return uiScale * (WIIIUI.Theme.DRUID_LIFT_PX[WIIIUI.Theme.GeometryTheme(theme)] or 0) / 512
 end
 
 function WIIIUI.Theme.LeftArtFile(base, slotCount)
@@ -441,7 +452,7 @@ function WIIIUI.Theme.XPBarGeometry(uiScale)
 end
 
 function WIIIUI.Theme.RightPartGeometry(uiScale, theme)
-  local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.ResolveThemeName(theme)] or { middle = 0, left = 0 }
+  local nudge = RIGHT_PART_NUDGES[WIIIUI.Theme.GeometryTheme(theme)] or { middle = 0, left = 0 }
   local leftWidth = uiScale / 2
 
   return {
@@ -535,7 +546,7 @@ end
 
 -- Vanilla Minimap_ActionButtons's per-theme resize (e17c352 WIIIUI.lua:
 -- 1547-1568): only the orc/human/undead/nightelf branches set a delta; any
--- other theme name (ResolveThemeName folds unknown names to orc before this
+-- other theme name (GeometryTheme folds unknown names to orc before this
 -- table is consulted) falls through with all three deltas at 0.
 local MINIMAP_SLOT_NUDGES = {
   orc = { resize = 3, width = 2, height = 1 },
@@ -558,7 +569,7 @@ local MINIMAP_SLOT_NUDGES = {
 -- in minimapTexture-CENTER-relative coordinates, is
 -- (minimapOffsetX + minimapSize/2, minimapOffsetY - minimapSize/2).
 local function minimapSlotGeometry(uiScale, theme, number)
-  local resolved = WIIIUI.Theme.ResolveThemeName(theme)
+  local resolved = WIIIUI.Theme.GeometryTheme(theme)
   local nudge = MINIMAP_SLOT_NUDGES[resolved] or { resize = 0, width = 0, height = 0 }
   local minimap = WIIIUI.Theme.MinimapGeometry(uiScale)
   local minimapRight = minimap.minimapOffsetX + minimap.minimapSize / 2

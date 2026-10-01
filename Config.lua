@@ -236,7 +236,7 @@ local function buildCycle(panel, row, x, y)
   return ROW_HEIGHT
 end
 
-local THEME_COLUMNS = 4
+local THEME_COLUMNS = 5
 local THEME_BUTTON_WIDTH = 100
 local THEME_BUTTON_HEIGHT = 22
 
