@@ -452,7 +452,7 @@ end
 -- applies when centerSlim is also false -- replicated here so centerSlim's
 -- per-piece hiding wins when both flags are set.
 local function applyLayoutModes(right, left, rawTheme, uiScale, backgroundGeometry)
-  local theme = WIIIUI.Theme.ResolveThemeName(rawTheme)
+  local theme = WIIIUI.Theme.GeometryTheme(rawTheme)
   local mode = WIIIUI.Console.LayoutMode()
   local lid = right.lid
   local chatTop = right.chatTop
