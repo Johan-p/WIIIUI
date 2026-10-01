@@ -12,6 +12,8 @@ This is a **separate build of WIIIUI made for World of Warcraft: Forever and ret
 
 The original has not been updated in over a year and was written for vanilla. This fork carries the same look over to the current game clients.
 
+**Retail status:** WIIIUI is built for World of Warcraft: Forever, and it also loads on retail. Retail support covers the same console plus retail-specific handling (class resources above the portrait, skyriding on the bottom action row, and a few info-icon differences). **It has not been tested in-game on retail yet**, so please report any problems on the issues page below.
+
 ## Screenshots
 
 *Taken on World of Warcraft: Forever at 1920×1080, UI Scale 290 with Ultra-Wide Mode on (the defaults), with WIIIUI's Edit Mode layout imported (see [Edit Mode layout](#edit-mode-layout-optional-one-time-setup)). Most show the config menu open.*
@@ -37,7 +39,7 @@ The original has not been updated in over a year and was written for vanilla. Th
 * **Druid resource bar:** for druids, an extra bar keeps your mana visible while the middle bar shows your current form's resource (rage or energy). Switch it with the **Druid resource bar** checkbox (shown for druids only).
 * **Minimap pieces** in the console art: a mail icon (lights up when you have mail; hover it to see the senders), a tracking button in the round slot (click it for the tracking menu), the zone name above the minimap, a clock (click it for the time manager) and a calendar button. Blizzard's own minimap corner at the top right is hidden; the **Show Blizzard's Minimap Corner** checkbox brings it back.
 * **UI Scale** sets the overall size of the console, from 240 to 300 (290 by default). Above 270 the text grows along with the console.
-* Icons that show information about your character, such as weapon damage and armor.
+* Icons that show information about your character, such as weapon damage and armor. On retail: Block shows your block chance in %, Ranged works without a ranged slot, and Healing is shown as spell power (retail merged the two).
 * Layout options (three checkboxes in the General tab, see below). Changing these no longer needs a reload.
 * A Customize tab in the config menu to adjust the position, size, transparency and look of individual parts of the UI. It only takes effect while **Enable Customizer** (a checkbox on the General tab) is ticked.
 * Your settings are saved per character.
@@ -53,7 +55,7 @@ Requires **World of Warcraft: Forever** or **retail**. Vanilla 1.12 and unoffici
 3. Rename that folder to `WIIIUI`. The folder name must be exactly `WIIIUI`, or the game ignores the addon.
 4. Put the renamed folder into your AddOns folder, so that `...\Interface\AddOns\WIIIUI\WIIIUI.toc` exists:
    * **WoW Forever (beta):** `World of Warcraft\_classic_beta_\Interface\AddOns`
-   * **Retail:** `World of Warcraft\_retail_\Interface\AddOns`
+   * **Retail:** `World of Warcraft\_retail_\Interface\AddOns` (not yet tested in-game on retail)
 5. Start the game, or restart it if it was running. A new addon needs a full restart, not just `/reload`.
 6. Make sure **WIIIUI** is ticked in the AddOns list on the character select screen.
 
@@ -79,6 +81,8 @@ The trailing `WIIIUI` sets the folder name. To update later, run `git pull` insi
 * **Saved settings may not stick on some Forever beta builds.** WIIIUI works with default settings on every login, so if your choices are forgotten, that is why. Settings also cannot be saved if the game's saved-settings files are read-only, so check that too.
 
 ## Edit Mode layout (optional, one-time setup)
+
+**The layout string below is for Forever only.** On retail, the "Copy layout string" box in the config menu shows "Not available in this build" until a retail layout is published. Do not import the Forever string on retail: the two clients number their Edit Mode pieces differently, so it will not import correctly there.
 
 WIIIUI replaces the bottom of your screen, but Blizzard still owns chat, bags, the micro menu, the cast bar, buffs and the stance and pet bars. This layout places them around the WIIIUI console. Importing it is up to you, and you only do it once.
 
